@@ -52,9 +52,7 @@ struct MenuBarView: View {
     private func groupRow(_ group: TabGroup) -> some View {
         HStack(spacing: 4) {
             ForEach(group.windows) { window in
-                Button {
-                    onFocusWindow(window)
-                } label: {
+                Group {
                     if let icon = window.icon {
                         Image(nsImage: icon)
                             .resizable()
@@ -64,7 +62,8 @@ struct MenuBarView: View {
                             .frame(width: 18, height: 18)
                     }
                 }
-                .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                .onTapGesture { onFocusWindow(window) }
                 .help(window.title.isEmpty ? window.appName : window.title)
             }
         }

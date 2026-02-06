@@ -57,6 +57,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             name: NSWorkspace.didActivateApplicationNotification,
             object: nil
         )
+
+        // Cmd+, for Settings (LSUIElement apps have no app menu to attach shortcuts to)
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "," {
+                self?.showSettings()
+                return nil
+            }
+            return event
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {

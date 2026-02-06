@@ -14,5 +14,6 @@ struct TabbedApp: App {
                 onQuit: { NSApplication.shared.terminate(nil) }
             )
         }
+        .menuBarExtraStyle(.window)
     }
 }
