@@ -162,10 +162,13 @@ final class GroupManagerTests: XCTestCase {
     func testDissolveAllGroupsFiresCallbackForEach() {
         let gm = GroupManager()
         var dissolvedCalls = 0
+        var releasedIDs: [CGWindowID] = []
         gm.onGroupDissolved = { _ in dissolvedCalls += 1 }
+        gm.onWindowReleased = { releasedIDs.append($0.id) }
         gm.createGroup(with: [makeWindow(id: 1), makeWindow(id: 2)], frame: .zero)
         gm.createGroup(with: [makeWindow(id: 3), makeWindow(id: 4)], frame: .zero)
         gm.dissolveAllGroups()
         XCTAssertEqual(dissolvedCalls, 2)
+        XCTAssertEqual(Set(releasedIDs), [1, 2, 3, 4])
     }
 }
