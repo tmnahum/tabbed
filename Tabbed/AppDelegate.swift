@@ -21,9 +21,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var resyncWorkItems: [UUID: DispatchWorkItem] = [:]
     /// Pending MRU commit after cycling stops.
     private var cycleWorkItem: DispatchWorkItem?
+    /// Timestamp when the last cycle ended — focus events within 150ms are
+    /// ignored to prevent delayed AX notifications from corrupting MRU order.
+    private var cycleEndTime: Date?
+    /// Only terminate when the user explicitly clicks "Quit Tabbed".
+    var isExplicitQuit = false
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        false
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        isExplicitQuit ? .terminateNow : .terminateCancel
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -412,6 +417,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let workItem = DispatchWorkItem { [weak self] in
             group.endCycle()
             self?.cycleWorkItem = nil
+            self?.cycleEndTime = Date()
         }
         cycleWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
@@ -623,7 +629,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         group.switchTo(windowID: windowID)
         lastActiveGroupID = group.id
-        if !group.isCycling {
+        let inCooldown = cycleEndTime.map { Date().timeIntervalSince($0) < 0.15 } ?? false
+        if !group.isCycling, !inCooldown {
             group.recordFocus(windowID: windowID)
         }
         panel.orderAbove(windowID: windowID)
@@ -688,7 +695,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         group.switchTo(windowID: windowID)
         lastActiveGroupID = group.id
-        if !group.isCycling {
+        let inCooldown = cycleEndTime.map { Date().timeIntervalSince($0) < 0.15 } ?? false
+        if !group.isCycling, !inCooldown {
             group.recordFocus(windowID: windowID)
         }
         panel.orderAbove(windowID: windowID)

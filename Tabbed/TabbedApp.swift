@@ -11,7 +11,10 @@ struct TabbedApp: App {
                 onNewGroup: { appDelegate.showWindowPicker() },
                 onFocusWindow: { window in appDelegate.focusWindow(window) },
                 onSettings: { appDelegate.showSettings() },
-                onQuit: { NSApplication.shared.terminate(nil) }
+                onQuit: {
+                    appDelegate.isExplicitQuit = true
+                    NSApplication.shared.terminate(nil)
+                }
             )
         }
         .menuBarExtraStyle(.window)

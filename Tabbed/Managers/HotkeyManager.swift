@@ -51,7 +51,7 @@ class HotkeyManager {
             onReleaseTab?()
             return true
         }
-        if config.cycleTab.matches(event) {
+        if config.cycleTab.matches(event), !event.isARepeat {
             onCycleTab?()
             return true
         }

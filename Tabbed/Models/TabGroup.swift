@@ -11,6 +11,8 @@ class TabGroup: Identifiable, ObservableObject {
     private(set) var focusHistory: [CGWindowID] = []
     /// Whether we're mid-cycle (Hyper+Tab held). Prevents focus handlers from updating MRU order.
     private(set) var isCycling = false
+    /// Frozen snapshot of MRU order for the current cycle (prevents mid-cycle mutations from causing revisits).
+    private var cycleOrder: [CGWindowID] = []
     private var cyclePosition = 0
 
     var activeWindow: WindowInfo? {
@@ -71,36 +73,47 @@ class TabGroup: Identifiable, ObservableObject {
     }
 
     /// Returns the index of the next window in MRU order.
-    /// Tracks cycle position so repeated calls walk through the full history.
+    /// Snapshots the MRU order on first call so mid-cycle focus events can't cause revisits.
     func nextInMRUCycle() -> Int? {
-        guard windows.count > 1, !focusHistory.isEmpty else { return nil }
+        guard windows.count > 1 else { return nil }
 
         if !isCycling {
-            // Starting a new cycle — begin from position 0 (the current window)
             isCycling = true
+            // Snapshot: freeze MRU order, filtered to windows still in the group
+            let windowIDs = Set(windows.map(\.id))
+            cycleOrder = focusHistory.filter { windowIDs.contains($0) }
+            if cycleOrder.isEmpty { cycleOrder = windows.map(\.id) }
             cyclePosition = 0
         }
 
-        // Advance through MRU history, skipping stale entries
-        for _ in 0..<focusHistory.count {
-            cyclePosition = (cyclePosition + 1) % focusHistory.count
-            let nextID = focusHistory[cyclePosition]
+        guard cycleOrder.count > 1 else { return nil }
+
+        // Advance, skipping any windows removed mid-cycle
+        for _ in 0..<cycleOrder.count {
+            cyclePosition = (cyclePosition + 1) % cycleOrder.count
+            let nextID = cycleOrder[cyclePosition]
             if let index = windows.firstIndex(where: { $0.id == nextID }) {
                 return index
             }
         }
 
-        // Fallback: just go to the next tab by position
         return (activeIndex + 1) % windows.count
     }
 
-    /// End a cycling session: commit the current window to MRU and reset state.
+    /// End a cycling session: commit the landed-on window to MRU front and reset.
     func endCycle() {
         isCycling = false
-        cyclePosition = 0
-        if let active = activeWindow {
-            recordFocus(windowID: active.id)
+        // Use the snapshot position — immune to focus-event races that change activeIndex
+        let landedID: CGWindowID? = {
+            guard !cycleOrder.isEmpty, cyclePosition < cycleOrder.count else { return nil }
+            let id = cycleOrder[cyclePosition]
+            return windows.contains(where: { $0.id == id }) ? id : nil
+        }()
+        if let id = landedID ?? activeWindow?.id {
+            recordFocus(windowID: id)
         }
+        cycleOrder = []
+        cyclePosition = 0
     }
 
     // MARK: - Tab Reordering
