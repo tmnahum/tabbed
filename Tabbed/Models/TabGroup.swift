@@ -42,6 +42,7 @@ class TabGroup: Identifiable, ObservableObject {
         guard index >= 0, index < windows.count else { return nil }
         let removed = windows.remove(at: index)
         focusHistory.removeAll { $0 == removed.id }
+        cycleOrder.removeAll { $0 == removed.id }
         if activeIndex >= windows.count {
             activeIndex = max(0, windows.count - 1)
         } else if index < activeIndex {

@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let windowManager = WindowManager()
     let groupManager = GroupManager()
     let windowObserver = WindowObserver()
@@ -21,11 +21,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var resyncWorkItems: [UUID: DispatchWorkItem] = [:]
     /// Pending MRU commit after cycling stops.
     private var cycleWorkItem: DispatchWorkItem?
-    /// Timestamp when the last cycle ended — focus events within 150ms are
-    /// ignored to prevent delayed AX notifications from corrupting MRU order.
+    /// Timestamp when the last cycle ended — focus events within the cooldown
+    /// are ignored to prevent delayed AX notifications from corrupting MRU order.
     private var cycleEndTime: Date?
+    private static let cycleCooldownDuration: TimeInterval = 0.15
+
+    private var isCycleCooldownActive: Bool {
+        cycleEndTime.map { Date().timeIntervalSince($0) < Self.cycleCooldownDuration } ?? false
+    }
     /// Only terminate when the user explicitly clicks "Quit Tabbed".
     var isExplicitQuit = false
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         isExplicitQuit ? .terminateNow : .terminateCancel
@@ -136,7 +145,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Settings
 
     func showSettings() {
-        if let existing = settingsWindow, existing.isVisible {
+        if let existing = settingsWindow {
             existing.makeKeyAndOrderFront(nil)
             if #available(macOS 14.0, *) {
                 NSApp.activate()
@@ -153,6 +162,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             defer: false
         )
         window.title = "Tabbed Settings"
+        window.isReleasedWhenClosed = false
+        window.delegate = self
         let settingsView = SettingsView(
             config: hotkeyManager?.config ?? .default,
             onConfigChanged: { [weak self] newConfig in
@@ -169,12 +180,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.activate(ignoringOtherApps: true)
         }
         settingsWindow = window
+    }
 
-        NotificationCenter.default.addObserver(
-            forName: NSWindow.willCloseNotification, object: window, queue: .main
-        ) { [weak self] _ in
-            self?.settingsWindow = nil
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        if sender === settingsWindow {
+            sender.orderOut(nil)
+            return false
         }
+        return true
     }
 
     // MARK: - Focus Window
@@ -304,6 +317,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         group.switchTo(index: index)
         guard let window = group.activeWindow else { return }
         lastActiveGroupID = group.id
+        // Update MRU synchronously for manual switches (cycling defers to endCycle)
+        if !group.isCycling {
+            group.recordFocus(windowID: window.id)
+        }
         // Activate the owning app first — the tab bar is a non-activating panel,
         // so clicking a tab won't activate the app. Without this, raiseWindow
         // may succeed (bringing the window to front within the app) but the app
@@ -629,8 +646,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         group.switchTo(windowID: windowID)
         lastActiveGroupID = group.id
-        let inCooldown = cycleEndTime.map { Date().timeIntervalSince($0) < 0.15 } ?? false
-        if !group.isCycling, !inCooldown {
+        if !group.isCycling, !isCycleCooldownActive {
             group.recordFocus(windowID: windowID)
         }
         panel.orderAbove(windowID: windowID)
@@ -695,8 +711,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         group.switchTo(windowID: windowID)
         lastActiveGroupID = group.id
-        let inCooldown = cycleEndTime.map { Date().timeIntervalSince($0) < 0.15 } ?? false
-        if !group.isCycling, !inCooldown {
+        if !group.isCycling, !isCycleCooldownActive {
             group.recordFocus(windowID: windowID)
         }
         panel.orderAbove(windowID: windowID)
