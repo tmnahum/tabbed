@@ -2,17 +2,14 @@
     - fill out keyboard shortcuts
         - 9 should be last always
         - think of any others to mirror browsers
-        
 
-[ip] - all in space button, put one directly in the menu bar too (under regular new group button), and customize behavior:
-    - assuming we can get this info: order tab order by most recently used app/window, or highest app/window in z index whatever we can get, most recently used first and continue in order
-    - maybe: skip adding apps of whom their window has a max width that is too small and cant be expanse
+- If tabbed window is fullscreen AND all windows in space are part of the tabbed window, then any new windows opening in space auto join the tabbed window
 
-- investigate a way to hide non active windows completely (maybe settle for minimizing). esp so that it doesnt show up in AltTab (and mission control etc) and instead the metawindow is what shows up
+- [pending] investigate a way to hide non active windows completely (maybe settle for minimizing). esp so that it doesnt show up in AltTab (and mission control etc) and instead the metawindow is what shows up
     - int his case also customize the window name maybe?
     - can hide with the undocumented CGS private APIs
 
-- session restoration:
+- session restoration feature:
     - customizable in settings
     - default mode: if windows are the exact same, (ie all window in group to be created still exist from when app was quit) recreate. do that on a per window basis. if a window is missing from group, do not recreate
     - no recreate mode: off (self explanatory)
@@ -30,30 +27,32 @@
 
 
 - do performance/battery review on the codebase
+- scan for dead or unnecessary duplicate code
+
+- brain
 
 ## Bugs
-- dragging the tab bar container (not the tab) does not drag the windows
-    - should either drag the windows or be undraggable
-    - i think undraggable is fine
-- related: minor: tab bar shows up in mission control, is able to be attempted to dragged to snap to side of pane, etc
+- tab bar sometimes appears in wrong space (desktop)
 
 - on add, is squeezes windows down to make room for tab bar even if there is space for tab bar already, should just show it on top instead
 
 - hyper T does not work
 
 - some special apps such as altTab the window close detection does not work
+    - well it was behaving like that but fixed now, so nevermind ig
 
 
-❯ bugs: 
-    - initial positioning can be a little wrong too low etc - check if still true
-    
-    - going from focus on non-grouped app that is on top of tab bar into grouped app not by clicking can leave non grouped app obsuring the tab bar - or something like that
 
+- going from focus on non-grouped app that is on top of tab bar into grouped app not by clicking can leave non grouped app obsuring the tab bar - or something like that
 
+- verify the alt tab behavior follows same standards such as those that browsers like firefox, brave, follow
 
 ## Maybe:
 
 - maybe: change menu bar style to be more normal while still working with a hiding menubar (ideally keep it open) and being native-y
+
+- hyper shift tab to go back in hyper tab cycle
+- maybe: window switcher ui for hyper tab
 
 - maybe behave differently in "fullscreen"?
     - feature: for windows that can't be resized, if we are in fullscreen view do not move them when added instead just switch between them, allow them to be moved without resizing all other windows (only under specific circumastances though)
@@ -70,13 +69,12 @@
     - maybe: add a window-wide close/release all windows button
 - change x icon on tab which frees the window, change it to a - icon or another icon we find
 
-- window switcher ui instead of remembering
-
-- duplicate app protection story
 
 - consider moving swiftui to appkit - swiftui we have lifecycle hacks right now and not that much code in it
 
 
+- as an alternative to hiding windows for better integration with stuff such as altTab. we could just recreate altTab but with awareness of our own groups, and displays as such in the ui (ie three app icons in one list view). we are already a window manager sort of esp with the hyper tab keybind
+    - basically how i want to use it personally is one alttab (replacing command tab) for window level, one hyper tab (or maybe remap) for within meta-window level, and then control tab for within app level (ie firefox, vscode) (already standard)
 
 
 ## Post-MVP Features (important)

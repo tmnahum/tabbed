@@ -1,2 +1,3 @@
-- build with env var DEVELOPMENT_TEAM=LS679A9VV4 set - or can use the sh files build.sh test.sh
+- build with env var DEVELOPMENT_TEAM=LS679A9VV4 set - or can use the sh files build.sh test.sh which include this
 - do web research when you are not sure about something or an approach is not working
+- after making changes: high confidence: commit then run code review, low confidence: run code review then commit

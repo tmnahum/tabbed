@@ -27,7 +27,10 @@
       "Bash(git -C /Users/tmn/ccode/tabbed/version-a commit:*)",
       "Bash(git -C /Users/tmn/ccode/tabbed/version-a diff --staged)",
       "Bash(git -C /Users/tmn/ccode/tabbed/version-a diff Tabbed/AppDelegate.swift)",
-      "Bash(defaults read:*)"
+      "Bash(defaults read:*)",
+      "Bash(DEVELOPMENT_TEAM=LS679A9VV4 ./build.sh:*)",
+      "Bash(DEVELOPMENT_TEAM=LS679A9VV4 xcodebuild:*)",
+      "Bash(ls:*)"
     ]
   }
 }
