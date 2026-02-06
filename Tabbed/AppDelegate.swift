@@ -348,19 +348,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         windowObserver.stopObserving(window: window)
 
-        let tabBarHeight = TabBarPanel.tabBarHeight
-
-        // Expand window upward into tab bar area
-        if let frame = AccessibilityHelper.getFrame(of: window.element) {
-            let expandedFrame = CGRect(
-                x: frame.origin.x,
-                y: frame.origin.y - tabBarHeight,
-                width: frame.width,
-                height: frame.height + tabBarHeight
-            )
-            AccessibilityHelper.setFrame(of: window.element, to: expandedFrame)
-        }
-
         groupManager.releaseWindow(withID: window.id, from: group)
 
         if !groupManager.groups.contains(where: { $0.id == group.id }) {
@@ -468,6 +455,34 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 AccessibilityHelper.setFrame(of: lastWindow.element, to: expandedFrame)
             }
         }
+        panel.close()
+        tabBarPanels.removeValue(forKey: group.id)
+    }
+
+    /// Disband an entire group: expand all windows upward to reclaim tab bar space,
+    /// stop observers, dissolve the group, and close the panel.
+    func disbandGroup(_ group: TabGroup) {
+        guard let panel = tabBarPanels[group.id] else { return }
+
+        if lastActiveGroupID == group.id { lastActiveGroupID = nil }
+        cycleWorkItem?.cancel()
+        cycleWorkItem = nil
+
+        let tabBarHeight = TabBarPanel.tabBarHeight
+        for window in group.windows {
+            windowObserver.stopObserving(window: window)
+            if let frame = AccessibilityHelper.getFrame(of: window.element) {
+                let expandedFrame = CGRect(
+                    x: frame.origin.x,
+                    y: frame.origin.y - tabBarHeight,
+                    width: frame.width,
+                    height: frame.height + tabBarHeight
+                )
+                AccessibilityHelper.setFrame(of: window.element, to: expandedFrame)
+            }
+        }
+
+        groupManager.dissolveGroup(group)
         panel.close()
         tabBarPanels.removeValue(forKey: group.id)
     }

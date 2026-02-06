@@ -10,6 +10,7 @@ struct TabbedApp: App {
                 groupManager: appDelegate.groupManager,
                 onNewGroup: { appDelegate.showWindowPicker() },
                 onFocusWindow: { window in appDelegate.focusWindow(window) },
+                onDisbandGroup: { group in appDelegate.disbandGroup(group) },
                 onSettings: { appDelegate.showSettings() },
                 onQuit: {
                     appDelegate.isExplicitQuit = true

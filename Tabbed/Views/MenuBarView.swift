@@ -5,6 +5,7 @@ struct MenuBarView: View {
 
     var onNewGroup: () -> Void
     var onFocusWindow: (WindowInfo) -> Void
+    var onDisbandGroup: (TabGroup) -> Void
     var onSettings: () -> Void
     var onQuit: () -> Void
 
@@ -52,7 +53,9 @@ struct MenuBarView: View {
     private func groupRow(_ group: TabGroup) -> some View {
         HStack(spacing: 4) {
             ForEach(group.windows) { window in
-                Group {
+                Button {
+                    onFocusWindow(window)
+                } label: {
                     if let icon = window.icon {
                         Image(nsImage: icon)
                             .resizable()
@@ -62,10 +65,23 @@ struct MenuBarView: View {
                             .frame(width: 18, height: 18)
                     }
                 }
-                .contentShape(Rectangle())
-                .onTapGesture { onFocusWindow(window) }
+                .buttonStyle(.plain)
                 .help(window.title.isEmpty ? window.appName : window.title)
             }
+
+            Spacer()
+
+            Button {
+                onDisbandGroup(group)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 18, height: 18)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Disband group")
         }
         .padding(6)
         .background(
