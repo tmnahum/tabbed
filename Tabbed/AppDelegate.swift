@@ -13,6 +13,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// extend the suppression window instead of leaving gaps.
     private var suppressedWindowIDs: Set<CGWindowID> = []
     private var suppressionWorkItems: [CGWindowID: DispatchWorkItem] = [:]
+    /// Pending delayed re-sync for animated resizes (e.g. double-click maximize).
+    private var resyncWorkItem: DispatchWorkItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if !AXIsProcessTrusted() {
@@ -210,6 +212,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 app.activate(options: [])
             }
         }
+
+        // Sync window to the group's canonical frame. This acts as a fallback
+        // for any prior resize that left this window at the wrong size (e.g.
+        // a double-click maximize that only partially synced).
+        suppressNotifications(for: [window.id])
+        AccessibilityHelper.setFrame(of: window.element, to: group.frame)
+
         raiseAndUpdate(window, in: group)
         panel.orderAbove(windowID: window.id)
     }
@@ -406,6 +415,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Update panel size and position
         panel.positionAbove(windowFrame: adjustedFrame)
         panel.orderAbove(windowID: activeWindow.id)
+
+        // Schedule a delayed re-sync to catch animated resizes (e.g. double-click
+        // maximize). macOS may fire the notification before the animation finishes,
+        // so we re-read the frame after a short delay and re-sync if it changed.
+        resyncWorkItem?.cancel()
+        let groupID = group.id
+        let resync = DispatchWorkItem { [weak self] in
+            guard let self,
+                  let group = self.groupManager.groups.first(where: { $0.id == groupID }),
+                  let panel = self.tabBarPanels[groupID],
+                  let activeWindow = group.activeWindow,
+                  let currentFrame = AccessibilityHelper.getFrame(of: activeWindow.element) else { return }
+
+            let clamped = self.clampFrameForTabBar(currentFrame)
+            guard clamped != group.frame else { return }
+
+            group.frame = clamped
+            let others = group.windows.filter { $0.id != activeWindow.id }
+            self.suppressNotifications(for: others.map(\.id))
+            for window in others {
+                AccessibilityHelper.setFrame(of: window.element, to: clamped)
+            }
+            panel.positionAbove(windowFrame: clamped)
+            panel.orderAbove(windowID: activeWindow.id)
+        }
+        resyncWorkItem = resync
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: resync)
     }
 
     private func handleWindowFocused(pid: pid_t, element: AXUIElement) {
