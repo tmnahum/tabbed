@@ -1,0 +1,33 @@
+name: Tabbed
+options:
+  bundleIdPrefix: com.tabbed
+  deploymentTarget:
+    macOS: "13.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MACOSX_DEPLOYMENT_TARGET: "13.0"
+targets:
+  Tabbed:
+    type: application
+    platform: macOS
+    sources: [Tabbed]
+    settings:
+      base:
+        INFOPLIST_FILE: Tabbed/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Tabbed/Tabbed.entitlements
+        CODE_SIGN_IDENTITY: "-"
+        PRODUCT_BUNDLE_IDENTIFIER: com.tabbed.Tabbed
+    entitlements:
+      path: Tabbed/Tabbed.entitlements
+  TabbedTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources: [TabbedTests]
+    dependencies:
+      - target: Tabbed
+    settings:
+      base:
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Tabbed.app/Contents/MacOS/Tabbed"
