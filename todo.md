@@ -39,3 +39,6 @@
 Maybe:
 - Drag a tab out of the tab bar to release it
 - Drag a tab into another group's tab bar to move between groups
+
+# Todo later
+- test that it works with Rectangles
