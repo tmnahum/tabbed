@@ -13,18 +13,30 @@
 ### Task 1: Project Setup
 
 **Files:**
+- Create: `.gitignore`
 - Create: `project.yml`
 - Create: `Tabbed/Info.plist`
 - Create: `Tabbed/Tabbed.entitlements`
 - Create: `Tabbed/TabbedApp.swift`
 - Create: `Tabbed/AppDelegate.swift`
+- Create: `TabbedTests/TabbedTests.swift`
 
-**Step 1: Install XcodeGen if needed**
+**Step 1: Create .gitignore**
+
+```
+*.xcodeproj
+build/
+DerivedData/
+.DS_Store
+*.xcuserdata
+```
+
+**Step 2: Install XcodeGen if needed**
 
 Run: `brew list xcodegen || brew install xcodegen`
 Expected: xcodegen is available
 
-**Step 2: Create project.yml**
+**Step 3: Create project.yml**
 
 ```yaml
 name: Tabbed
@@ -62,7 +74,7 @@ targets:
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Tabbed.app/Contents/MacOS/Tabbed"
 ```
 
-**Step 3: Create Info.plist**
+**Step 4: Create Info.plist**
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -93,7 +105,7 @@ targets:
 </plist>
 ```
 
-**Step 4: Create entitlements (no sandbox)**
+**Step 5: Create entitlements (no sandbox)**
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -106,7 +118,7 @@ targets:
 </plist>
 ```
 
-**Step 5: Create TabbedApp.swift**
+**Step 6: Create TabbedApp.swift**
 
 ```swift
 import SwiftUI
@@ -127,7 +139,7 @@ struct TabbedApp: App {
 }
 ```
 
-**Step 6: Create AppDelegate.swift**
+**Step 7: Create AppDelegate.swift**
 
 ```swift
 import AppKit
@@ -142,7 +154,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 }
 ```
 
-**Step 7: Create placeholder test file**
+**Step 8: Create placeholder test file**
 
 Create: `TabbedTests/TabbedTests.swift`
 
@@ -157,20 +169,20 @@ final class TabbedTests: XCTestCase {
 }
 ```
 
-**Step 8: Generate project and build**
+**Step 9: Generate project and build**
 
 Run: `cd /Users/tmn/ccode/tabbed/version-a && xcodegen generate`
 Expected: `Tabbed.xcodeproj` is created
 
-Run: `xcodebuild -project Tabbed.xcodeproj -scheme Tabbed build`
+Run: `xcodebuild -project Tabbed.xcodeproj -scheme Tabbed -derivedDataPath build build`
 Expected: BUILD SUCCEEDED
 
-**Step 9: Run the app to verify menu bar icon appears**
+**Step 10: Run the app to verify menu bar icon appears**
 
 Run: `open build/Build/Products/Debug/Tabbed.app`
 Expected: Menu bar icon appears (rectangle.stack), clicking shows "Tabbed is running" and "Quit". Accessibility permission prompt appears. No Dock icon.
 
-**Step 10: Commit**
+**Step 11: Commit**
 
 ```bash
 git init
@@ -388,7 +400,7 @@ final class TabGroupTests: XCTestCase {
 
 **Step 4: Run tests**
 
-Run: `xcodegen generate && xcodebuild -project Tabbed.xcodeproj -scheme TabbedTests test`
+Run: `xcodegen generate && xcodebuild -project Tabbed.xcodeproj -scheme TabbedTests -derivedDataPath build test`
 Expected: All tests pass
 
 **Step 5: Commit**
@@ -625,7 +637,7 @@ final class CoordinateConverterTests: XCTestCase {
 
 **Step 4: Run tests**
 
-Run: `xcodegen generate && xcodebuild -project Tabbed.xcodeproj -scheme TabbedTests test`
+Run: `xcodegen generate && xcodebuild -project Tabbed.xcodeproj -scheme TabbedTests -derivedDataPath build test`
 Expected: All tests pass
 
 **Step 5: Commit**
@@ -723,7 +735,7 @@ for w in wm.availableWindows {
 }
 ```
 
-Run: `xcodegen generate && xcodebuild -project Tabbed.xcodeproj -scheme Tabbed build && open build/Build/Products/Debug/Tabbed.app`
+Run: `xcodegen generate && xcodebuild -project Tabbed.xcodeproj -scheme Tabbed -derivedDataPath build build && open build/Build/Products/Debug/Tabbed.app`
 
 Expected: Console output lists open windows with app names and titles. Remove the temporary print after verifying.
 
@@ -832,7 +844,7 @@ final class GroupManagerTests: XCTestCase {
 
 **Step 2: Run tests to verify they fail**
 
-Run: `xcodegen generate && xcodebuild -project Tabbed.xcodeproj -scheme TabbedTests test`
+Run: `xcodegen generate && xcodebuild -project Tabbed.xcodeproj -scheme TabbedTests -derivedDataPath build test`
 Expected: FAIL — GroupManager not defined
 
 **Step 3: Create GroupManager**
@@ -902,7 +914,7 @@ class GroupManager: ObservableObject {
 
 **Step 4: Run tests**
 
-Run: `xcodegen generate && xcodebuild -project Tabbed.xcodeproj -scheme TabbedTests test`
+Run: `xcodegen generate && xcodebuild -project Tabbed.xcodeproj -scheme TabbedTests -derivedDataPath build test`
 Expected: All tests pass
 
 **Step 5: Commit**
@@ -945,12 +957,14 @@ class TabBarPanel: NSPanel {
 
         let visualEffect = NSVisualEffectView(frame: self.contentView!.bounds)
         visualEffect.autoresizingMask = [.width, .height]
-        visualEffect.material = .menu
+        visualEffect.material = .menu  // Try .titlebar, .headerView, or .hudWindow if this doesn't look right
         visualEffect.state = .active
         visualEffect.wantsLayer = true
-        visualEffect.layer?.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
+        // Top corners only (minY = top in NSView's flipped layer coords)
+        // If corners appear on the wrong side, swap to [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
+        visualEffect.layer?.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
         visualEffect.layer?.cornerRadius = 8
-        self.contentView?.addSubview(visualEffect)
+        self.contentView?.addSubview(visualEffect, positioned: .below, relativeTo: nil)
     }
 
     /// Position the panel above the given window frame (in AX/CG coordinates)
@@ -980,7 +994,7 @@ class TabBarPanel: NSPanel {
 
     func show(above windowFrame: CGRect, windowID: CGWindowID) {
         positionAbove(windowFrame: windowFrame)
-        orderBehind(nil)
+        orderFront(nil)
         orderAbove(windowID: windowID)
     }
 }
@@ -1111,6 +1125,12 @@ Add to `TabBarPanel.swift` — a method to set the SwiftUI content:
 ```swift
 import SwiftUI
 
+// Add this import at the top of TabBarPanel.swift, and store a reference to the visual effect view:
+private let visualEffectView: NSVisualEffectView  // Add as a property
+
+// In init(), store the reference:
+// self.visualEffectView = visualEffect  (add this line after creating visualEffect)
+
 // Add this method to TabBarPanel:
 func setContent(group: TabGroup, onSwitchTab: @escaping (Int) -> Void, onReleaseTab: @escaping (Int) -> Void, onAddWindow: @escaping () -> Void) {
     let tabBarView = TabBarView(
@@ -1120,17 +1140,18 @@ func setContent(group: TabGroup, onSwitchTab: @escaping (Int) -> Void, onRelease
         onAddWindow: onAddWindow
     )
     let hostingView = NSHostingView(rootView: tabBarView)
-    hostingView.frame = self.contentView!.bounds
+    hostingView.frame = visualEffectView.bounds
     hostingView.autoresizingMask = [.width, .height]
 
-    // Insert hosting view above the visual effect view
-    self.contentView?.addSubview(hostingView)
+    // Add as subview OF the visual effect view so vibrancy shows through
+    // and hosting view background is transparent
+    visualEffectView.addSubview(hostingView)
 }
 ```
 
 **Step 3: Build and verify**
 
-Run: `xcodegen generate && xcodebuild -project Tabbed.xcodeproj -scheme Tabbed build`
+Run: `xcodegen generate && xcodebuild -project Tabbed.xcodeproj -scheme Tabbed -derivedDataPath build build`
 Expected: BUILD SUCCEEDED
 
 **Step 4: Commit**
@@ -1269,7 +1290,7 @@ struct WindowPickerView: View {
 
 **Step 2: Build**
 
-Run: `xcodegen generate && xcodebuild -project Tabbed.xcodeproj -scheme Tabbed build`
+Run: `xcodegen generate && xcodebuild -project Tabbed.xcodeproj -scheme Tabbed -derivedDataPath build build`
 Expected: BUILD SUCCEEDED
 
 **Step 3: Commit**
@@ -1385,12 +1406,14 @@ Replace `Tabbed/AppDelegate.swift`:
 
 ```swift
 import AppKit
+import SwiftUI
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     let windowManager = WindowManager()
     let groupManager = GroupManager()
 
     private var windowPickerPanel: NSPanel?
+    private var tabBarPanels: [UUID: TabBarPanel] = [:]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if !AXIsProcessTrusted() {
@@ -1400,6 +1423,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        for (_, panel) in tabBarPanels {
+            panel.close()
+        }
+        tabBarPanels.removeAll()
         groupManager.dissolveAllGroups()
     }
 
@@ -1478,6 +1505,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         )
 
+        tabBarPanels[group.id] = panel
+
         if let activeWindow = group.activeWindow {
             panel.show(above: windowFrame, windowID: activeWindow.id)
         }
@@ -1511,6 +1540,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // If group was dissolved, remove the panel
         if !groupManager.groups.contains(where: { $0.id == group.id }) {
             panel.close()
+            tabBarPanels.removeValue(forKey: group.id)
         }
     }
 
@@ -1530,7 +1560,7 @@ extension Collection {
 
 **Step 4: Build and test manually**
 
-Run: `xcodegen generate && xcodebuild -project Tabbed.xcodeproj -scheme Tabbed build && open build/Build/Products/Debug/Tabbed.app`
+Run: `xcodegen generate && xcodebuild -project Tabbed.xcodeproj -scheme Tabbed -derivedDataPath build build && open build/Build/Products/Debug/Tabbed.app`
 
 Expected: Click menu bar icon → shows popover with "No groups" and "New Group". Click "New Group" → window picker appears listing open windows. Select 2+ windows → "Create Group" button enables. Click it → windows snap together, tab bar appears above them. Click tabs to switch.
 
@@ -1634,15 +1664,31 @@ class WindowObserver {
     }
 
     private func handleNotification(element: AXUIElement, notification: String) {
-        guard let windowID = AccessibilityHelper.windowID(for: element) else {
-            // Could be an app-level notification (focus change)
-            if notification == kAXFocusedWindowChangedNotification as String {
-                var pid: pid_t = 0
-                AXUIElementGetPid(element, &pid)
+        // For focus changes, the callback usually receives the window element,
+        // but sometimes receives the app element (when no window has focus).
+        // Handle both cases.
+        if notification == kAXFocusedWindowChangedNotification as String {
+            var pid: pid_t = 0
+            AXUIElementGetPid(element, &pid)
+
+            // Check if element is a window by trying to get its window ID
+            if let windowID = AccessibilityHelper.windowID(for: element) {
+                // Element IS the focused window — use it directly
                 onWindowFocused?(pid, element)
+            } else {
+                // Element is the app — query for the focused window
+                var focusedWindow: AnyObject?
+                let result = AXUIElementCopyAttributeValue(
+                    element, kAXFocusedWindowAttribute as CFString, &focusedWindow
+                )
+                if result == .success, let windowElement = focusedWindow {
+                    onWindowFocused?(pid, windowElement as! AXUIElement)
+                }
             }
             return
         }
+
+        guard let windowID = AccessibilityHelper.windowID(for: element) else { return }
 
         switch notification {
         case kAXMovedNotification as String:
@@ -1653,10 +1699,6 @@ class WindowObserver {
             onWindowDestroyed?(windowID)
         case kAXTitleChangedNotification as String:
             onTitleChanged?(windowID)
-        case kAXFocusedWindowChangedNotification as String:
-            var pid: pid_t = 0
-            AXUIElementGetPid(element, &pid)
-            onWindowFocused?(pid, element)
         default:
             break
         }
@@ -1670,7 +1712,7 @@ Add to `AppDelegate` class properties:
 
 ```swift
 let windowObserver = WindowObserver()
-private var tabBarPanels: [UUID: TabBarPanel] = [:]
+// Note: tabBarPanels dict was already added in Task 9
 ```
 
 Add setup in `applicationDidFinishLaunching` after the permission check:
@@ -1809,7 +1851,7 @@ private func addWindow(_ window: WindowInfo, to group: TabGroup) {
 }
 ```
 
-Update `applicationWillTerminate`:
+Update `applicationWillTerminate` to also stop the observer:
 
 ```swift
 func applicationWillTerminate(_ notification: Notification) {
@@ -1824,7 +1866,7 @@ func applicationWillTerminate(_ notification: Notification) {
 
 **Step 3: Build and test**
 
-Run: `xcodegen generate && xcodebuild -project Tabbed.xcodeproj -scheme Tabbed build && open build/Build/Products/Debug/Tabbed.app`
+Run: `xcodegen generate && xcodebuild -project Tabbed.xcodeproj -scheme Tabbed -derivedDataPath build build && open build/Build/Products/Debug/Tabbed.app`
 
 Expected: Create a group. Move the active window → tab bar and other windows snap to new position. Resize → everything syncs. Close a grouped window → it's removed from the tab. Switch to a grouped window via Cmd+Tab or clicking → tab bar updates active tab.
 
@@ -1872,7 +1914,7 @@ if let screen = NSScreen.main {
 
 **Step 2: Build and test**
 
-Run: `xcodegen generate && xcodebuild -project Tabbed.xcodeproj -scheme Tabbed build && open build/Build/Products/Debug/Tabbed.app`
+Run: `xcodegen generate && xcodebuild -project Tabbed.xcodeproj -scheme Tabbed -derivedDataPath build build && open build/Build/Products/Debug/Tabbed.app`
 
 Expected: Create a group. Click the green maximize button on one of the grouped windows → that window is released from the group. If only one window remains, the group dissolves.
 
@@ -1897,10 +1939,19 @@ git commit -m "feat: detect full-screen and release window from group"
 
 ```swift
 var onPanelMoved: (() -> Void)?
+private var frameOnMouseDown: NSRect = .zero
+
+override func mouseDown(with event: NSEvent) {
+    frameOnMouseDown = self.frame
+    super.mouseDown(with: event)
+}
 
 override func mouseUp(with event: NSEvent) {
     super.mouseUp(with: event)
-    onPanelMoved?()
+    // Only fire if the panel actually moved
+    if self.frame != frameOnMouseDown {
+        onPanelMoved?()
+    }
 }
 ```
 
@@ -1948,7 +1999,7 @@ private func handlePanelMoved(group: TabGroup, panel: TabBarPanel) {
 
 **Step 3: Build and test**
 
-Run: `xcodegen generate && xcodebuild -project Tabbed.xcodeproj -scheme Tabbed build && open build/Build/Products/Debug/Tabbed.app`
+Run: `xcodegen generate && xcodebuild -project Tabbed.xcodeproj -scheme Tabbed -derivedDataPath build build && open build/Build/Products/Debug/Tabbed.app`
 
 Expected: Create a group. Drag the tab bar (on empty space between tabs) → tab bar moves. On release, all grouped windows snap to the new position below the tab bar.
 
@@ -1968,7 +2019,9 @@ git commit -m "feat: dragging tab bar moves entire group"
 
 **Step 1: Add drag reordering to TabBarView**
 
-Update TabBarView to support dragging tabs to reorder. Add `onMoveTab` callback and use `onDrag`/`onDrop` or `.draggable`/`.dropDestination`:
+Update TabBarView to support dragging tabs to reorder. Add `onMoveTab` callback and use `onDrag`/`onDrop`.
+
+Note: `isMovableByWindowBackground` and SwiftUI `onDrag` should coexist without conflict — `onDrag` attaches to interactive controls (tab buttons), while `isMovableByWindowBackground` only triggers on non-interactive areas. If tab dragging unexpectedly moves the whole panel, disable `isMovableByWindowBackground` and implement panel drag manually via `mouseDown`/`mouseDragged` on background areas only.
 
 ```swift
 // Add to TabBarView properties:
@@ -2019,26 +2072,7 @@ struct TabDropDelegate: DropDelegate {
 }
 ```
 
-**Step 2: Wire onMoveTab in AppDelegate**
-
-In `createGroup`, update the `setContent` call:
-
-```swift
-panel.setContent(
-    group: group,
-    onSwitchTab: { [weak self] index in
-        self?.switchTab(in: group, to: index, panel: panel)
-    },
-    onReleaseTab: { [weak self] index in
-        self?.releaseTab(at: index, from: group, panel: panel)
-    },
-    onAddWindow: { [weak self] in
-        self?.showWindowPicker(addingTo: group)
-    }
-)
-```
-
-Since `TabBarView` observes the `TabGroup` (which is an `ObservableObject`), calling `group.moveTab(from:to:)` will trigger a UI update. Wire `onMoveTab` in `TabBarPanel.setContent`:
+**Step 2: Wire onMoveTab in TabBarPanel and AppDelegate**
 
 Update the `setContent` method signature and body to pass `onMoveTab`:
 
@@ -2055,14 +2089,20 @@ func setContent(group: TabGroup, onSwitchTab: @escaping (Int) -> Void, onRelease
 }
 ```
 
-In AppDelegate `createGroup`:
+In AppDelegate `createGroup`, update the `setContent` call to include `onMoveTab`:
 
 ```swift
 panel.setContent(
     group: group,
-    onSwitchTab: { ... },
-    onReleaseTab: { ... },
-    onAddWindow: { ... },
+    onSwitchTab: { [weak self] index in
+        self?.switchTab(in: group, to: index, panel: panel)
+    },
+    onReleaseTab: { [weak self] index in
+        self?.releaseTab(at: index, from: group, panel: panel)
+    },
+    onAddWindow: { [weak self] in
+        self?.showWindowPicker(addingTo: group)
+    },
     onMoveTab: { from, to in
         group.moveTab(from: from, to: to)
     }
@@ -2071,7 +2111,7 @@ panel.setContent(
 
 **Step 3: Build and test**
 
-Run: `xcodegen generate && xcodebuild -project Tabbed.xcodeproj -scheme Tabbed build && open build/Build/Products/Debug/Tabbed.app`
+Run: `xcodegen generate && xcodebuild -project Tabbed.xcodeproj -scheme Tabbed -derivedDataPath build build && open build/Build/Products/Debug/Tabbed.app`
 
 Expected: Create a group with 3+ windows. Drag a tab to a different position → tabs reorder. Active tab indicator follows correctly.
 
@@ -2104,7 +2144,7 @@ In `handleTitleChanged`, the `WindowInfo.title` is updated. Since `TabGroup` is 
 
 **Step 4: Run all tests**
 
-Run: `xcodegen generate && xcodebuild -project Tabbed.xcodeproj -scheme TabbedTests test`
+Run: `xcodegen generate && xcodebuild -project Tabbed.xcodeproj -scheme TabbedTests -derivedDataPath build test`
 Expected: All tests pass
 
 **Step 5: Full manual test pass**

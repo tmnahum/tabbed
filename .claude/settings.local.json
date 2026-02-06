@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(gh api:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(brew list:*)",
+      "Bash(xcodegen generate:*)",
+      "Bash(xcodebuild:*)",
+      "Bash(open:*)"
     ]
   }
 }
