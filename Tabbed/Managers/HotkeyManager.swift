@@ -66,7 +66,13 @@ class HotkeyManager {
 
     @discardableResult
     private func handleKeyDown(_ event: NSEvent) -> Bool {
+        let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask).rawValue
+        let hyper: UInt = 0x1E0000
+        if (mods & hyper) == hyper {
+            Logger.log("[HK] hyper keyDown: keyCode=\(event.keyCode) mods=0x\(String(mods, radix: 16)) | newTab binding: keyCode=\(config.newTab.keyCode) mods=0x\(String(config.newTab.modifiers, radix: 16)) unbound=\(config.newTab.isUnbound)")
+        }
         if config.newTab.matches(event) {
+            Logger.log("[HK] newTab MATCHED — calling handler")
             onNewTab?()
             return true
         }

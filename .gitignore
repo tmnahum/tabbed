@@ -5,3 +5,4 @@ DerivedData/
 *.xcuserdata
 .env
 .worktrees/
+logs/

@@ -258,11 +258,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func showSettings() {
         if let existing = settingsWindow {
             existing.makeKeyAndOrderFront(nil)
-            if #available(macOS 14.0, *) {
-                NSApp.activate()
-            } else {
-                NSApp.activate(ignoringOtherApps: true)
-            }
+            NSApp.activate(ignoringOtherApps: true)
             return
         }
 
@@ -289,11 +285,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.contentView = NSHostingView(rootView: settingsView)
         window.center()
         window.makeKeyAndOrderFront(nil)
-        if #available(macOS 14.0, *) {
-            NSApp.activate()
-        } else {
-            NSApp.activate(ignoringOtherApps: true)
-        }
+        NSApp.activate(ignoringOtherApps: true)
         settingsWindow = window
     }
 
@@ -345,11 +337,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.contentView = NSHostingView(rootView: picker)
         panel.center()
         panel.makeKeyAndOrderFront(nil)
-        if #available(macOS 14.0, *) {
-            NSApp.activate()
-        } else {
-            NSApp.activate(ignoringOtherApps: true)
-        }
+        NSApp.activate(ignoringOtherApps: true)
         windowPickerPanel = panel
     }
 
@@ -588,7 +576,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func handleHotkeyNewTab() {
-        guard let (group, _) = activeGroup() else { return }
+        let result = activeGroup()
+        Logger.log("[HK] handleHotkeyNewTab called — activeGroup=\(result != nil)")
+        guard let (group, _) = result else { return }
+        Logger.log("[HK] showing window picker for group \(group.id)")
         showWindowPicker(addingTo: group)
     }
 
@@ -745,7 +736,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         group.frame = adjustedFrame
-        group.tabBarSqueezeDelta = adjustedFrame.origin.y - frame.origin.y
+        // Only update squeeze delta when clamping actually moved the window;
+        // otherwise preserve the existing delta so we can still expand on quit.
+        if adjustedFrame.origin.y != frame.origin.y {
+            group.tabBarSqueezeDelta = adjustedFrame.origin.y - frame.origin.y
+        }
 
         // Suppress notifications for other windows we're about to sync
         let otherIDs = group.windows.filter { $0.id != windowID }.map(\.id)
