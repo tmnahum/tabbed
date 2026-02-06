@@ -17,7 +17,9 @@ targets:
       base:
         INFOPLIST_FILE: Tabbed/Info.plist
         CODE_SIGN_ENTITLEMENTS: Tabbed/Tabbed.entitlements
-        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_IDENTITY: "Apple Development"
+        CODE_SIGN_STYLE: "Automatic"
+        ENABLE_HARDENED_RUNTIME: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.tabbed.Tabbed
     entitlements:
       path: Tabbed/Tabbed.entitlements
