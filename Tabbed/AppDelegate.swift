@@ -137,7 +137,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Raise the first window
-        AccessibilityHelper.raiseWindow(group.windows[0])
+        raiseAndUpdate(group.windows[0], in: group)
 
         // Create and show tab bar
         let panel = TabBarPanel()
@@ -153,11 +153,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             },
             onAddWindow: { [weak self] in
                 self?.showWindowPicker(addingTo: group)
-            },
-            onMoveTab: { sourceID, destID in
-                guard let fromIndex = group.windows.firstIndex(where: { $0.id == sourceID }),
-                      let toIndex = group.windows.firstIndex(where: { $0.id == destID }) else { return }
-                group.moveTab(from: fromIndex, to: toIndex)
             }
         )
 
@@ -177,10 +172,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Raise a window and update the group's stored AXUIElement if a fresh one was resolved.
+    private func raiseAndUpdate(_ window: WindowInfo, in group: TabGroup) {
+        if let freshElement = AccessibilityHelper.raiseWindow(window) {
+            if let idx = group.windows.firstIndex(where: { $0.id == window.id }) {
+                group.windows[idx].element = freshElement
+            }
+        }
+    }
+
     private func switchTab(in group: TabGroup, to index: Int, panel: TabBarPanel) {
         group.switchTo(index: index)
         guard let window = group.activeWindow else { return }
-        AccessibilityHelper.raiseWindow(window)
+        raiseAndUpdate(window, in: group)
         panel.orderAbove(windowID: window.id)
     }
 
@@ -207,7 +211,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if !groupManager.groups.contains(where: { $0.id == group.id }) {
             handleGroupDissolution(group: group, panel: panel)
         } else if let newActive = group.activeWindow {
-            AccessibilityHelper.raiseWindow(newActive)
+            raiseAndUpdate(newActive, in: group)
             panel.orderAbove(windowID: newActive.id)
         }
     }
@@ -284,7 +288,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if let activeWindow = group.activeWindow {
-            AccessibilityHelper.raiseWindow(activeWindow)
+            raiseAndUpdate(activeWindow, in: group)
             panel.orderAbove(windowID: activeWindow.id)
         }
     }
@@ -348,7 +352,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if !groupManager.groups.contains(where: { $0.id == group.id }) {
                 handleGroupDissolution(group: group, panel: panel)
             } else if let newActive = group.activeWindow {
-                AccessibilityHelper.raiseWindow(newActive)
+                raiseAndUpdate(newActive, in: group)
                 panel.orderAbove(windowID: newActive.id)
             }
             return
@@ -411,7 +415,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if !groupManager.groups.contains(where: { $0.id == group.id }) {
             handleGroupDissolution(group: group, panel: panel)
         } else if let newActive = group.activeWindow {
-            AccessibilityHelper.raiseWindow(newActive)
+            raiseAndUpdate(newActive, in: group)
             panel.orderAbove(windowID: newActive.id)
         }
     }
@@ -441,7 +445,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 panel.close()
             } else if let panel = tabBarPanels[group.id],
                       let newActive = group.activeWindow {
-                AccessibilityHelper.raiseWindow(newActive)
+                raiseAndUpdate(newActive, in: group)
                 panel.orderAbove(windowID: newActive.id)
             }
         }

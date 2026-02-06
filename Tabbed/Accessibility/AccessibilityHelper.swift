@@ -128,22 +128,39 @@ enum AccessibilityHelper {
         return AXUIElementPerformAction(element, kAXRaiseAction as CFString)
     }
 
-    /// Raise with fallback: kAXRaiseAction → activate app + nudge position
-    static func raiseWindow(_ window: WindowInfo) {
-        let result = raise(window.element)
-        if result == .success { return }
+    /// Raise with fallback chain:
+    /// 1. kAXRaiseAction on stored element
+    /// 2. Refresh AXUIElement by CGWindowID, retry kAXRaiseAction
+    /// 3. Activate app + kAXRaiseAction on fresh element
+    ///
+    /// Returns a fresh AXUIElement if one was resolved (caller should update
+    /// the group's stored element), or nil if the original was fine.
+    @discardableResult
+    static func raiseWindow(_ window: WindowInfo) -> AXUIElement? {
+        // Fast path: raise with the stored element
+        if raise(window.element) == .success { return nil }
 
-        guard let app = NSRunningApplication(processIdentifier: window.ownerPID) else { return }
+        // The stored AXUIElement may be stale. Look up a fresh one by CGWindowID.
+        let freshElement: AXUIElement
+        let allElements = windowElements(for: window.ownerPID)
+        if let match = allElements.first(where: { windowID(for: $0) == window.id }) {
+            freshElement = match
+            if raise(freshElement) == .success { return freshElement }
+        } else {
+            freshElement = window.element
+        }
+
+        // Last resort: activate the app, then raise the specific window
+        guard let app = NSRunningApplication(processIdentifier: window.ownerPID) else {
+            return freshElement !== window.element ? freshElement : nil
+        }
         if #available(macOS 14.0, *) {
             app.activate()
         } else {
             app.activate(options: [])
         }
-        // Re-set position to current value — forces this specific window
-        // to front within the now-active app (not just any window of the app)
-        if let position = getPosition(of: window.element) {
-            setPosition(of: window.element, to: position)
-        }
+        raise(freshElement)
+        return freshElement !== window.element ? freshElement : nil
     }
 
     // MARK: - Observer
