@@ -10,6 +10,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindow: NSWindow?
     private var keyMonitor: Any?
     private var tabBarPanels: [UUID: TabBarPanel] = [:]
+    private var hotkeyManager: HotkeyManager?
+    private var lastActiveGroupID: UUID?
     /// Window IDs we're programmatically moving/resizing — suppress their AX notifications.
     /// Each window has its own cancellable timer so overlapping programmatic changes
     /// extend the suppression window instead of leaving gaps.
@@ -17,6 +19,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var suppressionWorkItems: [CGWindowID: DispatchWorkItem] = [:]
     /// Pending delayed re-syncs for animated resizes, keyed by group ID.
     private var resyncWorkItems: [UUID: DispatchWorkItem] = [:]
+    /// Pending MRU commit after cycling stops.
+    private var cycleWorkItem: DispatchWorkItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if !AXIsProcessTrusted() {
@@ -68,6 +72,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             return event
         }
+
+        // Global keyboard shortcuts
+        let config = ShortcutConfig.load()
+        let hkm = HotkeyManager(config: config)
+
+        hkm.onNewTab = { [weak self] in
+            self?.handleHotkeyNewTab()
+        }
+        hkm.onReleaseTab = { [weak self] in
+            self?.handleHotkeyReleaseTab()
+        }
+        hkm.onCycleTab = { [weak self] in
+            self?.handleHotkeyCycleTab()
+        }
+        hkm.onSwitchToTab = { [weak self] index in
+            self?.handleHotkeySwitchToTab(index)
+        }
+
+        hkm.start()
+        hotkeyManager = hkm
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -95,6 +119,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         settingsWindow = nil
         if let monitor = keyMonitor { NSEvent.removeMonitor(monitor) }
         keyMonitor = nil
+        hotkeyManager?.stop()
+        hotkeyManager = nil
         groupManager.dissolveAllGroups()
     }
 
@@ -118,7 +144,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             defer: false
         )
         window.title = "Tabbed Settings"
-        window.contentView = NSHostingView(rootView: SettingsView())
+        let settingsView = SettingsView(
+            config: hotkeyManager?.config ?? .default,
+            onConfigChanged: { [weak self] newConfig in
+                newConfig.save()
+                self?.hotkeyManager?.updateConfig(newConfig)
+            }
+        )
+        window.contentView = NSHostingView(rootView: settingsView)
         window.center()
         window.makeKeyAndOrderFront(nil)
         if #available(macOS 14.0, *) {
@@ -261,6 +294,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func switchTab(in group: TabGroup, to index: Int, panel: TabBarPanel) {
         group.switchTo(index: index)
         guard let window = group.activeWindow else { return }
+        lastActiveGroupID = group.id
         // Activate the owning app first — the tab bar is a non-activating panel,
         // so clicking a tab won't activate the app. Without this, raiseWindow
         // may succeed (bringing the window to front within the app) but the app
@@ -317,11 +351,74 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         windowObserver.observe(window: window)
     }
 
+    // MARK: - Hotkey Actions
+
+    /// Resolve the group the user is currently interacting with.
+    private func activeGroup() -> (TabGroup, TabBarPanel)? {
+        // Try the last-tracked active group first
+        if let id = lastActiveGroupID,
+           let group = groupManager.groups.first(where: { $0.id == id }),
+           let panel = tabBarPanels[id] {
+            return (group, panel)
+        }
+        // Fallback: query the frontmost app's focused window
+        guard let frontApp = NSWorkspace.shared.frontmostApplication else { return nil }
+        let appElement = AccessibilityHelper.appElement(for: frontApp.processIdentifier)
+        var focusedValue: AnyObject?
+        let result = AXUIElementCopyAttributeValue(
+            appElement, kAXFocusedWindowAttribute as CFString, &focusedValue
+        )
+        guard result == .success, let ref = focusedValue else { return nil }
+        let element = ref as! AXUIElement // swiftlint:disable:this force_cast
+        guard let windowID = AccessibilityHelper.windowID(for: element),
+              let group = groupManager.group(for: windowID),
+              let panel = tabBarPanels[group.id] else { return nil }
+        return (group, panel)
+    }
+
+    private func handleHotkeyNewTab() {
+        guard let (group, _) = activeGroup() else { return }
+        showWindowPicker(addingTo: group)
+    }
+
+    private func handleHotkeyReleaseTab() {
+        guard let (group, panel) = activeGroup() else { return }
+        releaseTab(at: group.activeIndex, from: group, panel: panel)
+    }
+
+    private func handleHotkeyCycleTab() {
+        guard let (group, panel) = activeGroup(),
+              let nextIndex = group.nextInMRUCycle() else { return }
+
+        // Cancel any pending MRU commit from a previous cycle step
+        cycleWorkItem?.cancel()
+
+        switchTab(in: group, to: nextIndex, panel: panel)
+
+        // After a pause with no further cycling, commit MRU order
+        let workItem = DispatchWorkItem { [weak self] in
+            group.endCycle()
+            self?.cycleWorkItem = nil
+        }
+        cycleWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
+    }
+
+    private func handleHotkeySwitchToTab(_ index: Int) {
+        guard let (group, panel) = activeGroup(),
+              index >= 0, index < group.windows.count else { return }
+        switchTab(in: group, to: index, panel: panel)
+    }
+
     /// Handle group dissolution: expand the last surviving window upward into tab bar space,
     /// stop its observer, and close the panel. Call this after `groupManager.releaseWindow`
     /// when the group no longer exists. If `group.windows` is empty (e.g. the caller already
     /// expanded and cleaned up the released window), this just closes the panel.
     private func handleGroupDissolution(group: TabGroup, panel: TabBarPanel) {
+        if lastActiveGroupID == group.id { lastActiveGroupID = nil }
+        cycleWorkItem?.cancel()
+        cycleWorkItem = nil
+
         let tabBarHeight = TabBarPanel.tabBarHeight
         if let lastWindow = group.windows.first {
             windowObserver.stopObserving(window: lastWindow)
@@ -512,6 +609,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
               let panel = tabBarPanels[group.id] else { return }
 
         group.switchTo(windowID: windowID)
+        lastActiveGroupID = group.id
+        if !group.isCycling {
+            group.recordFocus(windowID: windowID)
+        }
         panel.orderAbove(windowID: windowID)
     }
 
@@ -573,6 +674,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
               let panel = tabBarPanels[group.id] else { return }
 
         group.switchTo(windowID: windowID)
+        lastActiveGroupID = group.id
+        if !group.isCycling {
+            group.recordFocus(windowID: windowID)
+        }
         panel.orderAbove(windowID: windowID)
     }
 
