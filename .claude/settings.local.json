@@ -8,7 +8,8 @@
       "Bash(xcodebuild:*)",
       "Bash(open:*)",
       "Bash(git -C /Users/tmn/ccode/tabbed/version-a log --oneline -20)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(git -C /Users/tmn/ccode/tabbed/version-a show --stat e39df25)"
     ]
   }
 }
