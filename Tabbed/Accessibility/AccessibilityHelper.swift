@@ -123,6 +123,24 @@ enum AccessibilityHelper {
         return AXUIElementPerformAction(element, kAXRaiseAction as CFString)
     }
 
+    /// Raise with fallback: kAXRaiseAction → activate app + nudge position
+    static func raiseWindow(_ window: WindowInfo) {
+        let result = raise(window.element)
+        if result == .success { return }
+
+        guard let app = NSRunningApplication(processIdentifier: window.ownerPID) else { return }
+        if #available(macOS 14.0, *) {
+            app.activate()
+        } else {
+            app.activate(options: [])
+        }
+        // Re-set position to current value — forces this specific window
+        // to front within the now-active app (not just any window of the app)
+        if let position = getPosition(of: window.element) {
+            setPosition(of: window.element, to: position)
+        }
+    }
+
     // MARK: - Observer
 
     static func createObserver(

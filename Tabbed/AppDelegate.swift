@@ -137,7 +137,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Raise the first window
-        AccessibilityHelper.raise(group.windows[0].element)
+        AccessibilityHelper.raiseWindow(group.windows[0])
 
         // Create and show tab bar
         let panel = TabBarPanel()
@@ -180,7 +180,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func switchTab(in group: TabGroup, to index: Int, panel: TabBarPanel) {
         group.switchTo(index: index)
         guard let window = group.activeWindow else { return }
-        AccessibilityHelper.raise(window.element)
+        AccessibilityHelper.raiseWindow(window)
         panel.orderAbove(windowID: window.id)
     }
 
@@ -207,7 +207,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if !groupManager.groups.contains(where: { $0.id == group.id }) {
             handleGroupDissolution(group: group, panel: panel)
         } else if let newActive = group.activeWindow {
-            AccessibilityHelper.raise(newActive.element)
+            AccessibilityHelper.raiseWindow(newActive)
             panel.orderAbove(windowID: newActive.id)
         }
     }
@@ -284,7 +284,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if let activeWindow = group.activeWindow {
-            AccessibilityHelper.raise(activeWindow.element)
+            AccessibilityHelper.raiseWindow(activeWindow)
             panel.orderAbove(windowID: activeWindow.id)
         }
     }
@@ -351,7 +351,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 if !groupManager.groups.contains(where: { $0.id == group.id }) {
                     handleGroupDissolution(group: group, panel: panel)
                 } else if let newActive = group.activeWindow {
-                    AccessibilityHelper.raise(newActive.element)
+                    AccessibilityHelper.raiseWindow(newActive)
                     panel.orderAbove(windowID: newActive.id)
                 }
                 return
@@ -402,7 +402,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if !groupManager.groups.contains(where: { $0.id == group.id }) {
             handleGroupDissolution(group: group, panel: panel)
         } else if let newActive = group.activeWindow {
-            AccessibilityHelper.raise(newActive.element)
+            AccessibilityHelper.raiseWindow(newActive)
             panel.orderAbove(windowID: newActive.id)
         }
     }
