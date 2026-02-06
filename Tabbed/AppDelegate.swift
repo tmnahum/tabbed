@@ -441,6 +441,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if lastActiveGroupID == group.id { lastActiveGroupID = nil }
         cycleWorkItem?.cancel()
         cycleWorkItem = nil
+        resyncWorkItems[group.id]?.cancel()
+        resyncWorkItems.removeValue(forKey: group.id)
 
         let tabBarHeight = TabBarPanel.tabBarHeight
         if let lastWindow = group.windows.first {
@@ -467,6 +469,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if lastActiveGroupID == group.id { lastActiveGroupID = nil }
         cycleWorkItem?.cancel()
         cycleWorkItem = nil
+        resyncWorkItems[group.id]?.cancel()
+        resyncWorkItems.removeValue(forKey: group.id)
 
         let tabBarHeight = TabBarPanel.tabBarHeight
         for window in group.windows {
