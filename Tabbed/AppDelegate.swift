@@ -8,6 +8,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var windowPickerPanel: NSPanel?
     private var settingsWindow: NSWindow?
+    private var keyMonitor: Any?
     private var tabBarPanels: [UUID: TabBarPanel] = [:]
     /// Window IDs we're programmatically moving/resizing — suppress their AX notifications.
     /// Each window has its own cancellable timer so overlapping programmatic changes
@@ -59,8 +60,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         // Cmd+, for Settings (LSUIElement apps have no app menu to attach shortcuts to)
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "," {
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            if flags == .command, event.charactersIgnoringModifiers == "," {
                 self?.showSettings()
                 return nil
             }
@@ -89,6 +91,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             panel.close()
         }
         tabBarPanels.removeAll()
+        settingsWindow?.close()
+        settingsWindow = nil
+        if let monitor = keyMonitor { NSEvent.removeMonitor(monitor) }
+        keyMonitor = nil
         groupManager.dissolveAllGroups()
     }
 
@@ -121,18 +127,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.activate(ignoringOtherApps: true)
         }
         settingsWindow = window
+
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification, object: window, queue: .main
+        ) { [weak self] _ in
+            self?.settingsWindow = nil
+        }
     }
 
     // MARK: - Focus Window
 
     func focusWindow(_ window: WindowInfo) {
-        if let app = NSRunningApplication(processIdentifier: window.ownerPID) {
-            if #available(macOS 14.0, *) {
-                app.activate()
-            } else {
-                app.activate(options: [])
-            }
-        }
+        // raiseWindow already activates the owning app
         _ = AccessibilityHelper.raiseWindow(window)
     }
 
