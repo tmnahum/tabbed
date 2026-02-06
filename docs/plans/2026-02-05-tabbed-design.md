@@ -13,6 +13,8 @@ A macOS menu bar utility that groups arbitrary windows into tab groups with a br
 
 Swift + AppKit. Pure native Mac app. SwiftUI for UI content inside AppKit containers.
 
+If SwiftUI tab drag reordering has issues inside the non-activating `NSPanel`, fall back to implementing just that interaction in AppKit while keeping the rest SwiftUI.
+
 ## Architecture
 
 ### App Structure
@@ -124,13 +126,17 @@ When an unrelated app is focused, the tab bar naturally falls behind it — no m
 4. Resize tab bar panel width to match
 5. Resize/reposition all other grouped windows to match
 
-### No Real-Time Drag Tracking
+### Dragging the Active Window
 
-We do NOT track windows during a drag. The active window moves freely; the tab bar and other windows stay in place. When the drag ends (`kAXMovedNotification`), everything snaps to the new position. This avoids jitter from IPC overhead.
+Dragging the active window does NOT release it from the group. The window moves freely with the drag; the tab bar and other grouped windows stay in place. When the drag ends (`kAXMovedNotification`), everything snaps to the new position. This avoids jitter from IPC overhead.
 
 During the drag, inactive windows may be briefly visible behind the active window. This is acceptable.
 
 ## Tab Bar UI
+
+### Design Intent
+
+Native macOS look and feel (system materials, fonts, colors) but browser-inspired UX — tabs behave like browser tabs (reorderable, releasable, add with "+").
 
 ### Visual Style
 
