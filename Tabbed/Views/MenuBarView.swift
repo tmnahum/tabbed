@@ -4,6 +4,8 @@ struct MenuBarView: View {
     @ObservedObject var groupManager: GroupManager
 
     var onNewGroup: () -> Void
+    var onFocusWindow: (WindowInfo) -> Void
+    var onSettings: () -> Void
     var onQuit: () -> Void
 
     var body: some View {
@@ -28,6 +30,13 @@ struct MenuBarView: View {
             }
             .padding(.horizontal, 8)
 
+            Button {
+                onSettings()
+            } label: {
+                Label("Settings…", systemImage: "gear")
+            }
+            .padding(.horizontal, 8)
+
             Divider()
 
             Button {
@@ -38,25 +47,28 @@ struct MenuBarView: View {
             .padding(.horizontal, 8)
         }
         .padding(8)
-        .frame(width: 220)
     }
 
     private func groupRow(_ group: TabGroup) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: 4) {
             ForEach(group.windows) { window in
-                HStack(spacing: 4) {
+                Button {
+                    onFocusWindow(window)
+                } label: {
                     if let icon = window.icon {
                         Image(nsImage: icon)
                             .resizable()
-                            .frame(width: 14, height: 14)
+                            .frame(width: 18, height: 18)
+                    } else {
+                        Image(systemName: "macwindow")
+                            .frame(width: 18, height: 18)
                     }
-                    Text(window.title.isEmpty ? window.appName : window.title)
-                        .font(.system(size: 12))
-                        .lineLimit(1)
                 }
+                .buttonStyle(.plain)
+                .help(window.title.isEmpty ? window.appName : window.title)
             }
         }
-        .padding(8)
+        .padding(6)
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill(Color.primary.opacity(0.05))

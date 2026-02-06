@@ -9,6 +9,8 @@ struct TabbedApp: App {
             MenuBarView(
                 groupManager: appDelegate.groupManager,
                 onNewGroup: { appDelegate.showWindowPicker() },
+                onFocusWindow: { window in appDelegate.focusWindow(window) },
+                onSettings: { appDelegate.showSettings() },
                 onQuit: { NSApplication.shared.terminate(nil) }
             )
         }

@@ -21,11 +21,12 @@ final class GroupManagerTests: XCTestCase {
         XCTAssertEqual(group?.windows.count, 2)
     }
 
-    func testCreateGroupRequiresAtLeastTwoWindows() {
+    func testCreateGroupWithSingleWindow() {
         let gm = GroupManager()
         let group = gm.createGroup(with: [makeWindow(id: 1)], frame: .zero)
-        XCTAssertNil(group)
-        XCTAssertEqual(gm.groups.count, 0)
+        XCTAssertNotNil(group)
+        XCTAssertEqual(gm.groups.count, 1)
+        XCTAssertEqual(group?.windows.count, 1)
     }
 
     func testCreateGroupRejectsEmptyArray() {
@@ -72,10 +73,35 @@ final class GroupManagerTests: XCTestCase {
         XCTAssertNil(gm.group(for: 99))
     }
 
-    func testRemoveWindowDissolvesGroupWhenOneLeft() {
+    func testRemoveWindowKeepsGroupWithOneLeft() {
         let gm = GroupManager()
         let windows = [makeWindow(id: 1), makeWindow(id: 2)]
         let group = gm.createGroup(with: windows, frame: .zero)!
+        gm.releaseWindow(withID: 1, from: group)
+        XCTAssertEqual(gm.groups.count, 1)
+        XCTAssertEqual(group.windows.count, 1)
+    }
+
+    func testRemoveWindowDissolvesGroupWhenEmpty() {
+        let gm = GroupManager()
+        let group = gm.createGroup(with: [makeWindow(id: 1)], frame: .zero)!
+        gm.releaseWindow(withID: 1, from: group)
+        XCTAssertEqual(gm.groups.count, 0)
+        XCTAssertFalse(gm.isWindowGrouped(1))
+    }
+
+    func testSingleWindowGroupGrowAndShrink() {
+        let gm = GroupManager()
+        let group = gm.createGroup(with: [makeWindow(id: 1)], frame: .zero)!
+        XCTAssertEqual(group.windows.count, 1)
+
+        gm.addWindow(makeWindow(id: 2), to: group)
+        XCTAssertEqual(group.windows.count, 2)
+
+        gm.releaseWindow(withID: 2, from: group)
+        XCTAssertEqual(gm.groups.count, 1)
+        XCTAssertEqual(group.windows.count, 1)
+
         gm.releaseWindow(withID: 1, from: group)
         XCTAssertEqual(gm.groups.count, 0)
     }

@@ -1,4 +1,4 @@
 
 
 I vibe coded my own macos tabs solution inspired by seeing this post (also I couldn't get yours to work and this was easier)
-mine is more focused on tabs only and not window tiling, it should work with other window tiling solutions!
+mine is more focused on tabs only and not window tiling, it should work with other window tiling/snapping solutions!

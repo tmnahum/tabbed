@@ -157,7 +157,7 @@ struct WindowPickerView: View {
                     let selected = windowManager.availableWindows.filter { selectedIDs.contains($0.id) }
                     onCreateGroup(selected)
                 }
-                .disabled(selectedIDs.count < 2)
+                .disabled(selectedIDs.count < 1)
             }
             .padding(12)
         }

@@ -7,6 +7,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     let windowObserver = WindowObserver()
 
     private var windowPickerPanel: NSPanel?
+    private var settingsWindow: NSWindow?
     private var tabBarPanels: [UUID: TabBarPanel] = [:]
     /// Window IDs we're programmatically moving/resizing — suppress their AX notifications.
     /// Each window has its own cancellable timer so overlapping programmatic changes
@@ -80,6 +81,50 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         tabBarPanels.removeAll()
         groupManager.dissolveAllGroups()
+    }
+
+    // MARK: - Settings
+
+    func showSettings() {
+        if let existing = settingsWindow, existing.isVisible {
+            existing.makeKeyAndOrderFront(nil)
+            if #available(macOS 14.0, *) {
+                NSApp.activate()
+            } else {
+                NSApp.activate(ignoringOtherApps: true)
+            }
+            return
+        }
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Tabbed Settings"
+        window.contentView = NSHostingView(rootView: SettingsView())
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+        if #available(macOS 14.0, *) {
+            NSApp.activate()
+        } else {
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        settingsWindow = window
+    }
+
+    // MARK: - Focus Window
+
+    func focusWindow(_ window: WindowInfo) {
+        if let app = NSRunningApplication(processIdentifier: window.ownerPID) {
+            if #available(macOS 14.0, *) {
+                app.activate()
+            } else {
+                app.activate(options: [])
+            }
+        }
+        _ = AccessibilityHelper.raiseWindow(window)
     }
 
     // MARK: - Window Picker
@@ -259,7 +304,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Handle group dissolution: expand the last surviving window upward into tab bar space,
     /// stop its observer, and close the panel. Call this after `groupManager.releaseWindow`
-    /// when the group no longer exists.
+    /// when the group no longer exists. If `group.windows` is empty (e.g. the caller already
+    /// expanded and cleaned up the released window), this just closes the panel.
     private func handleGroupDissolution(group: TabGroup, panel: TabBarPanel) {
         let tabBarHeight = TabBarPanel.tabBarHeight
         if let lastWindow = group.windows.first {
@@ -504,7 +550,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             appElement, kAXFocusedWindowAttribute as CFString, &focusedValue
         )
         guard result == .success,
-              let windowElement = focusedValue as? AXUIElement else { return }
+              let focusedRef = focusedValue else { return }
+        let windowElement = focusedRef as! AXUIElement // swiftlint:disable:this force_cast
 
         guard let windowID = AccessibilityHelper.windowID(for: windowElement),
               let group = groupManager.group(for: windowID),

@@ -15,7 +15,7 @@ class GroupManager: ObservableObject {
 
     @discardableResult
     func createGroup(with windows: [WindowInfo], frame: CGRect) -> TabGroup? {
-        guard windows.count >= 2 else { return nil }
+        guard windows.count >= 1 else { return nil }
 
         // Reject duplicate window IDs in the input
         let uniqueIDs = Set(windows.map(\.id))
@@ -42,7 +42,7 @@ class GroupManager: ObservableObject {
         guard groups.contains(where: { $0.id == group.id }) else { return }
         guard group.removeWindow(withID: windowID) != nil else { return }
 
-        if group.windows.count <= 1 {
+        if group.windows.isEmpty {
             dissolveGroup(group)
         } else {
             objectWillChange.send()

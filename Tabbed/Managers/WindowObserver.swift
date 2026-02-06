@@ -154,7 +154,10 @@ class WindowObserver {
                 let result = AXUIElementCopyAttributeValue(
                     element, kAXFocusedWindowAttribute as CFString, &focusedWindow
                 )
-                if result == .success, let windowElement = focusedWindow as? AXUIElement {
+                if result == .success, let focusedRef = focusedWindow {
+                    // CF types always succeed in conditional downcasts;
+                    // use a force cast after the nil check instead.
+                    let windowElement = focusedRef as! AXUIElement // swiftlint:disable:this force_cast
                     onWindowFocused?(pid, windowElement)
                 }
             }
