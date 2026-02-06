@@ -4,7 +4,7 @@
         - think of any others to mirror browsers
         
 
-- all in space button, put one directly in the menu bar too (under regular new group button), and customize behavior:
+[ip] - all in space button, put one directly in the menu bar too (under regular new group button), and customize behavior:
     - assuming we can get this info: order tab order by most recently used app/window, or highest app/window in z index whatever we can get, most recently used first and continue in order
     - maybe: skip adding apps of whom their window has a max width that is too small and cant be expanse
 
@@ -27,11 +27,17 @@
 - do performance/battery review on the codebase
 
 ## Bugs
-- maybe: dragging the tab bar container does not drag the windows  (currently can no longer even drag it so its fine)
+- maybe: dragging the tab bar container (not the tab) does not drag the windows
+    - should either drag the windows or be undraggable
+    - i think undraggable is fine
+- related: minor: tab bar shows up in mission control, is able to be attempted to dragged to snap to side of pane, etc
 
 - on add, is squeezes windows down to make room for tab bar even if there is space for tab bar already, should just show it on top instead
 
+- hyper T does not work
+
 - some special apps such as altTab the window close detection does not work
+
 
 ❯ bugs: 
     - initial positioning can be a little wrong too low etc - check if still true

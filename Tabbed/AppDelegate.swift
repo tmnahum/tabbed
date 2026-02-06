@@ -23,6 +23,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var resyncWorkItems: [UUID: DispatchWorkItem] = [:]
     /// Pending MRU commit after cycling stops.
     private var cycleWorkItem: DispatchWorkItem?
+    /// The group currently being MRU-cycled (captured at cycle start so
+    /// flagsChanged can end the cycle even if activeGroup() resolves differently).
+    private weak var cyclingGroup: TabGroup?
     /// Timestamp when the last cycle ended — focus events within the cooldown
     /// are ignored to prevent delayed AX notifications from corrupting MRU order.
     private var cycleEndTime: Date?
@@ -126,6 +129,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         hkm.onSwitchToTab = { [weak self] index in
             self?.handleHotkeySwitchToTab(index)
         }
+        hkm.onCycleModifierReleased = { [weak self] in
+            self?.handleCycleModifierReleased()
+        }
 
         hkm.start()
         hotkeyManager = hkm
@@ -148,6 +154,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             onNewGroup: { [weak self] in
                 self?.popover.performClose(nil)
                 self?.showWindowPicker()
+            },
+            onAllInSpace: { [weak self] in
+                self?.popover.performClose(nil)
+                self?.groupAllInSpace()
             },
             onFocusWindow: { [weak self] window in
                 self?.popover.performClose(nil)
@@ -310,6 +320,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func dismissWindowPicker() {
         windowPickerPanel?.close()
         windowPickerPanel = nil
+    }
+
+    // MARK: - All in Space
+
+    private func groupAllInSpace() {
+        let allWindows = windowManager.windowsInZOrder()
+        let ungrouped = allWindows.filter { !groupManager.isWindowGrouped($0.id) }
+        guard !ungrouped.isEmpty else { return }
+        createGroup(with: ungrouped)
     }
 
     // MARK: - Group Lifecycle
@@ -484,16 +503,28 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // Cancel any pending MRU commit from a previous cycle step
         cycleWorkItem?.cancel()
 
+        cyclingGroup = group
         switchTab(in: group, to: nextIndex, panel: panel)
 
-        // After a pause with no further cycling, commit MRU order
+        // Fallback: if flagsChanged never fires (e.g. external keyboard quirks),
+        // commit MRU order after a longer inactivity timeout.
         let workItem = DispatchWorkItem { [weak self] in
             group.endCycle()
             self?.cycleWorkItem = nil
+            self?.cyclingGroup = nil
             self?.cycleEndTime = Date()
         }
         cycleWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
+    }
+
+    private func handleCycleModifierReleased() {
+        guard let group = cyclingGroup, group.isCycling else { return }
+        cycleWorkItem?.cancel()
+        cycleWorkItem = nil
+        group.endCycle()
+        cyclingGroup = nil
+        cycleEndTime = Date()
     }
 
     private func handleHotkeySwitchToTab(_ index: Int) {
@@ -510,6 +541,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if lastActiveGroupID == group.id { lastActiveGroupID = nil }
         cycleWorkItem?.cancel()
         cycleWorkItem = nil
+        if cyclingGroup === group { cyclingGroup = nil }
         resyncWorkItems[group.id]?.cancel()
         resyncWorkItems.removeValue(forKey: group.id)
 
@@ -538,6 +570,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if lastActiveGroupID == group.id { lastActiveGroupID = nil }
         cycleWorkItem?.cancel()
         cycleWorkItem = nil
+        if cyclingGroup === group { cyclingGroup = nil }
         resyncWorkItems[group.id]?.cancel()
         resyncWorkItems.removeValue(forKey: group.id)
 
@@ -825,6 +858,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 } else {
                     // All remaining windows are from the terminated app —
                     // nothing to expand, just tear down the panel.
+                    if cyclingGroup === group { cyclingGroup = nil }
+                    cycleWorkItem?.cancel()
+                    cycleWorkItem = nil
                     panel.close()
                     tabBarPanels.removeValue(forKey: group.id)
                 }

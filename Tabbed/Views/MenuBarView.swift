@@ -4,6 +4,7 @@ struct MenuBarView: View {
     @ObservedObject var groupManager: GroupManager
 
     var onNewGroup: () -> Void
+    var onAllInSpace: () -> Void
     var onFocusWindow: (WindowInfo) -> Void
     var onDisbandGroup: (TabGroup) -> Void
     var onSettings: () -> Void
@@ -24,6 +25,10 @@ struct MenuBarView: View {
 
             menuItem("New Group", systemImage: "plus") {
                 onNewGroup()
+            }
+
+            menuItem("All in Space", systemImage: "rectangle.stack.fill") {
+                onAllInSpace()
             }
 
             Divider()

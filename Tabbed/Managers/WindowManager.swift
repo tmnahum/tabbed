@@ -61,4 +61,58 @@ class WindowManager: ObservableObject {
             return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
         }
     }
+
+    /// Returns all on-screen windows ordered by z-index (front-most first).
+    /// CGWindowListCopyWindowInfo already returns windows in this order,
+    /// so we preserve it instead of sorting alphabetically.
+    func windowsInZOrder() -> [WindowInfo] {
+        let cgWindows = AccessibilityHelper.getWindowList()
+        var results: [WindowInfo] = []
+
+        // Build a lookup of AX elements keyed by window ID, per PID
+        var axElementsByPID: [pid_t: [CGWindowID: AXUIElement]] = [:]
+
+        for info in cgWindows {
+            guard let pid = info[kCGWindowOwnerPID as String] as? pid_t,
+                  pid != ownPID else { continue }
+
+            if axElementsByPID[pid] == nil {
+                let axWindows = AccessibilityHelper.windowElements(for: pid)
+                var map: [CGWindowID: AXUIElement] = [:]
+                for ax in axWindows {
+                    if let wid = AccessibilityHelper.windowID(for: ax) {
+                        map[wid] = ax
+                    }
+                }
+                axElementsByPID[pid] = map
+            }
+        }
+
+        // Walk CG windows in z-order and build WindowInfo for each
+        for info in cgWindows {
+            guard let pid = info[kCGWindowOwnerPID as String] as? pid_t,
+                  pid != ownPID,
+                  let windowID = info[kCGWindowNumber as String] as? CGWindowID,
+                  let axElement = axElementsByPID[pid]?[windowID] else { continue }
+
+            let title = AccessibilityHelper.getTitle(of: axElement) ?? ""
+            if let size = AccessibilityHelper.getSize(of: axElement),
+               size.width < 50 || size.height < 50, title.isEmpty {
+                continue
+            }
+
+            let app = NSRunningApplication(processIdentifier: pid)
+            results.append(WindowInfo(
+                id: windowID,
+                element: axElement,
+                ownerPID: pid,
+                bundleID: app?.bundleIdentifier ?? "",
+                title: title,
+                appName: app?.localizedName ?? (info[kCGWindowOwnerName as String] as? String ?? "Unknown"),
+                icon: app?.icon
+            ))
+        }
+
+        return results
+    }
 }

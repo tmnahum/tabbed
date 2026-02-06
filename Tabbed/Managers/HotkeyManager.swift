@@ -9,18 +9,33 @@ class HotkeyManager {
     var onReleaseTab: (() -> Void)?
     var onCycleTab: (() -> Void)?
     var onSwitchToTab: ((Int) -> Void)?
+    var onCycleModifierReleased: (() -> Void)?
 
     init(config: ShortcutConfig) {
         self.config = config
     }
 
     func start() {
-        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            self?.handleKeyDown(event)
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] event in
+            switch event.type {
+            case .keyDown:
+                self?.handleKeyDown(event)
+            case .flagsChanged:
+                self?.handleFlagsChanged(event)
+            default:
+                break
+            }
         }
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if self?.handleKeyDown(event) == true {
-                return nil
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] event in
+            switch event.type {
+            case .keyDown:
+                if self?.handleKeyDown(event) == true {
+                    return nil
+                }
+            case .flagsChanged:
+                self?.handleFlagsChanged(event)
+            default:
+                break
             }
             return event
         }
@@ -39,6 +54,14 @@ class HotkeyManager {
 
     func updateConfig(_ newConfig: ShortcutConfig) {
         config = newConfig
+    }
+
+    private func handleFlagsChanged(_ event: NSEvent) {
+        let currentMods = event.modifierFlags.intersection(.deviceIndependentFlagsMask).rawValue
+        let requiredMods = config.cycleTab.modifiers
+        if (currentMods & requiredMods) != requiredMods {
+            onCycleModifierReleased?()
+        }
     }
 
     @discardableResult
