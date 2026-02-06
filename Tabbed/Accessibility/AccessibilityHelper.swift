@@ -117,8 +117,11 @@ enum AccessibilityHelper {
     }
 
     static func setFrame(of element: AXUIElement, to frame: CGRect) {
-        setSize(of: element, to: frame.size)
+        // Position first so the window is at the target origin before resizing.
+        // Size-first can cause the window to temporarily extend off-screen at
+        // the old position, leading apps to constrain the size incorrectly.
         setPosition(of: element, to: frame.origin)
+        setSize(of: element, to: frame.size)
     }
 
     // MARK: - Actions
@@ -128,15 +131,27 @@ enum AccessibilityHelper {
         return AXUIElementPerformAction(element, kAXRaiseAction as CFString)
     }
 
-    /// Raise with fallback chain:
-    /// 1. kAXRaiseAction on stored element
+    /// Activate the owning app and raise the window, with a fallback chain
+    /// for stale AXUIElements:
+    /// 1. Activate app + kAXRaiseAction on stored element
     /// 2. Refresh AXUIElement by CGWindowID, retry kAXRaiseAction
-    /// 3. Activate app + kAXRaiseAction on fresh element
+    /// 3. kAXRaiseAction on fresh element (app already active)
     ///
     /// Returns a fresh AXUIElement if one was resolved (caller should update
     /// the group's stored element), or nil if the original was fine.
     @discardableResult
     static func raiseWindow(_ window: WindowInfo) -> AXUIElement? {
+        // Always activate the owning app so the window actually receives
+        // focus. Without this, kAXRaiseAction brings the window to front
+        // within its app but the app itself may stay in the background.
+        if let app = NSRunningApplication(processIdentifier: window.ownerPID) {
+            if #available(macOS 14.0, *) {
+                app.activate()
+            } else {
+                app.activate(options: [])
+            }
+        }
+
         // Fast path: raise with the stored element
         if raise(window.element) == .success { return nil }
 
@@ -145,20 +160,10 @@ enum AccessibilityHelper {
         let allElements = windowElements(for: window.ownerPID)
         if let match = allElements.first(where: { windowID(for: $0) == window.id }) {
             freshElement = match
-            if raise(freshElement) == .success { return freshElement }
         } else {
             freshElement = window.element
         }
 
-        // Last resort: activate the app, then raise the specific window
-        guard let app = NSRunningApplication(processIdentifier: window.ownerPID) else {
-            return freshElement !== window.element ? freshElement : nil
-        }
-        if #available(macOS 14.0, *) {
-            app.activate()
-        } else {
-            app.activate(options: [])
-        }
         raise(freshElement)
         return freshElement !== window.element ? freshElement : nil
     }

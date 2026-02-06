@@ -327,7 +327,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let tabBarHeight = TabBarPanel.tabBarHeight
         var adjusted = frame
         if frame.origin.y < visibleFrame.origin.y + tabBarHeight {
-            adjusted.origin.y = visibleFrame.origin.y + tabBarHeight
+            let delta = (visibleFrame.origin.y + tabBarHeight) - frame.origin.y
+            adjusted.origin.y += delta
+            adjusted.size.height -= delta
         }
         return adjusted
     }

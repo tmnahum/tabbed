@@ -26,6 +26,7 @@
     - add a close/release window button
 - change x icon on tab which frees the window, change it to a - icon or another icon we find
 
+- duplicate app protection
 
 - launch an app in addition to capturing an existing app
 
