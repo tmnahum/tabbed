@@ -154,9 +154,7 @@ class WindowObserver {
                 let result = AXUIElementCopyAttributeValue(
                     element, kAXFocusedWindowAttribute as CFString, &focusedWindow
                 )
-                if result == .success, let focusedWindow {
-                    // AXUIElement is a CFTypeRef; the cast always succeeds when non-nil
-                    let windowElement = focusedWindow as! AXUIElement
+                if result == .success, let windowElement = focusedWindow as? AXUIElement {
                     onWindowFocused?(pid, windowElement)
                 }
             }
