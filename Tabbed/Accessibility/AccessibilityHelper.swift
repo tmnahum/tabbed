@@ -29,6 +29,14 @@ enum AccessibilityHelper {
         }
     }
 
+    /// Check whether a CGWindowID still appears in the on-screen window list.
+    static func windowExists(id: CGWindowID) -> Bool {
+        guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
+            return false
+        }
+        return list.contains { ($0[kCGWindowNumber as String] as? CGWindowID) == id }
+    }
+
     static func appElement(for pid: pid_t) -> AXUIElement {
         return AXUIElementCreateApplication(pid)
     }
@@ -83,6 +91,13 @@ enum AccessibilityHelper {
         let result = AXUIElementCopyAttributeValue(element, kAXTitleAttribute as CFString, &value)
         guard result == .success, let title = value as? String else { return nil }
         return title
+    }
+
+    static func isFullScreen(_ element: AXUIElement) -> Bool {
+        var value: AnyObject?
+        let result = AXUIElementCopyAttributeValue(element, "AXFullScreen" as CFString, &value)
+        guard result == .success, let boolValue = value as? Bool else { return false }
+        return boolValue
     }
 
     // MARK: - Write Attributes

@@ -339,23 +339,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
               activeWindow.id == windowID,
               let frame = AccessibilityHelper.getFrame(of: activeWindow.element) else { return }
 
-        // Detect full-screen: window frame covers the entire screen
-        if let screen = CoordinateConverter.screen(containingAXPoint: frame.origin) {
-            let fullScreenSize = screen.frame.size
-            if frame.width >= fullScreenSize.width && frame.height >= fullScreenSize.height {
-                // Window went full-screen — release it from the group.
-                // macOS handles full-screen frame restoration on its own,
-                // so we don't attempt to resize the window during the transition.
-                windowObserver.stopObserving(window: activeWindow)
-                groupManager.releaseWindow(withID: windowID, from: group)
-                if !groupManager.groups.contains(where: { $0.id == group.id }) {
-                    handleGroupDissolution(group: group, panel: panel)
-                } else if let newActive = group.activeWindow {
-                    AccessibilityHelper.raiseWindow(newActive)
-                    panel.orderAbove(windowID: newActive.id)
-                }
-                return
+        // Detect native full-screen (green button / Mission Control).
+        // We use the AXFullScreen attribute rather than a size heuristic so that
+        // merely maximising a window to fill the screen doesn't eject it.
+        if AccessibilityHelper.isFullScreen(activeWindow.element) {
+            windowObserver.stopObserving(window: activeWindow)
+            groupManager.releaseWindow(withID: windowID, from: group)
+            if !groupManager.groups.contains(where: { $0.id == group.id }) {
+                handleGroupDissolution(group: group, panel: panel)
+            } else if let newActive = group.activeWindow {
+                AccessibilityHelper.raiseWindow(newActive)
+                panel.orderAbove(windowID: newActive.id)
             }
+            return
         }
 
         // Clamp to visible frame — ensure room for tab bar
@@ -394,9 +390,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
               let panel = tabBarPanels[group.id],
               let window = group.windows.first(where: { $0.id == windowID }) else { return }
 
-        // Don't call stopObserving — the AXUIElement is already invalid.
-        // Just do bookkeeping for the PID-level observer cleanup.
+        // Clean up the old (now-invalid) element from observer bookkeeping.
         windowObserver.handleDestroyedWindow(pid: window.ownerPID, elementHash: CFHash(window.element))
+
+        // Some apps destroy and recreate their AXUIElement without actually
+        // closing the window (e.g. browser tab switches). If the window is
+        // still on screen, find the new element and re-observe it.
+        if AccessibilityHelper.windowExists(id: windowID) {
+            let newElements = AccessibilityHelper.windowElements(for: window.ownerPID)
+            if let newElement = newElements.first(where: { AccessibilityHelper.windowID(for: $0) == windowID }),
+               let index = group.windows.firstIndex(where: { $0.id == windowID }) {
+                group.windows[index].element = newElement
+                windowObserver.observe(window: group.windows[index])
+            }
+            return
+        }
+
         groupManager.releaseWindow(withID: windowID, from: group)
 
         if !groupManager.groups.contains(where: { $0.id == group.id }) {

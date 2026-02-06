@@ -3,7 +3,7 @@ import ApplicationServices
 
 struct WindowInfo: Identifiable, Equatable {
     let id: CGWindowID
-    let element: AXUIElement
+    var element: AXUIElement
     let ownerPID: pid_t
     let bundleID: String
     var title: String
