@@ -152,6 +152,12 @@ struct WindowPickerView: View {
     private var footer: some View {
         if addingToGroup == nil {
             HStack {
+                Button("Add All in Space") {
+                    let allUngrouped = windowManager.availableWindows.filter { !groupManager.isWindowGrouped($0.id) }
+                    guard !allUngrouped.isEmpty else { return }
+                    onCreateGroup(allUngrouped)
+                }
+                .disabled(windowManager.availableWindows.filter { !groupManager.isWindowGrouped($0.id) }.isEmpty)
                 Spacer()
                 Button("Create Group") {
                     let selected = windowManager.availableWindows.filter { selectedIDs.contains($0.id) }
