@@ -4,12 +4,16 @@
         - think of any others to mirror browsers
         
 
+- all in space button, put one directly in the menu bar too (under regular new group button), and customize behavior:
+    - assuming we can get this info: order tab order by most recently used app/window, or highest app/window in z index whatever we can get, most recently used first and continue in order
+    - maybe: skip adding apps of whom their window has a max width that is too small and cant be expanse
 
 - investigate a way to hide non active windows completely (maybe settle for minimizing). esp so that it doesnt show up in AltTab (and mission control etc) and instead the metawindow is what shows up
     - int his case also customize the window name maybe?
     - can hide with the undocumented CGS private APIs
     
 
+- maybe: change menu bar style to be more normal while still working with a hiding menubar (ideally keep it open) and being native-y
 
 - change design
     - maybe make settings to cycle between many different design stlyles, to prototype them out, then pick one (or two?) and delete rest
@@ -19,6 +23,8 @@
             - (inspired by ultrasnapper screenshots)
         - 3 more wildcard designs (be creative make them different from each other)
 
+
+- do performance/battery review on the codebase
 
 ## Bugs
 - maybe: dragging the tab bar container does not drag the windows  (currently can no longer even drag it so its fine)
@@ -38,6 +44,7 @@
 - maybe behave differently in "fullscreen"?
     - feature: for windows that can't be resized, if we are in fullscreen view do not move them when added instead just switch between them, allow them to be moved without resizing all other windows (only under specific circumastances though)
         - maybe even don't resize windows at all in fullscreen, just keep the menubar at the top and switch active windows without resizing other windows, (but only in fullscreen mode), maybe adding unecessary complexity.
+        - or maybe just dont resize or care about windows who can not be expanded to be fullscreen when we are in fullscreen
 - related feature: if all tabs in a space are part of metawindow, (and if it's fullsecreen?) all newly opened apps join the metawindow automatically
 
 - maybe add all in space should be menu bar level quick shortcut
