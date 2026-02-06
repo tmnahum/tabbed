@@ -9,8 +9,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowPickerPanel: NSPanel?
     private var tabBarPanels: [UUID: TabBarPanel] = [:]
     /// Window IDs we're programmatically moving/resizing — suppress their AX notifications.
-    /// Cleared after a short delay to allow the async notifications to arrive and be discarded.
+    /// Each window has its own cancellable timer so overlapping programmatic changes
+    /// extend the suppression window instead of leaving gaps.
     private var suppressedWindowIDs: Set<CGWindowID> = []
+    private var suppressionWorkItems: [CGWindowID: DispatchWorkItem] = [:]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if !AXIsProcessTrusted() {
@@ -159,7 +161,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         )
 
-        panel.onPanelMoved = { [weak self] in
+        panel.onPanelMoved = { [weak self, weak panel] in
+            guard let panel else { return }
             self?.handlePanelMoved(group: group, panel: panel)
         }
 
@@ -239,13 +242,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Notification Suppression
 
     /// Suppress AX move/resize notifications for the given window IDs.
-    /// Notifications arriving within the suppression window are discarded
-    /// to prevent feedback loops from our own programmatic frame changes.
+    /// Each window gets its own cancellable timer. If a new programmatic change
+    /// arrives for an already-suppressed window, the old timer is cancelled and
+    /// a fresh one starts — preventing gaps in suppression during rapid updates.
     private func suppressNotifications(for windowIDs: [CGWindowID]) {
-        suppressedWindowIDs.formUnion(windowIDs)
-        let ids = Set(windowIDs)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-            self?.suppressedWindowIDs.subtract(ids)
+        for id in windowIDs {
+            suppressionWorkItems[id]?.cancel()
+            suppressedWindowIDs.insert(id)
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.suppressedWindowIDs.remove(id)
+                self?.suppressionWorkItems.removeValue(forKey: id)
+            }
+            suppressionWorkItems[id] = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: workItem)
         }
     }
 
