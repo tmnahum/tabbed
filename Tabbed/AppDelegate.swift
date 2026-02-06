@@ -6,6 +6,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let groupManager = GroupManager()
     let windowObserver = WindowObserver()
 
+    private var statusItem: NSStatusItem!
+    private var popover: NSPopover!
     private var windowPickerPanel: NSPanel?
     private var settingsWindow: NSWindow?
     private var keyMonitor: Any?
@@ -110,6 +112,56 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         hkm.start()
         hotkeyManager = hkm
+
+        setupStatusItem()
+    }
+
+    private func setupStatusItem() {
+        NSApp.setActivationPolicy(.accessory)
+
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        if let button = statusItem.button {
+            button.image = NSImage(systemSymbolName: "rectangle.stack", accessibilityDescription: "Tabbed")
+            button.action = #selector(togglePopover)
+            button.target = self
+        }
+
+        let menuBarView = MenuBarView(
+            groupManager: groupManager,
+            onNewGroup: { [weak self] in
+                self?.popover.performClose(nil)
+                self?.showWindowPicker()
+            },
+            onFocusWindow: { [weak self] window in
+                self?.popover.performClose(nil)
+                self?.focusWindow(window)
+            },
+            onDisbandGroup: { [weak self] group in
+                self?.popover.performClose(nil)
+                self?.disbandGroup(group)
+            },
+            onSettings: { [weak self] in
+                self?.popover.performClose(nil)
+                self?.showSettings()
+            },
+            onQuit: { [weak self] in
+                self?.isExplicitQuit = true
+                NSApplication.shared.terminate(nil)
+            }
+        )
+
+        popover = NSPopover()
+        popover.behavior = .transient
+        popover.contentViewController = NSHostingController(rootView: menuBarView)
+    }
+
+    @objc private func togglePopover() {
+        guard let button = statusItem.button else { return }
+        if popover.isShown {
+            popover.performClose(nil)
+        } else {
+            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {

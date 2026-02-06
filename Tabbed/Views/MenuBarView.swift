@@ -1,9 +1,7 @@
 import SwiftUI
-import AppKit
 
 struct MenuBarView: View {
     @ObservedObject var groupManager: GroupManager
-    @StateObject private var menuState = MenuPanelState()
 
     var onNewGroup: () -> Void
     var onFocusWindow: (WindowInfo) -> Void
@@ -25,7 +23,6 @@ struct MenuBarView: View {
             }
 
             menuItem("New Group", systemImage: "plus") {
-                menuState.dismiss()
                 onNewGroup()
             }
 
@@ -33,7 +30,6 @@ struct MenuBarView: View {
                 .padding(.vertical, 4)
 
             menuItem("Settings…", systemImage: "gear") {
-                menuState.dismiss()
                 onSettings()
             }
 
@@ -42,7 +38,6 @@ struct MenuBarView: View {
             }
         }
         .padding(4)
-        .background(MenuPanelTracker(state: menuState))
     }
 
     private func menuItem(_ title: String, systemImage: String? = nil, action: @escaping () -> Void) -> some View {
@@ -53,7 +48,6 @@ struct MenuBarView: View {
         HStack(spacing: 4) {
             ForEach(group.windows) { window in
                 Button {
-                    menuState.dismiss()
                     onFocusWindow(window)
                 } label: {
                     if let icon = window.icon {
@@ -73,7 +67,6 @@ struct MenuBarView: View {
             Spacer()
 
             Button {
-                menuState.dismiss()
                 onDisbandGroup(group)
             } label: {
                 Image(systemName: "xmark")
@@ -120,94 +113,5 @@ private struct MenuItemButton: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
-    }
-}
-
-// MARK: - Menu Panel State & Tracker
-
-/// Tracks the MenuBarExtra's hosting window for dismissal and menu bar pinning.
-private class MenuPanelState: ObservableObject {
-    weak var menuWindow: NSWindow?
-
-    func dismiss() {
-        menuWindow?.close()
-    }
-}
-
-/// NSViewRepresentable that captures the hosting window reference and prevents
-/// the menu bar from auto-hiding while the panel is visible.
-private struct MenuPanelTracker: NSViewRepresentable {
-    let state: MenuPanelState
-
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        view.setFrameSize(.zero)
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        if let window = nsView.window {
-            state.menuWindow = window
-            context.coordinator.startObserving(window: window)
-        }
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator() }
-
-    class Coordinator {
-        private var savedOptions: NSApplication.PresentationOptions?
-        private var observers: [NSObjectProtocol] = []
-        private weak var observedWindow: NSWindow?
-
-        func startObserving(window: NSWindow) {
-            guard observedWindow !== window else { return }
-            stopObserving()
-            observedWindow = window
-            pinMenuBar()
-
-            observers.append(
-                NotificationCenter.default.addObserver(
-                    forName: NSWindow.willCloseNotification,
-                    object: window, queue: .main
-                ) { [weak self] _ in self?.unpinMenuBar() }
-            )
-            observers.append(
-                NotificationCenter.default.addObserver(
-                    forName: NSWindow.didResignKeyNotification,
-                    object: window, queue: .main
-                ) { [weak self] _ in self?.unpinMenuBar() }
-            )
-        }
-
-        func stopObserving() {
-            for obs in observers { NotificationCenter.default.removeObserver(obs) }
-            observers.removeAll()
-            observedWindow = nil
-        }
-
-        private func pinMenuBar() {
-            let current = NSApp.presentationOptions
-            if current.contains(.autoHideMenuBar) {
-                savedOptions = current
-                var opts = current
-                opts.remove(.autoHideMenuBar)
-                opts.remove(.autoHideDock)
-                NSApp.presentationOptions = opts
-            }
-        }
-
-        func unpinMenuBar() {
-            if let saved = savedOptions {
-                NSApp.presentationOptions = saved
-                savedOptions = nil
-            }
-            stopObserving()
-        }
-
-        deinit { unpinMenuBar() }
-    }
-
-    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
-        coordinator.unpinMenuBar()
     }
 }
