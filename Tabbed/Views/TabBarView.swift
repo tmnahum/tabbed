@@ -15,7 +15,7 @@ struct TabBarView: View {
         GeometryReader { geo in
             let tabCount = group.windows.count
             let tabStep: CGFloat = tabCount > 0
-                ? (geo.size.width - 8 - 28) / CGFloat(tabCount)
+                ? (geo.size.width - 8 - 20) / CGFloat(tabCount)
                 : 0
 
             let targetIndex = computeTargetIndex(tabStep: tabStep)
@@ -162,7 +162,7 @@ struct TabBarView: View {
             Image(systemName: "plus")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
-                .frame(width: 28, height: 28)
+                .frame(width: 20, height: 20)
         }
         .buttonStyle(.plain)
     }

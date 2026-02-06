@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 class TabBarPanel: NSPanel {
-    static let tabBarHeight: CGFloat = 36
+    static let tabBarHeight: CGFloat = 28
 
     var onPanelMoved: (() -> Void)?
     private var frameOnMouseDown: NSRect = .zero
