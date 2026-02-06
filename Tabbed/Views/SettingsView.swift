@@ -47,7 +47,7 @@ struct SettingsView: View {
                 Spacer()
 
                 if recordingAction != nil {
-                    Text("Press a key combo (2+ modifiers)…")
+                    Text("Press a key combo…")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -196,13 +196,9 @@ class ShortcutRecorderView: NSView {
             onEscape?()
             return
         }
-        // Require at least 2 modifiers to avoid conflicts with normal typing
+        // Require at least one modifier key
         let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        let modCount = [
-            mods.contains(.command), mods.contains(.control),
-            mods.contains(.option), mods.contains(.shift),
-        ].filter { $0 }.count
-        guard modCount >= 2 else { return }
+        guard !mods.isEmpty else { return }
         onKeyDown?(event)
     }
 }
