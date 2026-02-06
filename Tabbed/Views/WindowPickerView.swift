@@ -31,6 +31,13 @@ struct WindowPickerView: View {
             Text(addingToGroup != nil ? "Add Window" : "New Group")
                 .font(.headline)
             Spacer()
+            Button {
+                windowManager.refreshWindowList()
+            } label: {
+                Image(systemName: "arrow.clockwise")
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
             Button("Cancel") { onDismiss() }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
@@ -40,11 +47,44 @@ struct WindowPickerView: View {
 
     private var windowList: some View {
         ScrollView {
-            if windowManager.availableWindows.isEmpty {
-                Text("No available windows")
+            if !AccessibilityHelper.checkPermission() {
+                VStack(spacing: 12) {
+                    Image(systemName: "lock.shield")
+                        .font(.system(size: 28))
+                        .foregroundStyle(.secondary)
+                    Text("Accessibility Access Required")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("Tabbed needs accessibility permission to see and manage windows.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                    Button("Open System Settings") {
+                        AccessibilityHelper.requestPermission()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    Button("Check Again") {
+                        windowManager.refreshWindowList()
+                    }
+                    .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(.top, 40)
+                    .font(.system(size: 12))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.top, 40)
+            } else if windowManager.availableWindows.isEmpty {
+                VStack(spacing: 12) {
+                    Text("No available windows")
+                        .foregroundStyle(.secondary)
+                    Button("Refresh") {
+                        windowManager.refreshWindowList()
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .font(.system(size: 12))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.top, 40)
             } else {
                 LazyVStack(spacing: 2) {
                     ForEach(windowManager.availableWindows) { window in
