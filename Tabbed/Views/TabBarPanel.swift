@@ -4,8 +4,6 @@ import SwiftUI
 class TabBarPanel: NSPanel {
     static let tabBarHeight: CGFloat = 28
 
-    var onPanelMoved: (() -> Void)?
-    private var frameOnMouseDown: NSRect = .zero
     private var visualEffectView: NSVisualEffectView!
 
     init() {
@@ -23,6 +21,7 @@ class TabBarPanel: NSPanel {
         self.backgroundColor = .clear
         self.isMovableByWindowBackground = false
         self.animationBehavior = .none
+        self.collectionBehavior = [.transient, .ignoresCycle, .fullScreenDisallowsTiling]
 
         let visualEffect = NSVisualEffectView(frame: self.contentView!.bounds)
         visualEffect.autoresizingMask = [.width, .height]
@@ -35,17 +34,6 @@ class TabBarPanel: NSPanel {
         visualEffect.layer?.cornerRadius = 8
         self.contentView?.addSubview(visualEffect, positioned: .below, relativeTo: nil)
         self.visualEffectView = visualEffect
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        // With isMovableByWindowBackground = false, this override only fires
-        // for clicks that miss all SwiftUI content (e.g. padding areas).
-        // Use those to drag the panel + grouped windows.
-        frameOnMouseDown = self.frame
-        performDrag(with: event)
-        if self.frame != frameOnMouseDown {
-            onPanelMoved?()
-        }
     }
 
     func setContent(
