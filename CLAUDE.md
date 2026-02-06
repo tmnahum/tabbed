@@ -1,0 +1,1 @@
+- build with env var DEVELOPMENT_TEAM=LS679A9VV4 set - or can use the sh files build.sh test.sh

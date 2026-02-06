@@ -1,11 +1,9 @@
 # Todo
-- allow one tab windows
-
-- create settings page (and change statusbar preview)
-    - we will soon have keyboard shortcuts, other settings
+- when adding a window switch to it's tab automatically
+- add a button in initial window picker to add all windows in space and create
 
 
-- invetigate a way to hide non active windows completely (maybe settle for minimizing). esp so that it doesnt show up in AltTab (and mission control etc) and instead the metawindow is what shows up
+- investigate a way to hide non active windows completely (maybe settle for minimizing). esp so that it doesnt show up in AltTab (and mission control etc) and instead the metawindow is what shows up
     - int his case also customize the window name maybe?
     - can hide with the undocumented CGS private APIs
 
@@ -14,7 +12,12 @@
     - when quitting tabbed all together it is still good
 - maybe: dragging the tab bar container does not drag the windows  (currently can no longer even drag it so its fine)
 
+❯ bugs: 
+    - initial positioning can be a little wrong too low etc
 
+    - closing settings quits the whole app
+    
+    - going from focus on non-grouped app into grouped app not by clicking can leave non grouped app obsuring the tab bar - or something like that
 
 ## Maybe:
 
@@ -46,3 +49,14 @@ Maybe:
     - mvp is they can run ./build lol
     - over the air update system
     - $99/year signing or else it will be sus for people to install
+    
+# Potential configs:
+- conflict: less is better so its easier for me to test with my own usecase. but more is more fun and more useful to people if it does work
+
+- free vs quit windows when closing tabs
+- restoration behavior once we implement that
+- hide vs dont tabs
+- could have fullscreen vs small tab styles though I think its not worth it
+
+- if all windows in a space are part of one hyperwindow, auto add any newly opened windows to the hyperspace when opened
+
