@@ -42,7 +42,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         isExplicitQuit ? .terminateNow : .terminateCancel
     }
 
+    /// Install a SIGINT handler so that `kill -INT` from the build script
+    /// triggers a graceful quit (with cleanup) rather than a hard kill.
+    private func installSignalHandler() {
+        let source = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
+        source.setEventHandler { [weak self] in
+            self?.isExplicitQuit = true
+            NSApplication.shared.terminate(nil)
+        }
+        source.resume()
+        // Ignore the default SIGINT action so our handler runs instead
+        signal(SIGINT, SIG_IGN)
+        // Store to keep alive
+        signalSource = source
+    }
+    private var signalSource: DispatchSourceSignal?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        installSignalHandler()
         if !AXIsProcessTrusted() {
             let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary
             AXIsProcessTrustedWithOptions(options)
