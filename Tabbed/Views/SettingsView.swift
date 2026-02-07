@@ -3,20 +3,26 @@ import SwiftUI
 struct SettingsView: View {
     @State private var config: ShortcutConfig
     @State private var sessionConfig: SessionConfig
+    @State private var switcherConfig: SwitcherConfig
     @State private var recordingAction: ShortcutAction?
     var onConfigChanged: (ShortcutConfig) -> Void
     var onSessionConfigChanged: (SessionConfig) -> Void
+    var onSwitcherConfigChanged: (SwitcherConfig) -> Void
 
     init(
         config: ShortcutConfig,
         sessionConfig: SessionConfig,
+        switcherConfig: SwitcherConfig,
         onConfigChanged: @escaping (ShortcutConfig) -> Void,
-        onSessionConfigChanged: @escaping (SessionConfig) -> Void
+        onSessionConfigChanged: @escaping (SessionConfig) -> Void,
+        onSwitcherConfigChanged: @escaping (SwitcherConfig) -> Void
     ) {
         self._config = State(initialValue: config)
         self._sessionConfig = State(initialValue: sessionConfig)
+        self._switcherConfig = State(initialValue: switcherConfig)
         self.onConfigChanged = onConfigChanged
         self.onSessionConfigChanged = onSessionConfigChanged
+        self.onSwitcherConfigChanged = onSwitcherConfigChanged
     }
 
     var body: some View {
@@ -57,6 +63,28 @@ struct SettingsView: View {
 
             Divider()
 
+            Text("Quick Switcher")
+                .font(.headline)
+                .padding(.top, 12)
+                .padding(.bottom, 8)
+
+            Picker("Style", selection: $switcherConfig.style) {
+                Text("App Icons").tag(SwitcherStyle.appIcons)
+                Text("Titles").tag(SwitcherStyle.titles)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 12)
+
+            Text(switcherStyleDescription)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12)
+                .padding(.top, 4)
+                .padding(.bottom, 12)
+
+            Divider()
+
             Text("Keyboard Shortcuts")
                 .font(.headline)
                 .padding(.top, 12)
@@ -69,6 +97,7 @@ struct SettingsView: View {
                     shortcutRow(.newTab)
                     shortcutRow(.releaseTab)
                     shortcutRow(.cycleTab)
+                    shortcutRow(.globalSwitcher)
 
                     Divider()
                         .padding(.vertical, 4)
@@ -99,12 +128,15 @@ struct SettingsView: View {
             }
             .padding(12)
         }
-        .frame(width: 400, height: 520)
+        .frame(width: 400, height: 620)
         .onChange(of: sessionConfig.restoreMode) { _ in
             onSessionConfigChanged(sessionConfig)
         }
         .onChange(of: sessionConfig.autoCaptureEnabled) { _ in
             onSessionConfigChanged(sessionConfig)
+        }
+        .onChange(of: switcherConfig.style) { _ in
+            onSwitcherConfigChanged(switcherConfig)
         }
         .background(ShortcutRecorderBridge(
             isRecording: recordingAction != nil,
@@ -129,6 +161,15 @@ struct SettingsView: View {
             return "Always restore groups, even if some windows are missing."
         case .off:
             return "Never auto-restore. Use the menu bar button to restore manually."
+        }
+    }
+
+    private var switcherStyleDescription: String {
+        switch switcherConfig.style {
+        case .appIcons:
+            return "Large icons in a horizontal row, like macOS Cmd+Tab."
+        case .titles:
+            return "Vertical list with app name, window title, and window count."
         }
     }
 
@@ -166,6 +207,7 @@ struct SettingsView: View {
         case .newTab: return config.newTab
         case .releaseTab: return config.releaseTab
         case .cycleTab: return config.cycleTab
+        case .globalSwitcher: return config.globalSwitcher
         case .switchToTab(let n): return config.switchToTab[n - 1]
         }
     }
@@ -178,6 +220,7 @@ struct SettingsView: View {
         case .newTab: config.newTab = binding
         case .releaseTab: config.releaseTab = binding
         case .cycleTab: config.cycleTab = binding
+        case .globalSwitcher: config.globalSwitcher = binding
         case .switchToTab(let n): config.switchToTab[n - 1] = binding
         }
         onConfigChanged(config)
@@ -189,6 +232,7 @@ struct SettingsView: View {
         if action != .newTab, config.newTab == binding { config.newTab = unused }
         if action != .releaseTab, config.releaseTab == binding { config.releaseTab = unused }
         if action != .cycleTab, config.cycleTab == binding { config.cycleTab = unused }
+        if action != .globalSwitcher, config.globalSwitcher == binding { config.globalSwitcher = unused }
         for i in 0..<config.switchToTab.count {
             if action != .switchToTab(i + 1), config.switchToTab[i] == binding {
                 config.switchToTab[i] = unused
@@ -203,6 +247,7 @@ enum ShortcutAction: Equatable {
     case newTab
     case releaseTab
     case cycleTab
+    case globalSwitcher
     case switchToTab(Int)
 
     var label: String {
@@ -210,6 +255,7 @@ enum ShortcutAction: Equatable {
         case .newTab: return "New Tab"
         case .releaseTab: return "Release Tab"
         case .cycleTab: return "Cycle Tabs (MRU)"
+        case .globalSwitcher: return "Global Switcher"
         case .switchToTab(let n): return "Switch to Tab \(n)"
         }
     }

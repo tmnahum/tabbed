@@ -294,7 +294,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 400, height: 520),
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 620),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -305,6 +305,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let settingsView = SettingsView(
             config: hotkeyManager?.config ?? .default,
             sessionConfig: SessionConfig.load(),
+            switcherConfig: switcherConfig,
             onConfigChanged: { [weak self] newConfig in
                 newConfig.save()
                 self?.hotkeyManager?.updateConfig(newConfig)
@@ -317,6 +318,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 } else {
                     self?.deactivateAutoCapture()
                 }
+            },
+            onSwitcherConfigChanged: { [weak self] newConfig in
+                newConfig.save()
+                self?.switcherConfig = newConfig
             }
         )
         window.contentView = NSHostingView(rootView: settingsView)
