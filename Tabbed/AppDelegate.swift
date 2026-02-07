@@ -608,25 +608,59 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func handleHotkeyCycleTab() {
-        guard let (group, panel) = activeGroup(),
-              let nextIndex = group.nextInMRUCycle() else { return }
+        guard let (group, panel) = activeGroup() else { return }
+        guard group.windows.count > 1 else { return }
 
-        // Cancel any pending MRU commit from a previous cycle step
         cycleWorkItem?.cancel()
-
         cyclingGroup = group
-        switchTab(in: group, to: nextIndex, panel: panel)
 
-        // Fallback: if flagsChanged never fires (e.g. external keyboard quirks),
-        // commit MRU order after a longer inactivity timeout.
-        let workItem = DispatchWorkItem { [weak self] in
-            group.endCycle()
-            self?.cycleWorkItem = nil
-            self?.cyclingGroup = nil
-            self?.cycleEndTime = Date()
+        if switcherController.isActive {
+            // Already showing within-group switcher — advance
+            switcherController.advance()
+            return
         }
-        cycleWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
+
+        // Build items from MRU order within the group
+        let windowIDs = Set(group.windows.map(\.id))
+        let mruOrder = group.focusHistory.filter { windowIDs.contains($0) }
+        let orderedWindows: [WindowInfo] = mruOrder.compactMap { id in
+            group.windows.first { $0.id == id }
+        }
+        // Add any windows not in focus history
+        let remaining = group.windows.filter { w in !mruOrder.contains(w.id) }
+        let allWindows = orderedWindows + remaining
+
+        let items = allWindows.map { SwitcherItem.singleWindow($0) }
+        guard !items.isEmpty else { return }
+
+        switcherController.onCommit = { [weak self] item in
+            guard let self, let (group, panel) = self.activeGroup() else { return }
+            if let windowID = item.windowIDs.first,
+               let index = group.windows.firstIndex(where: { $0.id == windowID }) {
+                self.switchTab(in: group, to: index, panel: panel)
+                group.endCycle()
+                self.cyclingGroup = nil
+                self.cycleEndTime = Date()
+            }
+        }
+        switcherController.onDismiss = { [weak self] in
+            guard let self else { return }
+            self.cyclingGroup?.endCycle()
+            self.cyclingGroup = nil
+        }
+
+        // Mark group as cycling (prevents MRU updates during cycle)
+        if !group.isCycling {
+            _ = group.nextInMRUCycle() // triggers isCycling = true + snapshot
+        }
+
+        switcherController.show(
+            items: items,
+            style: switcherConfig.style,
+            scope: .withinGroup
+        )
+        // Advance past current window (index 0 = currently focused)
+        switcherController.advance()
     }
 
     // MARK: - Global Switcher
