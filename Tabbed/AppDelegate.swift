@@ -32,6 +32,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var autoCaptureNotificationTokens: [NSObjectProtocol] = []
     private var autoCaptureDefaultCenterTokens: [NSObjectProtocol] = []
     private var sessionConfig = SessionConfig.load()
+    private var switcherController = SwitcherController()
+    private var switcherConfig = SwitcherConfig.load()
     /// Pending MRU commit after cycling stops.
     private var cycleWorkItem: DispatchWorkItem?
     /// The group currently being MRU-cycled (captured at cycle start so
@@ -141,7 +143,27 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             self?.handleHotkeySwitchToTab(index)
         }
         hkm.onModifierReleased = { [weak self] in
-            self?.handleCycleModifierReleased()
+            self?.handleModifierReleased()
+        }
+        hkm.onGlobalSwitcher = { [weak self] in
+            self?.handleGlobalSwitcher()
+        }
+        hkm.onSwitcherAdvance = { [weak self] in
+            guard let self, self.switcherController.isActive else { return }
+            self.switcherController.advance()
+        }
+        hkm.onSwitcherRetreat = { [weak self] in
+            guard let self, self.switcherController.isActive else { return }
+            self.switcherController.retreat()
+        }
+        hkm.onEscapePressed = { [weak self] in
+            guard let self, self.switcherController.isActive else { return false }
+            self.switcherController.dismiss()
+            if let group = self.cyclingGroup {
+                group.endCycle()
+                self.cyclingGroup = nil
+            }
+            return true
         }
 
         hkm.start()
@@ -607,13 +629,71 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
     }
 
-    private func handleCycleModifierReleased() {
+    // MARK: - Global Switcher
+
+    private func handleGlobalSwitcher() {
+        if switcherController.isActive {
+            // Already showing — advance to next
+            switcherController.advance()
+            return
+        }
+
+        let zWindows = windowManager.windowsInZOrder()
+        let items = SwitcherItemBuilder.build(
+            zOrderedWindows: zWindows,
+            groups: groupManager.groups
+        )
+        guard !items.isEmpty else { return }
+
+        switcherController.onCommit = { [weak self] item in
+            self?.commitSwitcherSelection(item)
+        }
+        switcherController.onDismiss = nil
+
+        switcherController.show(
+            items: items,
+            style: switcherConfig.style,
+            scope: .global
+        )
+        // Auto-advance past the current window (index 0 = already focused)
+        switcherController.advance()
+    }
+
+    /// Unified modifier release handler — commits whichever switcher is active.
+    private func handleModifierReleased() {
+        if switcherController.isActive {
+            switcherController.commit()
+            // Clean up within-group cycling state if applicable
+            cycleWorkItem?.cancel()
+            cycleWorkItem = nil
+            if let group = cyclingGroup {
+                group.endCycle()
+                cyclingGroup = nil
+                cycleEndTime = Date()
+            }
+            return
+        }
+        // Fallback: non-visual cycle commit (shouldn't happen but safe)
         guard let group = cyclingGroup, group.isCycling else { return }
         cycleWorkItem?.cancel()
         cycleWorkItem = nil
         group.endCycle()
         cyclingGroup = nil
         cycleEndTime = Date()
+    }
+
+    private func commitSwitcherSelection(_ item: SwitcherItem) {
+        switch item {
+        case .singleWindow(let window):
+            focusWindow(window)
+        case .group(let group):
+            guard let activeWindow = group.activeWindow else { return }
+            lastActiveGroupID = group.id
+            focusWindow(activeWindow)
+            if let panel = tabBarPanels[group.id] {
+                panel.orderAbove(windowID: activeWindow.id)
+            }
+        }
     }
 
     private func handleHotkeySwitchToTab(_ index: Int) {
