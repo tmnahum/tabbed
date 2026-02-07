@@ -364,18 +364,27 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let windowFrame = clampFrameForTabBar(firstFrame)
         let squeezeDelta = windowFrame.origin.y - firstFrame.origin.y
 
-        guard let group = groupManager.createGroup(with: windows, frame: windowFrame) else { return }
-        group.tabBarSqueezeDelta = squeezeDelta
+        setupGroup(with: windows, frame: windowFrame, squeezeDelta: squeezeDelta)
+    }
 
-        // Suppress notifications while we sync frames to prevent observer races
+    /// Shared group setup: create the group, sync frames, wire up tab bar panel and observers.
+    @discardableResult
+    private func setupGroup(
+        with windows: [WindowInfo],
+        frame: CGRect,
+        squeezeDelta: CGFloat,
+        activeIndex: Int = 0
+    ) -> TabGroup? {
+        guard let group = groupManager.createGroup(with: windows, frame: frame) else { return nil }
+        group.tabBarSqueezeDelta = squeezeDelta
+        group.switchTo(index: activeIndex)
+
         suppressNotifications(for: group.windows.map(\.id))
 
-        // Sync all windows to same frame
         for window in group.windows {
-            AccessibilityHelper.setFrame(of: window.element, to: windowFrame)
+            AccessibilityHelper.setFrame(of: window.element, to: frame)
         }
 
-        // Create and show tab bar
         let panel = TabBarPanel()
         panel.setContent(
             group: group,
@@ -399,12 +408,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         if let activeWindow = group.activeWindow {
-            panel.show(above: windowFrame, windowID: activeWindow.id)
+            panel.show(above: frame, windowID: activeWindow.id)
             // Raise the active window last so it's on top of the other grouped windows.
             // This must happen after panel.show() to establish correct z-order.
             raiseAndUpdate(activeWindow, in: group)
             panel.orderAbove(windowID: activeWindow.id)
         }
+
+        return group
     }
 
     /// Raise a window and update the group's stored AXUIElement if a fresh one was resolved.
@@ -500,46 +511,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             let restoredFrame = clampFrameForTabBar(savedFrame)
             let squeezeDelta = restoredFrame.origin.y - savedFrame.origin.y
             let effectiveSqueezeDelta = max(snapshot.tabBarSqueezeDelta, squeezeDelta)
-
-            guard let group = groupManager.createGroup(with: matchedWindows, frame: restoredFrame) else { continue }
-            group.tabBarSqueezeDelta = effectiveSqueezeDelta
-
             let restoredActiveIndex = min(snapshot.activeIndex, matchedWindows.count - 1)
-            group.switchTo(index: restoredActiveIndex)
 
-            suppressNotifications(for: group.windows.map(\.id))
-
-            for window in group.windows {
-                AccessibilityHelper.setFrame(of: window.element, to: restoredFrame)
-            }
-
-            let panel = TabBarPanel()
-            panel.setContent(
-                group: group,
-                onSwitchTab: { [weak self, weak panel] index in
-                    guard let panel else { return }
-                    self?.switchTab(in: group, to: index, panel: panel)
-                },
-                onReleaseTab: { [weak self, weak panel] index in
-                    guard let panel else { return }
-                    self?.releaseTab(at: index, from: group, panel: panel)
-                },
-                onAddWindow: { [weak self] in
-                    self?.showWindowPicker(addingTo: group)
-                }
+            setupGroup(
+                with: matchedWindows,
+                frame: restoredFrame,
+                squeezeDelta: effectiveSqueezeDelta,
+                activeIndex: restoredActiveIndex
             )
-
-            tabBarPanels[group.id] = panel
-
-            for window in group.windows {
-                windowObserver.observe(window: window)
-            }
-
-            if let activeWindow = group.activeWindow {
-                panel.show(above: restoredFrame, windowID: activeWindow.id)
-                raiseAndUpdate(activeWindow, in: group)
-                panel.orderAbove(windowID: activeWindow.id)
-            }
         }
     }
 
