@@ -129,81 +129,102 @@ class WindowManager: ObservableObject {
             }
         }
 
-        // Step 2 & 3: AX-first window discovery + filtering
-        var results: [WindowInfo] = []
+        // Step 2 & 3: AX-first window discovery + filtering (parallelized per-app)
         let cgsConn = CGSMainConnectionID()
 
-        for app in apps {
-            let pid = app.processIdentifier
-            let bundleID = app.bundleIdentifier
-            let appName = app.localizedName ?? "Unknown"
-            let icon = app.icon
+        // Pre-extract app metadata on the calling thread (NSRunningApplication may not be thread-safe)
+        struct AppSnapshot {
+            let pid: pid_t
+            let bundleID: String?
+            let appName: String
+            let icon: NSImage?
+            let localizedName: String?
+            let executableURL: URL?
+        }
+        let appSnapshots = apps.map { AppSnapshot(
+            pid: $0.processIdentifier,
+            bundleID: $0.bundleIdentifier,
+            appName: $0.localizedName ?? "Unknown",
+            icon: $0.icon,
+            localizedName: $0.localizedName,
+            executableURL: $0.executableURL
+        )}
 
-            // 2a. Set messaging timeout (100ms) to cap slow/hung apps
-            let appElement = AccessibilityHelper.appElement(for: pid)
-            AXUIElementSetMessagingTimeout(appElement, 0.1)
+        // Each app writes to its own slot — no synchronization needed
+        var perAppResults: [[WindowInfo]?] = Array(repeating: nil, count: appSnapshots.count)
+        perAppResults.withUnsafeMutableBufferPointer { buffer in
+            DispatchQueue.concurrentPerform(iterations: appSnapshots.count) { i in
+                let snap = appSnapshots[i]
 
-            // 2b. Standard AX windows (current space)
-            var windowsByID: [CGWindowID: AXUIElement] = [:]
-            var axValue: AnyObject?
-            let axResult = AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &axValue)
-            if axResult == .success, let axWindows = axValue as? [AXUIElement] {
-                for ax in axWindows {
-                    if let wid = AccessibilityHelper.windowID(for: ax), wid != 0 {
-                        windowsByID[wid] = ax
+                // 2a. Set messaging timeout (100ms) to cap slow/hung apps
+                let appElement = AccessibilityHelper.appElement(for: snap.pid)
+                AXUIElementSetMessagingTimeout(appElement, 0.1)
+
+                // 2b. Standard AX windows (current space)
+                var windowsByID: [CGWindowID: AXUIElement] = [:]
+                var axValue: AnyObject?
+                let axResult = AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &axValue)
+                if axResult == .success, let axWindows = axValue as? [AXUIElement] {
+                    for ax in axWindows {
+                        if let wid = AccessibilityHelper.windowID(for: ax), wid != 0 {
+                            windowsByID[wid] = ax
+                        }
                     }
                 }
-            }
 
-            // 2c. Brute-force cross-space discovery (only if CG shows windows AX missed)
-            let cgWindows = cgWindowsByPID[pid] ?? []
-            let missingFromAX = cgWindows.subtracting(windowsByID.keys)
-            if !missingFromAX.isEmpty {
-                let bruteForce = discoverWindowsByBruteForce(pid: pid, targetWindowIDs: missingFromAX)
-                for (element, wid) in bruteForce {
-                    if windowsByID[wid] == nil {
-                        windowsByID[wid] = element
+                // 2c. Brute-force cross-space discovery (only if CG shows windows AX missed)
+                let cgWindows = cgWindowsByPID[snap.pid] ?? []
+                let missingFromAX = cgWindows.subtracting(windowsByID.keys)
+                if !missingFromAX.isEmpty {
+                    let bruteForce = discoverWindowsByBruteForce(pid: snap.pid, targetWindowIDs: missingFromAX)
+                    for (element, wid) in bruteForce {
+                        if windowsByID[wid] == nil {
+                            windowsByID[wid] = element
+                        }
                     }
                 }
-            }
 
-            // 2d. Filter and build WindowInfo
-            for (wid, element) in windowsByID {
-                if AccessibilityHelper.isMinimized(element) { continue }
+                // 2d. Filter and build WindowInfo
+                var appWindows: [WindowInfo] = []
+                for (wid, element) in windowsByID {
+                    if AccessibilityHelper.isMinimized(element) { continue }
 
-                let subrole = AccessibilityHelper.getSubrole(of: element)
-                let role = AccessibilityHelper.getRole(of: element)
-                let title = AccessibilityHelper.getTitle(of: element)
-                let size = AccessibilityHelper.getSize(of: element)
+                    let subrole = AccessibilityHelper.getSubrole(of: element)
+                    let role = AccessibilityHelper.getRole(of: element)
+                    let title = AccessibilityHelper.getTitle(of: element)
+                    let size = AccessibilityHelper.getSize(of: element)
 
-                var windowLevel: Int32 = 0
-                let levelOK = CGSGetWindowLevel(cgsConn, wid, &windowLevel) == 0
-                let level: Int? = levelOK ? Int(windowLevel) : nil
+                    var windowLevel: Int32 = 0
+                    let levelOK = CGSGetWindowLevel(cgsConn, wid, &windowLevel) == 0
+                    let level: Int? = levelOK ? Int(windowLevel) : nil
 
-                guard WindowDiscriminator.isActualWindow(
-                    cgWindowID: wid,
-                    subrole: subrole,
-                    role: role,
-                    title: title,
-                    size: size,
-                    level: level,
-                    bundleIdentifier: bundleID,
-                    localizedName: app.localizedName,
-                    executableURL: app.executableURL
-                ) else { continue }
+                    guard WindowDiscriminator.isActualWindow(
+                        cgWindowID: wid,
+                        subrole: subrole,
+                        role: role,
+                        title: title,
+                        size: size,
+                        level: level,
+                        bundleIdentifier: snap.bundleID,
+                        localizedName: snap.localizedName,
+                        executableURL: snap.executableURL
+                    ) else { continue }
 
-                results.append(WindowInfo(
-                    id: wid,
-                    element: element,
-                    ownerPID: pid,
-                    bundleID: bundleID ?? "",
-                    title: title ?? "",
-                    appName: appName,
-                    icon: icon,
-                    cgBounds: cgLookup[wid]?.bounds
-                ))
+                    appWindows.append(WindowInfo(
+                        id: wid,
+                        element: element,
+                        ownerPID: snap.pid,
+                        bundleID: snap.bundleID ?? "",
+                        title: title ?? "",
+                        appName: snap.appName,
+                        icon: snap.icon,
+                        cgBounds: cgLookup[wid]?.bounds
+                    ))
+                }
+                buffer[i] = appWindows
             }
         }
+        var results = perAppResults.compactMap { $0 }.flatMap { $0 }
 
         // Step 5: Sort by CG z-order (frontmost first)
         results.sort { a, b in
