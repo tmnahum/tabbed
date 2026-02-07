@@ -1,18 +1,7 @@
 # Todo
-    - fill out keyboard shortcuts
-        - 9 should be last always
-        - think of any others to mirror browsers
-
 - If tabbed window is fullscreen AND all windows in space are part of the tabbed window, then any new windows opening in space auto join the tabbed window
 
-
-
-- session restoration feature:
-    - customizable in settings
-    - default mode: if windows are the exact same, (ie all window in group to be created still exist from when app was quit) recreate. do that on a per window basis. if a window is missing from group, do not recreate
-    - no recreate mode: off (self explanatory)
-    - always recreate mode: attempt to recreate if windows are missing, so be it, also be more permissive about windows whos titles changed etc
-    - also in default and off modes include a restore previous session button in menubar which does as such (only needs to work once)
+- proper alt tab feature with display, both within tabbed window group and system wide
 
 
 - change design
@@ -21,7 +10,7 @@
         - one that is like what we have now but with max length of tabs, draggable rest of the area
         - one that is like chrome tabs, but do not paint over rest of area
             - (inspired by ultrasnapper screenshots)
-        - 3 more wildcard designs (be creative make them different from each other)
+        - 3+ more wildcard designs (be creative make them different from each other)
 
 
 - do performance/battery review on the codebase
@@ -29,17 +18,12 @@
 
 - brain
 
+Maybe:
+    - when app breaks out by going goes full screen and then unfullscreen, restore it back to the group
+    - 
+
 ## Bugs
 - tab bar sometimes appears in wrong space (desktop)
-
-- on add, is squeezes windows down to make room for tab bar even if there is space for tab bar already, should just show it on top instead
-
-- hyper T does not work
-
-- some special apps such as altTab the window close detection does not work
-    - well it was behaving like that but fixed now, so nevermind ig
-
-
 
 - going from focus on non-grouped app that is on top of tab bar into grouped app not by clicking can leave non grouped app obsuring the tab bar - or something like that
 
@@ -85,10 +69,7 @@
     - maybe: implement minimization,
     - or alternative is to interface with alttab, command tab or make our own
 
-## Post-MVP Features (important)
-- Keyboard shortcuts for tab switching (using Hyper key to avoid conflicts with in-app shortcuts)
-- Persist groups across app restarts (match by app bundle ID + window title, best-effort) / restore previous session option on startup
-
+## Post-MVP Features
 Maybe:
 - Drag a tab out of the tab bar to release it
 - Drag a tab into another group's tab bar to move between groups
@@ -104,10 +85,5 @@ Maybe:
 # Potential configs:
 - conflict: less is better so its easier for me to test with my own usecase. but more is more fun and more useful to people if it does work
 
-- free vs quit windows when closing tabs
-- restoration behavior once we implement that
-- hide vs dont tabs
 - could have fullscreen vs small tab styles though I think its not worth it
-
-- if all windows in a space are part of one hyperwindow, auto add any newly opened windows to the hyperspace when opened
-
+    - or miltiple tab styles in general
