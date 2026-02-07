@@ -701,10 +701,40 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }.map(\.element)
         }
 
-        let items = SwitcherItemBuilder.build(
-            zOrderedWindows: sortedWindows,
-            groups: groupManager.groups
-        )
+        // Build items: groups are first-class, windows fill the gaps
+        let groupFrames = groupManager.groups.map { $0.frame }
+
+        var items: [SwitcherItem] = []
+        var seenGroupIDs: Set<UUID> = []
+
+        for window in sortedWindows {
+            // Known group member by ID → place group at this position (once)
+            if let group = groupManager.group(for: window.id) {
+                if seenGroupIDs.insert(group.id).inserted {
+                    items.append(.group(group))
+                }
+                continue
+            }
+
+            // Not matched by ID — check frame against group frames (catches stale IDs)
+            if let frame = AccessibilityHelper.getFrame(of: window.element) {
+                let matchesGroupFrame = groupFrames.contains { gf in
+                    abs(frame.origin.x - gf.origin.x) < 2 &&
+                    abs(frame.origin.y - gf.origin.y) < 2 &&
+                    abs(frame.width - gf.width) < 2 &&
+                    abs(frame.height - gf.height) < 2
+                }
+                if matchesGroupFrame { continue }
+            }
+
+            items.append(.singleWindow(window))
+        }
+
+        // Add groups whose windows weren't in the z-ordered list at all
+        for group in groupManager.groups where !seenGroupIDs.contains(group.id) {
+            items.append(.group(group))
+        }
+
         guard !items.isEmpty else { return }
 
         switcherController.onCommit = { [weak self] item in
