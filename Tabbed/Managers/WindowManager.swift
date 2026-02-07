@@ -174,8 +174,20 @@ class WindowManager: ObservableObject {
                     icon: app?.icon
                 ))
             } else {
-                // No AX match — window is likely on another Space.
-                // Use CG metadata + app AXUIElement as placeholder.
+                // No AX match — check if this is a companion window vs other-space window.
+                // Companion/auxiliary CG windows (GPU surfaces, rendering helpers) are
+                // on-screen but NOT in the app's AX window list. Other-space windows
+                // are off-screen and also lack AX matches. Only include the latter.
+                let isOnScreen: Bool
+                if let flag = info[kCGWindowIsOnscreen as String] as? Bool {
+                    isOnScreen = flag
+                } else if let num = info[kCGWindowIsOnscreen as String] as? Int {
+                    isOnScreen = num != 0
+                } else {
+                    isOnScreen = false
+                }
+                if isOnScreen { continue }
+
                 let cgTitle = info[kCGWindowName as String] as? String ?? ""
                 var bounds = CGRect.zero
                 if let boundsRef = info[kCGWindowBounds as String] as? NSDictionary as CFDictionary? {
