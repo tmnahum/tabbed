@@ -9,7 +9,13 @@ class HotkeyManager {
     var onReleaseTab: (() -> Void)?
     var onCycleTab: (() -> Void)?
     var onSwitchToTab: ((Int) -> Void)?
-    var onCycleModifierReleased: (() -> Void)?
+    var onGlobalSwitcher: (() -> Void)?
+    /// Fires when modifier keys are released (used by both within-group and global switcher).
+    var onModifierReleased: (() -> Void)?
+    /// Fires when the escape key is pressed. Returns true if handled (event should be consumed).
+    var onEscapePressed: (() -> Bool)?
+    var onSwitcherAdvance: (() -> Void)?
+    var onSwitcherRetreat: (() -> Void)?
 
     init(config: ShortcutConfig) {
         self.config = config
@@ -58,14 +64,32 @@ class HotkeyManager {
 
     private func handleFlagsChanged(_ event: NSEvent) {
         let currentMods = event.modifierFlags.intersection(.deviceIndependentFlagsMask).rawValue
-        let requiredMods = config.cycleTab.modifiers
-        if (currentMods & requiredMods) != requiredMods {
-            onCycleModifierReleased?()
+        // Check if either switcher's required modifiers have been released.
+        let cycleMods = config.cycleTab.modifiers
+        let globalMods = config.globalSwitcher.modifiers
+        let anyRequired = cycleMods | globalMods
+        if (currentMods & anyRequired) != anyRequired {
+            onModifierReleased?()
         }
     }
 
     @discardableResult
     private func handleKeyDown(_ event: NSEvent) -> Bool {
+        // Escape — let the handler decide whether to consume
+        if event.keyCode == 53 {
+            if onEscapePressed?() == true {
+                return true
+            }
+        }
+
+        // Arrow keys for switcher navigation
+        if event.keyCode == 123 || event.keyCode == 126 { // Left or Up arrow
+            onSwitcherRetreat?()
+        }
+        if event.keyCode == 124 || event.keyCode == 125 { // Right or Down arrow
+            onSwitcherAdvance?()
+        }
+
         let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask).rawValue
         let hyper: UInt = 0x1E0000
         if (mods & hyper) == hyper {
@@ -82,6 +106,10 @@ class HotkeyManager {
         }
         if config.cycleTab.matches(event), !event.isARepeat {
             onCycleTab?()
+            return true
+        }
+        if config.globalSwitcher.matches(event), !event.isARepeat {
+            onGlobalSwitcher?()
             return true
         }
         for (i, binding) in config.switchToTab.enumerated() {

@@ -140,7 +140,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         hkm.onSwitchToTab = { [weak self] index in
             self?.handleHotkeySwitchToTab(index)
         }
-        hkm.onCycleModifierReleased = { [weak self] in
+        hkm.onModifierReleased = { [weak self] in
             self?.handleCycleModifierReleased()
         }
 
