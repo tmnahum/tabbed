@@ -286,7 +286,6 @@ extension AppDelegate {
         globalMRU.removeAll { $0 == .window(window.id) }
         setExpectedFrame(group.frame, for: [window.id])
         AccessibilityHelper.setFrame(of: window.element, to: group.frame)
-
         // If active tab is from the same app, insert right after it
         let insertAfterActive = group.activeWindow.map { $0.bundleID == window.bundleID } ?? false
         let insertionIndex = insertAfterActive ? group.activeIndex + 1 : nil
@@ -685,9 +684,11 @@ extension AppDelegate {
     @objc func handleAppTerminated(_ notification: Notification) {
         guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
         let pid = app.processIdentifier
+        Logger.log("[DEBUG] handleAppTerminated: app=\(app.localizedName ?? "?") pid=\(pid)")
 
         for group in groupManager.groups {
             let affectedWindows = group.windows.filter { $0.ownerPID == pid }
+            guard !affectedWindows.isEmpty else { continue }
             for window in affectedWindows {
                 globalMRU.removeAll { $0 == .window(window.id) }
                 expectedFrames.removeValue(forKey: window.id)

@@ -188,20 +188,24 @@ enum AccessibilityHelper {
             raise(freshElement!)
         }
 
-        // Now activate the app — the raised window is already in front.
-        if let app = NSRunningApplication(processIdentifier: window.ownerPID) {
+        // Activate the app only if it isn't already active.  When the app is
+        // already frontmost, AXRaise alone is sufficient; calling activate()
+        // again can cause macOS to switch Spaces to the app's "main" window
+        // when it has windows on multiple Spaces.
+        let appForActivation = NSRunningApplication(processIdentifier: window.ownerPID)
+        if let app = appForActivation, !app.isActive {
             if #available(macOS 14.0, *) {
                 app.activate()
             } else {
                 app.activate(options: [])
             }
-        }
 
-        // Re-raise after activate: app.activate() can bring forward the app's
-        // own previously-focused window, overriding our initial raise. This
-        // matters for same-app multi-window groups.
-        let elementToRaise = freshElement ?? window.element
-        raise(elementToRaise)
+            // Re-raise after activate: app.activate() can bring forward the
+            // app's own previously-focused window, overriding our initial
+            // raise.  This matters for same-app multi-window groups.
+            let elementToRaise = freshElement ?? window.element
+            raise(elementToRaise)
+        }
 
         if let fresh = freshElement, fresh !== window.element {
             return fresh
