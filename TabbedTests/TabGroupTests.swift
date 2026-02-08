@@ -199,4 +199,61 @@ final class TabGroupTests: XCTestCase {
         XCTAssertEqual(group.windows.map(\.id), [3, 4, 1, 2])
         XCTAssertEqual(group.activeWindow?.id, 2)
     }
+
+    // MARK: - Multi-Drag Position Delta (TabBarView animation helper)
+
+    func testMultiDragPositionDeltaDragToEnd() {
+        // [1,2,3,4,5], drag {1,3} to target=4
+        // remaining: [(0,1→skip),(1,2),(2,3→skip),(3,4),(4,5)]
+        // remaining without dragged: [(1,2),(3,4),(4,5)], insertAt=min(4,3)=3
+        // All non-dragged are before insertAt → no shift for any? No:
+        // finalPos 0 (id 2, orig 1): adjustedPos=0, delta=0-1=-1
+        // finalPos 1 (id 4, orig 3): adjustedPos=1, delta=1-3=-2
+        // finalPos 2 (id 5, orig 4): adjustedPos=2, delta=2-4=-2
+        let ids: [CGWindowID] = [1, 2, 3, 4, 5]
+        let dragged: Set<CGWindowID> = [1, 3]
+        XCTAssertEqual(TabBarView.multiDragPositionDelta(for: 1, windowIDs: ids, draggedIDs: dragged, targetIndex: 4), -1)
+        XCTAssertEqual(TabBarView.multiDragPositionDelta(for: 3, windowIDs: ids, draggedIDs: dragged, targetIndex: 4), -2)
+        XCTAssertEqual(TabBarView.multiDragPositionDelta(for: 4, windowIDs: ids, draggedIDs: dragged, targetIndex: 4), -2)
+    }
+
+    func testMultiDragPositionDeltaDragToBeginning() {
+        // [1,2,3,4], drag {3,4} to target=0
+        // remaining: [(0,1),(1,2)], insertAt=0
+        // finalPos 0 (id 1, orig 0): 0>=0 → adjustedPos=0+2=2, delta=+2
+        // finalPos 1 (id 2, orig 1): 1>=0 → adjustedPos=1+2=3, delta=+2
+        let ids: [CGWindowID] = [1, 2, 3, 4]
+        let dragged: Set<CGWindowID> = [3, 4]
+        XCTAssertEqual(TabBarView.multiDragPositionDelta(for: 0, windowIDs: ids, draggedIDs: dragged, targetIndex: 0), 2)
+        XCTAssertEqual(TabBarView.multiDragPositionDelta(for: 1, windowIDs: ids, draggedIDs: dragged, targetIndex: 0), 2)
+    }
+
+    func testMultiDragPositionDeltaNoOp() {
+        // [1,2,3,4], drag {1,2} to target=0 — block already at 0
+        // remaining: [(2,3),(3,4)], insertAt=0
+        // finalPos 0 (id 3, orig 2): 0>=0 → adjustedPos=0+2=2, delta=0
+        // finalPos 1 (id 4, orig 3): 1>=0 → adjustedPos=1+2=3, delta=0
+        let ids: [CGWindowID] = [1, 2, 3, 4]
+        let dragged: Set<CGWindowID> = [1, 2]
+        XCTAssertEqual(TabBarView.multiDragPositionDelta(for: 2, windowIDs: ids, draggedIDs: dragged, targetIndex: 0), 0)
+        XCTAssertEqual(TabBarView.multiDragPositionDelta(for: 3, windowIDs: ids, draggedIDs: dragged, targetIndex: 0), 0)
+    }
+
+    func testMultiDragPositionDeltaScatteredToMiddle() {
+        // [1,2,3,4,5], drag {1,3,5} to target=2
+        // remaining: [(1,2),(3,4)], insertAt=min(2,2)=2
+        // finalPos 0 (id 2, orig 1): 0<2 → adjustedPos=0, delta=-1
+        // finalPos 1 (id 4, orig 3): 1<2 → adjustedPos=1, delta=-2
+        let ids: [CGWindowID] = [1, 2, 3, 4, 5]
+        let dragged: Set<CGWindowID> = [1, 3, 5]
+        XCTAssertEqual(TabBarView.multiDragPositionDelta(for: 1, windowIDs: ids, draggedIDs: dragged, targetIndex: 2), -1)
+        XCTAssertEqual(TabBarView.multiDragPositionDelta(for: 3, windowIDs: ids, draggedIDs: dragged, targetIndex: 2), -2)
+    }
+
+    func testMultiDragPositionDeltaDraggedTabReturnsZero() {
+        // Dragged tabs should return 0 (they use dragTranslation directly)
+        let ids: [CGWindowID] = [1, 2, 3, 4]
+        let dragged: Set<CGWindowID> = [2, 3]
+        XCTAssertEqual(TabBarView.multiDragPositionDelta(for: 1, windowIDs: ids, draggedIDs: dragged, targetIndex: 0), 0)  // index 1 is dragged → not in remaining → returns 0
+    }
 }

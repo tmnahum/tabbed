@@ -144,9 +144,16 @@ struct TabBarView: View {
 
     private func shiftOffset(for index: Int, targetIndex: Int?, tabStep: CGFloat) -> CGFloat {
         guard let target = targetIndex else { return 0 }
-        // Multi-drag: non-dragged tabs stay in place, dragged tabs float over
-        if draggingIDs.count > 1 { return 0 }
-        // Single-drag: original shift logic
+
+        if draggingIDs.count > 1 {
+            let windowIDs = group.windows.map(\.id)
+            let positionDelta = Self.multiDragPositionDelta(
+                for: index, windowIDs: windowIDs, draggedIDs: draggingIDs, targetIndex: target
+            )
+            return CGFloat(positionDelta) * tabStep
+        }
+
+        // Single-drag: shift tabs between source and target
         if dragStartIndex < target {
             if index > dragStartIndex && index <= target {
                 return -tabStep
@@ -154,6 +161,24 @@ struct TabBarView: View {
         } else if dragStartIndex > target {
             if index >= target && index < dragStartIndex {
                 return tabStep
+            }
+        }
+        return 0
+    }
+
+    /// Compute how many positions a non-dragged tab at `index` shifts when a block of
+    /// dragged tabs is moved to `targetIndex`. Mirrors the logic of `moveTabs(withIDs:toIndex:)`.
+    static func multiDragPositionDelta(
+        for index: Int, windowIDs: [CGWindowID], draggedIDs: Set<CGWindowID>, targetIndex: Int
+    ) -> Int {
+        let remaining = windowIDs.enumerated().filter { !draggedIDs.contains($0.element) }
+        let insertAt = max(0, min(targetIndex, remaining.count))
+        let draggedCount = draggedIDs.count
+
+        for (finalPos, entry) in remaining.enumerated() {
+            if entry.offset == index {
+                let adjustedPos = finalPos < insertAt ? finalPos : finalPos + draggedCount
+                return adjustedPos - index
             }
         }
         return 0
