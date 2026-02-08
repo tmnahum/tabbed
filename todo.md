@@ -1,10 +1,33 @@
 
+- simplify session restore config options maybe
+
+
+
+- option to make tabs have max width, and left aligned instead of justified
+
+- freeing  window focuses it, not the next active tabs
+- replace x button (maybe - button) since it frees and doesnt close, maybe config to close window
+    - ok maybe the active tab its a - free button, non active tabs its a x close window button (active tab can be closed with traffic lights)
+    
+
+Window Handling:
+    - drag tabs between windows. shift to select tabs to drag as group, drag out into its own window or into another window
+    - handle changing spaces
+        - ux:
+            - either: drag tab bar to change, dragging window out does not change it
+            - or dragging any child window into space moves the whole group there
+                - probably this is better but we need to make freeing logic good (shift select)
+    - maybe: handle fullscreening app differently
+        - right now it breaks out
+        - can have it rejoin group on unfullscreen
+            - can have it have an indicator in the group that its a part of the gorup but fullscreened
+
 
 
 Meta Dev:
-- create a build script that outputs nothing on sucessfull build to help avoid unesessary context stuff
-- set up vscode swift lsp
-- claude swift extension reduce the false positives
+    - create a build script that outputs nothing on sucessfull build to help avoid unesessary context stuff
+    - set up vscode swift lsp
+    - claude swift extension reduce the false positives
 
 
 Maybe:
