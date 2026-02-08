@@ -131,7 +131,7 @@ extension AppDelegate {
             lastActiveGroupID = group.id
             group.recordFocus(windowID: activeWindow.id)
             focusWindow(activeWindow)
-            if let panel = tabBarPanels[group.id] {
+            if !activeWindow.isFullscreened, let panel = tabBarPanels[group.id] {
                 panel.orderAbove(windowID: activeWindow.id)
             }
         }

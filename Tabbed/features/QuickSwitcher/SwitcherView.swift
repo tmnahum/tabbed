@@ -99,15 +99,17 @@ struct SwitcherView: View {
             ZStack {
                 if item.isGroup {
                     let frontIndex = isSelected ? subSelectedWindowIndex : nil
-                    groupedIconStack(icons: item.iconsInMRUOrder(frontIndex: frontIndex, maxVisible: Self.maxGroupIcons))
+                    groupedIconStack(entries: item.iconsInMRUOrder(frontIndex: frontIndex, maxVisible: Self.maxGroupIcons))
                 } else if let icon = item.icons.first ?? nil {
                     Image(nsImage: icon)
                         .resizable()
                         .frame(width: 64, height: 64)
+                        .opacity(item.isWindowFullscreened(at: nil) ? 0.4 : 1.0)
                 } else {
                     Image(systemName: "macwindow")
                         .font(.system(size: 40))
                         .frame(width: 64, height: 64)
+                        .opacity(item.isWindowFullscreened(at: nil) ? 0.4 : 1.0)
                 }
             }
             .frame(width: 80, height: 64)
@@ -124,15 +126,15 @@ struct SwitcherView: View {
             Text(displayAppName(for: item, isSelected: isSelected))
                 .font(.system(size: 11))
                 .lineLimit(1)
-                .foregroundStyle(isSelected ? .primary : .secondary)
+                .foregroundStyle(item.isWindowFullscreened(at: isSelected ? subSelectedWindowIndex : nil) ? .tertiary : isSelected ? .primary : .secondary)
         }
         .frame(width: 96)
     }
 
     /// Stacked/overlapping icons for a group entry.
     /// Scales icon size down proportionally to fit more icons within a target width.
-    private func groupedIconStack(icons: [NSImage?]) -> some View {
-        let count = icons.count
+    private func groupedIconStack(entries: [(icon: NSImage?, isFullscreened: Bool)]) -> some View {
+        let count = entries.count
         let maxWidth: CGFloat = 96
         let overlapRatio: CGFloat = 1.0 / 3.0
 
@@ -150,9 +152,9 @@ struct SwitcherView: View {
         let cornerRadius = iconSize * (10.0 / 48.0)
 
         return ZStack {
-            ForEach(Array(icons.enumerated()), id: \.offset) { index, icon in
+            ForEach(Array(entries.enumerated()), id: \.offset) { index, entry in
                 Group {
-                    if let icon {
+                    if let icon = entry.icon {
                         Image(nsImage: icon)
                             .resizable()
                     } else {
@@ -167,6 +169,7 @@ struct SwitcherView: View {
                 )
                 .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
                 .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
+                .opacity(entry.isFullscreened ? 0.4 : 1.0)
                 .offset(x: CGFloat(index) * overlap - CGFloat(count - 1) * overlap / 2)
             }
         }
@@ -215,23 +218,26 @@ struct SwitcherView: View {
             // Icon(s)
             if item.isGroup {
                 let frontIndex = isSelected ? subSelectedWindowIndex : nil
-                let icons = item.iconsInMRUOrder(frontIndex: frontIndex, maxVisible: Self.maxGroupIcons)
-                let stackWidth = CGFloat(22 + max(0, icons.count - 1) * 9)
-                groupedIconRowStack(icons: icons)
+                let entries = item.iconsInMRUOrder(frontIndex: frontIndex, maxVisible: Self.maxGroupIcons)
+                let stackWidth = CGFloat(22 + max(0, entries.count - 1) * 9)
+                groupedIconRowStack(entries: entries)
                     .frame(width: max(36, stackWidth), height: 28)
             } else if let icon = item.icons.first ?? nil {
                 Image(nsImage: icon)
                     .resizable()
                     .frame(width: 28, height: 28)
+                    .opacity(item.isWindowFullscreened(at: nil) ? 0.4 : 1.0)
             } else {
                 Image(systemName: "macwindow")
                     .frame(width: 28, height: 28)
+                    .opacity(item.isWindowFullscreened(at: nil) ? 0.4 : 1.0)
             }
 
             Text("\(appName) — \(title)")
                 .font(.system(size: 14))
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .foregroundStyle(item.isWindowFullscreened(at: isSelected ? subSelectedWindowIndex : nil) ? .tertiary : .primary)
 
             Spacer()
 
@@ -266,15 +272,15 @@ struct SwitcherView: View {
     }
 
     /// Small overlapping icons for the titles-style row.
-    private func groupedIconRowStack(icons: [NSImage?]) -> some View {
-        let count = icons.count
+    private func groupedIconRowStack(entries: [(icon: NSImage?, isFullscreened: Bool)]) -> some View {
+        let count = entries.count
         let iconSize: CGFloat = 22
         let overlap: CGFloat = 9
 
         return ZStack {
-            ForEach(Array(icons.enumerated()), id: \.offset) { index, icon in
+            ForEach(Array(entries.enumerated()), id: \.offset) { index, entry in
                 Group {
-                    if let icon {
+                    if let icon = entry.icon {
                         Image(nsImage: icon)
                             .resizable()
                     } else {
@@ -285,6 +291,7 @@ struct SwitcherView: View {
                 .frame(width: iconSize, height: iconSize)
                 .clipShape(RoundedRectangle(cornerRadius: 4))
                 .shadow(color: .black.opacity(0.1), radius: 1, y: 0.5)
+                .opacity(entry.isFullscreened ? 0.4 : 1.0)
                 .offset(x: CGFloat(index) * overlap - CGFloat(count - 1) * overlap / 2)
             }
         }
