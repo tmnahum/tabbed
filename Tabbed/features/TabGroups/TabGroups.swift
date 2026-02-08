@@ -523,10 +523,10 @@ extension AppDelegate {
         )
         group.frame = newFrame
 
-        // Only move the active (visible) window during drag for performance
-        if let activeWindow = group.activeWindow {
-            setExpectedFrame(newFrame, for: [activeWindow.id])
-            AccessibilityHelper.setPosition(of: activeWindow.element, to: newFrame.origin)
+        let allIDs = group.windows.map(\.id)
+        setExpectedFrame(newFrame, for: allIDs)
+        for window in group.windows {
+            AccessibilityHelper.setPosition(of: window.element, to: newFrame.origin)
         }
     }
 
