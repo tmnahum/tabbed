@@ -1,3 +1,19 @@
+
+
+
+Meta Dev:
+- create a build script that outputs nothing on sucessfull build to help avoid unesessary context stuff
+- set up vscode swift lsp
+- claude swift extension reduce the false positives
+
+
+Maybe:
+- might be too complex
+    - double click to fullscreen -> if allready in fullscreen double click restores to old behavior (like it would without this app)
+
+----- More ------
+
+
 # uncommited from main branch
 1. Frame-based notification suppression (e8a572c) — replaced time-based suppression with frame-based
     - (related to distinguishing movement notifs that came from itself type shit)                                                    

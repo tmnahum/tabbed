@@ -34,7 +34,13 @@
       "Bash(security find-certificate:*)",
       "Bash(openssl x509:*)",
       "Bash(source:*)",
-      "Bash(DEVELOPMENT_TEAM=LS679A9VV4 ./test.sh:*)"
+      "Bash(DEVELOPMENT_TEAM=LS679A9VV4 ./test.sh:*)",
+      "Bash(grep:*)",
+      "Bash(swift --version:*)",
+      "Bash(find:*)",
+      "Bash(xcode-build-server:*)",
+      "Bash(tee:*)",
+      "Bash(code:*)"
     ]
   }
 }
