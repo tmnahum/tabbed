@@ -158,7 +158,7 @@ extension AppDelegate {
     }
 
     /// Move the tab bar panel to the same Space as the given window, if they differ.
-    private func movePanelToWindowSpace(_ panel: TabBarPanel, windowID: CGWindowID) {
+    func movePanelToWindowSpace(_ panel: TabBarPanel, windowID: CGWindowID) {
         guard panel.windowNumber > 0 else { return }
         let conn = CGSMainConnectionID()
         let panelWID = CGWindowID(panel.windowNumber)

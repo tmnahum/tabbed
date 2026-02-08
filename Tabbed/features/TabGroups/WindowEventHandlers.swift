@@ -123,7 +123,13 @@ extension AppDelegate {
         if !group.isCycling, !isCycleCooldownActive {
             group.recordFocus(windowID: windowID)
         }
+        movePanelToWindowSpace(panel, windowID: windowID)
         panel.orderAbove(windowID: windowID)
+        // Re-order after a delay — when the OS raises a window (dock click, Cmd-Tab,
+        // third-party switcher), its reordering may finish after our orderAbove call.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak panel] in
+            panel?.orderAbove(windowID: windowID)
+        }
     }
 
     func handleWindowDestroyed(_ windowID: CGWindowID) {
@@ -193,6 +199,10 @@ extension AppDelegate {
         if !group.isCycling, !isCycleCooldownActive {
             group.recordFocus(windowID: windowID)
         }
+        movePanelToWindowSpace(panel, windowID: windowID)
         panel.orderAbove(windowID: windowID)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak panel] in
+            panel?.orderAbove(windowID: windowID)
+        }
     }
 }

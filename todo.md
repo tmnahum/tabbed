@@ -6,12 +6,20 @@
 
 - switcher arrow keys
 
+- close window functionality optional, also have close or disband in menubar prob
+
 BUGS:
     - signal app specifically (most apps dont but others might) pick up control + tab key shortcut even though im pressing hyper tab
     - selecting a tabbed window not by clicking does not bring the tabs panel to front
     - switcher 
         - 
     - capture new windows when maximized doesnt work
+    
+    - switching to a tab of a window briefly flashes that apps last used window before correctly showing the tab you clicked (probably activating that app before switching to it or something, but we get 1 frame of the wrong screen)
+    
+    - fullscreen restoration on app quit is 2px too short
+    
+    - session restore is having wrong tab ordering, shows wrong tab as active
 
 
 
