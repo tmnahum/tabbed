@@ -182,4 +182,88 @@ final class GroupManagerTests: XCTestCase {
         XCTAssertEqual(foreignGroup.windows.count, 2)
     }
 
+    // MARK: - Cross-Group Tab Moves
+
+    func testMoveTabsBetweenGroups() {
+        let gm = GroupManager()
+        let groupA = gm.createGroup(with: [makeWindow(id: 1), makeWindow(id: 2), makeWindow(id: 3)], frame: .zero)!
+        let groupB = gm.createGroup(with: [makeWindow(id: 10), makeWindow(id: 11)], frame: .zero)!
+
+        // Release window 2 from group A
+        let released = gm.releaseWindows(withIDs: [2], from: groupA)
+        XCTAssertEqual(released.count, 1)
+        XCTAssertEqual(groupA.windows.map(\.id), [1, 3])
+
+        // Add released window to group B at index 1
+        gm.addWindow(released[0], to: groupB, at: 1)
+        XCTAssertEqual(groupB.windows.map(\.id), [10, 2, 11])
+        XCTAssertEqual(gm.groups.count, 2)
+    }
+
+    func testMoveMultipleTabsBetweenGroups() {
+        let gm = GroupManager()
+        let groupA = gm.createGroup(with: [makeWindow(id: 1), makeWindow(id: 2), makeWindow(id: 3)], frame: .zero)!
+        let groupB = gm.createGroup(with: [makeWindow(id: 10), makeWindow(id: 11)], frame: .zero)!
+
+        // Release windows 1 and 3 from group A
+        let released = gm.releaseWindows(withIDs: [1, 3], from: groupA)
+        XCTAssertEqual(released.count, 2)
+        XCTAssertEqual(groupA.windows.map(\.id), [2])
+
+        // Add released windows to group B at index 1 (preserving order)
+        for (offset, window) in released.enumerated() {
+            gm.addWindow(window, to: groupB, at: 1 + offset)
+        }
+        XCTAssertEqual(groupB.windows.map(\.id), [10, 1, 3, 11])
+    }
+
+    func testMoveAllTabsDissolvesSource() {
+        let gm = GroupManager()
+        let groupA = gm.createGroup(with: [makeWindow(id: 1), makeWindow(id: 2)], frame: .zero)!
+        let groupB = gm.createGroup(with: [makeWindow(id: 10)], frame: .zero)!
+
+        let released = gm.releaseWindows(withIDs: [1, 2], from: groupA)
+        XCTAssertEqual(released.count, 2)
+        XCTAssertEqual(gm.groups.count, 1) // groupA dissolved
+
+        for (offset, window) in released.enumerated() {
+            gm.addWindow(window, to: groupB, at: 1 + offset)
+        }
+        XCTAssertEqual(groupB.windows.map(\.id), [10, 1, 2])
+        XCTAssertEqual(gm.groups.count, 1)
+    }
+
+    func testMoveTabToEndOfTargetGroup() {
+        let gm = GroupManager()
+        let groupA = gm.createGroup(with: [makeWindow(id: 1), makeWindow(id: 2)], frame: .zero)!
+        let groupB = gm.createGroup(with: [makeWindow(id: 10), makeWindow(id: 11)], frame: .zero)!
+
+        let released = gm.releaseWindows(withIDs: [1], from: groupA)
+        gm.addWindow(released[0], to: groupB, at: 2)
+        XCTAssertEqual(groupB.windows.map(\.id), [10, 11, 1])
+    }
+
+    func testMoveTabToBeginningOfTargetGroup() {
+        let gm = GroupManager()
+        let groupA = gm.createGroup(with: [makeWindow(id: 1), makeWindow(id: 2)], frame: .zero)!
+        let groupB = gm.createGroup(with: [makeWindow(id: 10), makeWindow(id: 11)], frame: .zero)!
+
+        let released = gm.releaseWindows(withIDs: [1], from: groupA)
+        gm.addWindow(released[0], to: groupB, at: 0)
+        XCTAssertEqual(groupB.windows.map(\.id), [1, 10, 11])
+    }
+
+    // MARK: - Drop Indicator
+
+    func testDropIndicatorIndexSetAndClear() {
+        let group = TabGroup(windows: [makeWindow(id: 1), makeWindow(id: 2)], frame: .zero)
+        XCTAssertNil(group.dropIndicatorIndex)
+
+        group.dropIndicatorIndex = 1
+        XCTAssertEqual(group.dropIndicatorIndex, 1)
+
+        group.dropIndicatorIndex = nil
+        XCTAssertNil(group.dropIndicatorIndex)
+    }
+
 }

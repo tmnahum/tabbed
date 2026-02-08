@@ -126,6 +126,19 @@ extension AppDelegate {
             onCloseTabs: { [weak self, weak panel] ids in
                 guard let panel else { return }
                 self?.closeTabs(withIDs: ids, from: group, panel: panel)
+            },
+            onCrossPanelDrop: { [weak self, weak panel] ids, targetGroupID, insertionIndex in
+                guard let panel else { return }
+                self?.moveTabsToExistingGroup(
+                    withIDs: ids, from: group, sourcePanel: panel,
+                    toGroupID: targetGroupID, at: insertionIndex
+                )
+            },
+            onDragOverPanels: { [weak self] mouseLocation -> CrossPanelDropTarget? in
+                self?.handleDragOverPanels(from: group, at: mouseLocation)
+            },
+            onDragEnded: { [weak self] in
+                self?.clearAllDropIndicators()
             }
         )
 
@@ -436,6 +449,117 @@ extension AppDelegate {
         let targetIndex = (index == 8) ? group.windows.count - 1 : index
         guard targetIndex < group.windows.count else { return }
         switchTab(in: group, to: targetIndex, panel: panel)
+    }
+
+    // MARK: - Cross-Panel Drag & Drop
+
+    func clearAllDropIndicators() {
+        for group in groupManager.groups {
+            group.dropIndicatorIndex = nil
+        }
+    }
+
+    /// Find which panel (if any) the cursor is over, excluding the source group.
+    /// Returns insertion index based on cursor X position.
+    func findDropTarget(from sourceGroup: TabGroup, at mouseLocation: NSPoint) -> CrossPanelDropTarget? {
+        for (groupID, panel) in tabBarPanels {
+            guard groupID != sourceGroup.id,
+                  let group = groupManager.groups.first(where: { $0.id == groupID }) else { continue }
+
+            // Expand hit area vertically for easier targeting (30px padding above and below the 28px bar)
+            var hitRect = panel.frame
+            hitRect.origin.y -= 30
+            hitRect.size.height += 60
+
+            guard NSMouseInRect(mouseLocation, hitRect, false) else { continue }
+
+            let tabCount = group.windows.count
+            let panelWidth = panel.frame.width
+            let tabStep = tabCount > 0
+                ? (panelWidth - TabBarView.horizontalPadding - TabBarView.addButtonWidth) / CGFloat(tabCount)
+                : 0
+
+            // Convert mouse X to local panel coordinates
+            let localX = mouseLocation.x - panel.frame.origin.x
+            let insertionIndex: Int
+            if tabStep > 0 {
+                insertionIndex = max(0, min(tabCount, Int(round((localX - TabBarView.horizontalPadding / 2) / tabStep))))
+            } else {
+                insertionIndex = 0
+            }
+
+            return CrossPanelDropTarget(groupID: groupID, insertionIndex: insertionIndex)
+        }
+        return nil
+    }
+
+    /// Poll during drag to update drop indicators. Returns the target if cursor is over another panel.
+    func handleDragOverPanels(from sourceGroup: TabGroup, at mouseLocation: NSPoint) -> CrossPanelDropTarget? {
+        clearAllDropIndicators()
+
+        guard let target = findDropTarget(from: sourceGroup, at: mouseLocation) else {
+            return nil
+        }
+
+        if let targetGroup = groupManager.groups.first(where: { $0.id == target.groupID }) {
+            targetGroup.dropIndicatorIndex = target.insertionIndex
+        }
+
+        return target
+    }
+
+    /// Move tabs from source group to an existing target group at the given insertion index.
+    func moveTabsToExistingGroup(
+        withIDs ids: Set<CGWindowID>,
+        from sourceGroup: TabGroup,
+        sourcePanel: TabBarPanel,
+        toGroupID targetGroupID: UUID,
+        at insertionIndex: Int
+    ) {
+        guard let targetGroup = groupManager.groups.first(where: { $0.id == targetGroupID }),
+              let targetPanel = tabBarPanels[targetGroupID] else { return }
+
+        Logger.log("[DRAG] Cross-panel drop: \(ids) from group \(sourceGroup.id) to group \(targetGroupID) at index \(insertionIndex)")
+        targetGroup.dropIndicatorIndex = nil
+
+        let windowsToMove = sourceGroup.windows.filter { ids.contains($0.id) }
+        guard !windowsToMove.isEmpty else { return }
+
+        // Stop observing source windows (they'll be re-observed under target)
+        for window in windowsToMove {
+            windowObserver.stopObserving(window: window)
+            expectedFrames.removeValue(forKey: window.id)
+        }
+
+        // Release from source group (auto-dissolves if empty)
+        groupManager.releaseWindows(withIDs: ids, from: sourceGroup)
+
+        if !groupManager.groups.contains(where: { $0.id == sourceGroup.id }) {
+            handleGroupDissolution(group: sourceGroup, panel: sourcePanel)
+        } else if let newActive = sourceGroup.activeWindow {
+            raiseAndUpdate(newActive, in: sourceGroup)
+            sourcePanel.orderAbove(windowID: newActive.id)
+        }
+
+        // Add each window to target at insertion index
+        for (offset, window) in windowsToMove.enumerated() {
+            setExpectedFrame(targetGroup.frame, for: [window.id])
+            AccessibilityHelper.setFrame(of: window.element, to: targetGroup.frame)
+            groupManager.addWindow(window, to: targetGroup, at: insertionIndex + offset)
+            windowObserver.observe(window: window)
+        }
+
+        // Switch target group to the first moved tab and raise it
+        if let firstMoved = windowsToMove.first,
+           let newIndex = targetGroup.windows.firstIndex(where: { $0.id == firstMoved.id }) {
+            targetGroup.switchTo(index: newIndex)
+            lastActiveGroupID = targetGroup.id
+            targetGroup.recordFocus(windowID: firstMoved.id)
+            raiseAndUpdate(firstMoved, in: targetGroup)
+            targetPanel.orderAbove(windowID: firstMoved.id)
+        }
+
+        evaluateAutoCapture()
     }
 
     // MARK: - Multi-Tab Operations
