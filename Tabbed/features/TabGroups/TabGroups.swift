@@ -94,9 +94,9 @@ extension AppDelegate {
         group.tabBarSqueezeDelta = squeezeDelta
         group.switchTo(index: activeIndex)
 
-        setExpectedFrame(frame, for: group.windows.map(\.id))
+        setExpectedFrame(frame, for: group.visibleWindows.map(\.id))
 
-        for window in group.windows {
+        for window in group.visibleWindows {
             AccessibilityHelper.setFrame(of: window.element, to: frame)
         }
 
@@ -187,7 +187,7 @@ extension AppDelegate {
             if !self.framesMatch(clamped, group.frame) {
                 group.frame = clamped
                 group.tabBarSqueezeDelta = squeezeDelta
-                let others = group.windows.filter { $0.id != activeWindow.id }
+                let others = group.visibleWindows.filter { $0.id != activeWindow.id }
                 if !others.isEmpty {
                     self.setExpectedFrame(clamped, for: others.map(\.id))
                     for window in others {
@@ -233,6 +233,20 @@ extension AppDelegate {
     }
 
     func switchTab(in group: TabGroup, to index: Int, panel: TabBarPanel) {
+        guard let window = group.windows[safe: index] else { return }
+
+        // Fullscreened window: just activate its app (takes user to fullscreen Space)
+        if window.isFullscreened {
+            if let app = NSRunningApplication(processIdentifier: window.ownerPID) {
+                if #available(macOS 14.0, *) {
+                    app.activate()
+                } else {
+                    app.activate(options: [])
+                }
+            }
+            return
+        }
+
         let previousID = group.activeWindow?.id
         group.switchTo(index: index)
         guard let window = group.activeWindow else { return }
@@ -267,20 +281,18 @@ extension AppDelegate {
         windowObserver.stopObserving(window: window)
         expectedFrames.removeValue(forKey: window.id)
 
-        // Expand the released window upward to cover the tab bar area.
-        // Size first so the window can grow, then position to move it up.
-        // Re-push position after a delay because some apps revert position
-        // changes asynchronously (same issue solved in applicationWillTerminate
-        // where the process is terminating and can't fight back).
-        if let frame = AccessibilityHelper.getFrame(of: window.element) {
-            let delta = max(group.tabBarSqueezeDelta, ScreenCompensation.tabBarHeight)
-            let expanded = ScreenCompensation.expandFrame(frame, undoingSqueezeDelta: delta)
-            let element = window.element
-            AccessibilityHelper.setSize(of: element, to: expanded.size)
-            AccessibilityHelper.setPosition(of: element, to: expanded.origin)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                AccessibilityHelper.setPosition(of: element, to: expanded.origin)
+        // Fullscreened windows: skip frame expansion (macOS manages their frame)
+        if !window.isFullscreened {
+            if let frame = AccessibilityHelper.getFrame(of: window.element) {
+                let delta = max(group.tabBarSqueezeDelta, ScreenCompensation.tabBarHeight)
+                let expanded = ScreenCompensation.expandFrame(frame, undoingSqueezeDelta: delta)
+                let element = window.element
                 AccessibilityHelper.setSize(of: element, to: expanded.size)
+                AccessibilityHelper.setPosition(of: element, to: expanded.origin)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    AccessibilityHelper.setPosition(of: element, to: expanded.origin)
+                    AccessibilityHelper.setSize(of: element, to: expanded.size)
+                }
             }
         }
 
@@ -348,7 +360,8 @@ extension AppDelegate {
 
         if let lastWindow = group.windows.first {
             windowObserver.stopObserving(window: lastWindow)
-            if group.tabBarSqueezeDelta > 0, let lastFrame = AccessibilityHelper.getFrame(of: lastWindow.element) {
+            if !lastWindow.isFullscreened, group.tabBarSqueezeDelta > 0,
+               let lastFrame = AccessibilityHelper.getFrame(of: lastWindow.element) {
                 let expandedFrame = ScreenCompensation.expandFrame(lastFrame, undoingSqueezeDelta: group.tabBarSqueezeDelta)
                 AccessibilityHelper.setFrame(of: lastWindow.element, to: expandedFrame)
             }
@@ -372,7 +385,8 @@ extension AppDelegate {
 
         for window in group.windows {
             windowObserver.stopObserving(window: window)
-            if group.tabBarSqueezeDelta > 0, let frame = AccessibilityHelper.getFrame(of: window.element) {
+            if !window.isFullscreened, group.tabBarSqueezeDelta > 0,
+               let frame = AccessibilityHelper.getFrame(of: window.element) {
                 let expandedFrame = ScreenCompensation.expandFrame(frame, undoingSqueezeDelta: group.tabBarSqueezeDelta)
                 AccessibilityHelper.setFrame(of: window.element, to: expandedFrame)
             }
@@ -537,9 +551,9 @@ extension AppDelegate {
         )
         group.frame = newFrame
 
-        let allIDs = group.windows.map(\.id)
+        let allIDs = group.visibleWindows.map(\.id)
         setExpectedFrame(newFrame, for: allIDs)
-        for window in group.windows {
+        for window in group.visibleWindows {
             AccessibilityHelper.setPosition(of: window.element, to: newFrame.origin)
         }
     }
@@ -549,9 +563,9 @@ extension AppDelegate {
         barDragInitialFrame = nil
 
         // Sync all windows to the final position
-        let allIDs = group.windows.map(\.id)
+        let allIDs = group.visibleWindows.map(\.id)
         setExpectedFrame(group.frame, for: allIDs)
-        for window in group.windows {
+        for window in group.visibleWindows {
             AccessibilityHelper.setFrame(of: window.element, to: group.frame)
         }
 
@@ -566,9 +580,9 @@ extension AppDelegate {
         if adjustedFrame != group.frame {
             group.frame = adjustedFrame
             group.tabBarSqueezeDelta = squeezeDelta
-            let otherIDs = group.windows.filter { $0.id != activeWindow.id }.map(\.id)
-            setExpectedFrame(adjustedFrame, for: otherIDs)
-            for window in group.windows where window.id != activeWindow.id {
+            let others = group.visibleWindows.filter { $0.id != activeWindow.id }
+            setExpectedFrame(adjustedFrame, for: others.map(\.id))
+            for window in others {
                 AccessibilityHelper.setFrame(of: window.element, to: adjustedFrame)
             }
         }
@@ -606,9 +620,9 @@ extension AppDelegate {
 
     private func setGroupFrame(_ group: TabGroup, to frame: CGRect, panel: TabBarPanel) {
         group.frame = frame
-        let allIDs = group.windows.map(\.id)
+        let allIDs = group.visibleWindows.map(\.id)
         setExpectedFrame(frame, for: allIDs)
-        for window in group.windows {
+        for window in group.visibleWindows {
             AccessibilityHelper.setFrame(of: window.element, to: frame)
         }
         panel.positionAbove(windowFrame: frame)
@@ -742,7 +756,7 @@ extension AppDelegate {
             windowObserver.stopObserving(window: window)
             expectedFrames.removeValue(forKey: window.id)
 
-            if let frame = AccessibilityHelper.getFrame(of: window.element) {
+            if !window.isFullscreened, let frame = AccessibilityHelper.getFrame(of: window.element) {
                 let delta = max(group.tabBarSqueezeDelta, ScreenCompensation.tabBarHeight)
                 let expanded = ScreenCompensation.expandFrame(frame, undoingSqueezeDelta: delta)
                 let element = window.element
