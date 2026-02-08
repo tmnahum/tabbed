@@ -385,12 +385,7 @@ extension AppDelegate {
         Logger.log("[FULLSCREEN] Window \(windowID) exited fullscreen in group \(group.id)")
         group.windows[idx].isFullscreened = false
 
-        // Re-squeeze the window to fit the group's current frame
-        let element = group.windows[idx].element
-        setExpectedFrame(group.frame, for: [windowID])
-        AccessibilityHelper.setFrame(of: element, to: group.frame)
-
-        // Make this the active tab and bring it to front
+        // Make this the active tab immediately so the tab bar updates
         group.switchTo(windowID: windowID)
         group.recordFocus(windowID: windowID)
         lastActiveGroupID = group.id
@@ -398,6 +393,21 @@ extension AppDelegate {
         // Ensure tab bar is visible (it may have been hidden if all were fullscreened)
         panel.positionAbove(windowFrame: group.frame)
         panel.show(above: group.frame, windowID: windowID)
-        bringTabToFront(group.windows[idx], in: group)
+
+        // Delay frame restoration — macOS fullscreen exit animation takes ~0.7s.
+        // Setting the frame immediately fights the animation and looks janky.
+        let groupID = group.id
+        let targetFrame = group.frame
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+            guard let self,
+                  let group = self.groupManager.groups.first(where: { $0.id == groupID }),
+                  let idx = group.windows.firstIndex(where: { $0.id == windowID }),
+                  !group.windows[idx].isFullscreened else { return }
+
+            let element = group.windows[idx].element
+            self.setExpectedFrame(targetFrame, for: [windowID])
+            AccessibilityHelper.setFrame(of: element, to: targetFrame)
+            self.bringTabToFront(group.windows[idx], in: group)
+        }
     }
 }

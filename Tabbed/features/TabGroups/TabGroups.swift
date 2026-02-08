@@ -235,15 +235,9 @@ extension AppDelegate {
     func switchTab(in group: TabGroup, to index: Int, panel: TabBarPanel) {
         guard let window = group.windows[safe: index] else { return }
 
-        // Fullscreened window: just activate its app (takes user to fullscreen Space)
+        // Fullscreened window: raise it to switch to its fullscreen Space.
         if window.isFullscreened {
-            if let app = NSRunningApplication(processIdentifier: window.ownerPID) {
-                if #available(macOS 14.0, *) {
-                    app.activate()
-                } else {
-                    app.activate(options: [])
-                }
-            }
+            focusWindow(window)
             return
         }
 
