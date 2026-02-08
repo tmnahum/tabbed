@@ -86,6 +86,12 @@ extension AppDelegate {
             )
         }
 
+        // Seed globalMRU from restore order (reflects previous session's MRU).
+        // Groups restored earlier = higher MRU priority.
+        for group in groupManager.groups where !globalMRU.contains(.group(group.id)) {
+            globalMRU.append(.group(group.id))
+        }
+
         // Sync active tab to the user's actual focused window.
         // The frontmostIndex heuristic above uses z-order which can diverge from
         // real focus (e.g. macOS ordering quirks, stale z-order from frame expansion).
@@ -103,6 +109,7 @@ extension AppDelegate {
                     group.switchTo(windowID: windowID)
                     group.recordFocus(windowID: windowID)
                     lastActiveGroupID = group.id
+                    recordGlobalActivation(.group(group.id))
                     Logger.log("[SessionRestore] synced active tab to focused window wid=\(windowID) in group=\(group.id)")
                 }
             }

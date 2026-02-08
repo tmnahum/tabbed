@@ -6,7 +6,7 @@ enum SessionManager {
 
     // MARK: - Save / Load
 
-    static func saveSession(groups: [TabGroup]) {
+    static func saveSession(groups: [TabGroup], mruGroupOrder: [UUID] = []) {
         let snapshots = groups.map { group in
             GroupSnapshot(
                 windows: group.windows.map { window in
@@ -22,7 +22,25 @@ enum SessionManager {
                 tabBarSqueezeDelta: group.tabBarSqueezeDelta
             )
         }
-        guard let data = try? JSONEncoder().encode(snapshots) else { return }
+
+        // Reorder snapshots: MRU groups first, then remaining in original order
+        var snapshotsByGroupID: [UUID: GroupSnapshot] = [:]
+        for (group, snapshot) in zip(groups, snapshots) {
+            snapshotsByGroupID[group.id] = snapshot
+        }
+        var ordered: [GroupSnapshot] = []
+        for groupID in mruGroupOrder {
+            if let snapshot = snapshotsByGroupID.removeValue(forKey: groupID) {
+                ordered.append(snapshot)
+            }
+        }
+        for group in groups {
+            if let snapshot = snapshotsByGroupID.removeValue(forKey: group.id) {
+                ordered.append(snapshot)
+            }
+        }
+
+        guard let data = try? JSONEncoder().encode(ordered) else { return }
         UserDefaults.standard.set(data, forKey: userDefaultsKey)
     }
 

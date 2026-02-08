@@ -258,7 +258,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         switcherController.dismiss()
         deactivateAutoCapture()
         windowObserver.stopAll()
-        SessionManager.saveSession(groups: groupManager.groups)
+        let mruGroupOrder = globalMRU.compactMap { entry -> UUID? in
+            if case .group(let id) = entry { return id } else { return nil }
+        }
+        SessionManager.saveSession(groups: groupManager.groups, mruGroupOrder: mruGroupOrder)
         for group in groupManager.groups {
             let delta = group.tabBarSqueezeDelta
             guard delta > 0 else { continue }
