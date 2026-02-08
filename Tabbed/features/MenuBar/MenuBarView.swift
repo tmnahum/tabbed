@@ -60,9 +60,9 @@ struct MenuBarView: View {
             }
         }
 
-        if groupManager.groups.count > 8 {
+        if groupManager.groups.count > 4 {
             ScrollView { rows }
-                .frame(maxHeight: 300)
+                .frame(height: 34 * 4.5)
         } else {
             rows
         }
