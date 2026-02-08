@@ -40,6 +40,7 @@ struct TabBarView: View {
         ).combined(with: .opacity)
 
     @State private var hoveredWindowID: CGWindowID? = nil
+    @State private var confirmingCloseID: CGWindowID? = nil
     @State private var draggingID: CGWindowID? = nil
     @State private var dragTranslation: CGFloat = 0
     @State private var dragStartIndex: Int = 0
@@ -350,18 +351,30 @@ struct TabBarView: View {
             Spacer(minLength: 0)
 
             if isHovered && !isSelected {
-                Image(systemName: isActive ? "minus" : "xmark")
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 16, height: 16)
-                    .contentShape(Rectangle())
-                    .highPriorityGesture(TapGesture().onEnded {
-                        if isActive {
+                if isActive {
+                    Image(systemName: "minus")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 16, height: 16)
+                        .contentShape(Rectangle())
+                        .highPriorityGesture(TapGesture().onEnded {
                             onReleaseTab(index)
-                        } else {
-                            onCloseTab(index)
-                        }
-                    })
+                        })
+                } else {
+                    Image(systemName: confirmingCloseID == window.id ? "questionmark" : "xmark")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(confirmingCloseID == window.id ? .primary : .secondary)
+                        .frame(width: 16, height: 16)
+                        .contentShape(Rectangle())
+                        .highPriorityGesture(TapGesture().onEnded {
+                            if confirmingCloseID == window.id {
+                                confirmingCloseID = nil
+                                onCloseTab(index)
+                            } else {
+                                confirmingCloseID = window.id
+                            }
+                        })
+                }
             }
         }
         .transaction { $0.animation = nil }
@@ -390,6 +403,9 @@ struct TabBarView: View {
         }
         .onHover { hovering in
             hoveredWindowID = hovering ? window.id : nil
+            if !hovering && confirmingCloseID == window.id {
+                confirmingCloseID = nil
+            }
             if tabBarConfig.showTooltip {
                 let title = window.title.isEmpty ? window.appName : window.title
                 if hovering && Self.isTitleTruncated(title: title, tabWidth: tabWidth) {
