@@ -126,8 +126,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         hkm.onGroupAllInSpace = { [weak self] in
             self?.groupAllInSpace()
         }
-        hkm.onCycleTab = { [weak self] in
-            self?.handleHotkeyCycleTab()
+        hkm.onCycleTab = { [weak self] reverse in
+            self?.handleHotkeyCycleTab(reverse: reverse)
         }
         hkm.onSwitchToTab = { [weak self] index in
             self?.handleHotkeySwitchToTab(index)
@@ -135,8 +135,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         hkm.onModifierReleased = { [weak self] in
             self?.handleModifierReleased()
         }
-        hkm.onGlobalSwitcher = { [weak self] in
-            self?.handleGlobalSwitcher()
+        hkm.onGlobalSwitcher = { [weak self] reverse in
+            self?.handleGlobalSwitcher(reverse: reverse)
         }
         hkm.onArrowLeft  = { [weak self] in self?.handleSwitcherArrow(.left) }
         hkm.onArrowRight = { [weak self] in self?.handleSwitcherArrow(.right) }

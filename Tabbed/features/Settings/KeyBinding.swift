@@ -10,6 +10,16 @@ struct KeyBinding: Codable, Equatable {
         return eventMods.rawValue == modifiers && event.keyCode == keyCode
     }
 
+    /// Returns true if the event matches this binding with Shift added on top.
+    /// Only matches when the binding itself doesn't already include Shift.
+    func matchesWithExtraShift(_ event: NSEvent) -> Bool {
+        guard !isUnbound else { return false }
+        let shiftFlag = NSEvent.ModifierFlags.shift.intersection(.deviceIndependentFlagsMask).rawValue
+        guard (modifiers & shiftFlag) == 0 else { return false }
+        let eventMods = event.modifierFlags.intersection(.deviceIndependentFlagsMask).rawValue
+        return eventMods == (modifiers | shiftFlag) && event.keyCode == keyCode
+    }
+
     /// Whether this binding is unset (cleared by conflict resolution).
     var isUnbound: Bool { modifiers == 0 && keyCode == 0 }
 
@@ -59,7 +69,10 @@ struct KeyBinding: Codable, Equatable {
     static let keyCode8: UInt16 = 28
     static let keyCode9: UInt16 = 25
 
-    // MARK: - Hyper Key
+    // MARK: - Modifier Presets
+
+    static let cmdModifiers: UInt = NSEvent.ModifierFlags.command
+        .intersection(.deviceIndependentFlagsMask).rawValue
 
     static let hyperModifiers: UInt = NSEvent.ModifierFlags(
         [.command, .control, .option, .shift]
@@ -70,8 +83,8 @@ struct KeyBinding: Codable, Equatable {
     static let defaultNewTab = KeyBinding(modifiers: hyperModifiers, keyCode: keyCodeT)
     static let defaultReleaseTab = KeyBinding(modifiers: hyperModifiers, keyCode: keyCodeW)
     static let defaultGroupAllInSpace = KeyBinding(modifiers: hyperModifiers, keyCode: keyCodeN)
-    static let defaultCycleTab = KeyBinding(modifiers: hyperModifiers, keyCode: keyCodeTab)
-    static let defaultGlobalSwitcher = KeyBinding(modifiers: hyperModifiers, keyCode: keyCodeBacktick)
+    static let defaultCycleTab = KeyBinding(modifiers: cmdModifiers, keyCode: keyCodeBacktick)
+    static let defaultGlobalSwitcher = KeyBinding(modifiers: cmdModifiers, keyCode: keyCodeTab)
 
     static func defaultSwitchToTab(_ number: Int) -> KeyBinding {
         let codes: [UInt16] = [keyCode1, keyCode2, keyCode3, keyCode4, keyCode5,

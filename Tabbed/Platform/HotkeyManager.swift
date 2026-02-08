@@ -1,16 +1,56 @@
 import AppKit
 
+// MARK: - CGEvent Tap Callback (file-scope, required by CGEventTapCallBack)
+
+private func hotkeyEventTapCallback(
+    proxy: CGEventTapProxy,
+    type: CGEventType,
+    event: CGEvent,
+    userInfo: UnsafeMutableRawPointer?
+) -> Unmanaged<CGEvent>? {
+    guard let userInfo else { return Unmanaged.passUnretained(event) }
+    let manager = Unmanaged<HotkeyManager>.fromOpaque(userInfo).takeUnretainedValue()
+
+    // Re-enable tap if macOS disabled it (timeout or user input)
+    if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+        if let tap = manager.eventTap {
+            CGEvent.tapEnable(tap: tap, enable: true)
+        }
+        return Unmanaged.passUnretained(event)
+    }
+
+    guard let nsEvent = NSEvent(cgEvent: event) else {
+        return Unmanaged.passUnretained(event)
+    }
+
+    switch type {
+    case .keyDown:
+        if manager.handleKeyDown(nsEvent) {
+            return nil // suppress
+        }
+    case .flagsChanged:
+        manager.handleFlagsChanged(nsEvent)
+    default:
+        break
+    }
+
+    return Unmanaged.passUnretained(event)
+}
+
+// MARK: - HotkeyManager
+
 class HotkeyManager {
     private(set) var config: ShortcutConfig
-    private var globalMonitor: Any?
-    private var localMonitor: Any?
+    fileprivate var eventTap: CFMachPort?
+    private var runLoopSource: CFRunLoopSource?
+    private var retainedSelf: Unmanaged<HotkeyManager>?
 
     var onNewTab: (() -> Void)?
     var onReleaseTab: (() -> Void)?
     var onGroupAllInSpace: (() -> Void)?
-    var onCycleTab: (() -> Void)?
+    var onCycleTab: ((_ reverse: Bool) -> Void)?
     var onSwitchToTab: ((Int) -> Void)?
-    var onGlobalSwitcher: (() -> Void)?
+    var onGlobalSwitcher: ((_ reverse: Bool) -> Void)?
     /// Fires when modifier keys are released (used by both within-group and global switcher).
     var onModifierReleased: (() -> Void)?
     /// Fires when the escape key is pressed. Returns true if handled (event should be consumed).
@@ -24,43 +64,53 @@ class HotkeyManager {
         self.config = config
     }
 
+    deinit {
+        stop()
+    }
+
     func start() {
-        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] event in
-            switch event.type {
-            case .keyDown:
-                self?.handleKeyDown(event)
-            case .flagsChanged:
-                self?.handleFlagsChanged(event)
-            default:
-                break
-            }
+        guard eventTap == nil else { return }
+
+        let eventMask: CGEventMask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.flagsChanged.rawValue)
+        retainedSelf = Unmanaged.passRetained(self)
+
+        guard let tap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .defaultTap,
+            eventsOfInterest: eventMask,
+            callback: hotkeyEventTapCallback,
+            userInfo: retainedSelf!.toOpaque()
+        ) else {
+            Logger.log("[HK] CGEvent tap creation failed — accessibility permissions not granted?")
+            retainedSelf?.release()
+            retainedSelf = nil
+            return
         }
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] event in
-            switch event.type {
-            case .keyDown:
-                if self?.handleKeyDown(event) == true {
-                    return nil
-                }
-            case .flagsChanged:
-                self?.handleFlagsChanged(event)
-            default:
-                break
-            }
-            return event
-        }
+
+        eventTap = tap
+        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+        runLoopSource = source
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+        CGEvent.tapEnable(tap: tap, enable: true)
     }
 
     private var modifierPollTimer: Timer?
 
     func stop() {
         stopModifierWatch()
-        if let monitor = globalMonitor {
-            NSEvent.removeMonitor(monitor)
-            globalMonitor = nil
+        if let tap = eventTap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+            if let source = runLoopSource {
+                CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
+                runLoopSource = nil
+            }
+            CFMachPortInvalidate(tap)
+            eventTap = nil
         }
-        if let monitor = localMonitor {
-            NSEvent.removeMonitor(monitor)
-            localMonitor = nil
+        if let retained = retainedSelf {
+            retained.release()
+            retainedSelf = nil
         }
     }
 
@@ -93,7 +143,7 @@ class HotkeyManager {
         config = newConfig
     }
 
-    private func handleFlagsChanged(_ event: NSEvent) {
+    func handleFlagsChanged(_ event: NSEvent) {
         let currentMods = event.modifierFlags.intersection(.deviceIndependentFlagsMask).rawValue
         // Check if either switcher's required modifiers have been released.
         let cycleMods = config.cycleTab.modifiers
@@ -106,7 +156,7 @@ class HotkeyManager {
     }
 
     @discardableResult
-    private func handleKeyDown(_ event: NSEvent) -> Bool {
+    func handleKeyDown(_ event: NSEvent) -> Bool {
         // Escape — let the handler decide whether to consume
         if event.keyCode == 53 {
             if onEscapePressed?() == true {
@@ -138,12 +188,20 @@ class HotkeyManager {
             onGroupAllInSpace?()
             return true
         }
-        if config.cycleTab.matches(event), !event.isARepeat {
-            onCycleTab?()
+        if config.cycleTab.matches(event) {
+            if !event.isARepeat { onCycleTab?(false) }
+            return true  // suppress even repeats
+        }
+        if config.cycleTab.matchesWithExtraShift(event) {
+            if !event.isARepeat { onCycleTab?(true) }
             return true
         }
-        if config.globalSwitcher.matches(event), !event.isARepeat {
-            onGlobalSwitcher?()
+        if config.globalSwitcher.matches(event) {
+            if !event.isARepeat { onGlobalSwitcher?(false) }
+            return true  // suppress even repeats
+        }
+        if config.globalSwitcher.matchesWithExtraShift(event) {
+            if !event.isARepeat { onGlobalSwitcher?(true) }
             return true
         }
         for (i, binding) in config.switchToTab.enumerated() {
