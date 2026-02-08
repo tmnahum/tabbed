@@ -36,7 +36,23 @@ extension AppDelegate {
         Logger.log("[CLAMP] squeeze wid=\(windowID) frame=\(frame) → \(result.frame) delta=\(result.squeezeDelta)")
         setExpectedFrame(result.frame, for: [windowID])
         AccessibilityHelper.setFrame(of: element, to: result.frame)
-        return (result.frame, result.squeezeDelta)
+
+        // Quick re-check: some apps accept the position synchronously but
+        // revert it asynchronously (~50-200ms). Catch it fast so the user
+        // doesn't see the window jump back and forth.
+        let target = result.frame
+        let delta = result.squeezeDelta
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            guard let self,
+                  let actual = AccessibilityHelper.getFrame(of: element),
+                  abs(actual.origin.y - target.origin.y) > Self.frameTolerance else { return }
+            Logger.log("[CLAMP] quick re-push wid=\(windowID) actual=\(actual) → y=\(target.origin.y)")
+            self.expectedFrames.removeValue(forKey: windowID)
+            self.setExpectedFrame(target, for: [windowID])
+            AccessibilityHelper.setPosition(of: element, to: target.origin)
+        }
+
+        return (result.frame, delta)
     }
 }
 
@@ -132,7 +148,13 @@ extension AppDelegate {
                 frame: currentFrame, visibleFrame: visibleFrame,
                 existingSqueezeDelta: group.tabBarSqueezeDelta
             )
-            guard clamped != group.frame else { return }
+            guard clamped != group.frame else {
+                // Frame is already correct. Clear suppression so if the app
+                // reverts position after this point, handleWindowMoved fires
+                // immediately and re-pushes without waiting for the deadline.
+                self.expectedFrames.removeValue(forKey: activeWindow.id)
+                return
+            }
 
             group.frame = clamped
             group.tabBarSqueezeDelta = squeezeDelta
