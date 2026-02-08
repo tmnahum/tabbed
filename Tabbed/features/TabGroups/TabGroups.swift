@@ -107,8 +107,11 @@ extension AppDelegate {
 
         if let activeWindow = group.activeWindow {
             panel.show(above: frame, windowID: activeWindow.id)
-            raiseAndUpdate(activeWindow, in: group)
+            if isOnCurrentSpace(activeWindow.id) {
+                raiseAndUpdate(activeWindow, in: group)
+            }
             panel.orderAbove(windowID: activeWindow.id)
+            movePanelToWindowSpace(panel, windowID: activeWindow.id)
         }
 
         let groupID = group.id
@@ -136,6 +139,7 @@ extension AppDelegate {
             }
             panel.positionAbove(windowFrame: group.frame)
             panel.orderAbove(windowID: activeWindow.id)
+            self.movePanelToWindowSpace(panel, windowID: activeWindow.id)
         }
 
         evaluateAutoCapture()
@@ -148,6 +152,28 @@ extension AppDelegate {
                 group.windows[idx].element = freshElement
             }
         }
+    }
+
+    private func isOnCurrentSpace(_ windowID: CGWindowID) -> Bool {
+        let onScreen = CGWindowListCopyWindowInfo(
+            [.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID
+        ) as? [[String: Any]] ?? []
+        return onScreen.contains { ($0[kCGWindowNumber as String] as? CGWindowID) == windowID }
+    }
+
+    /// Move the tab bar panel to the same Space as the given window, if they differ.
+    private func movePanelToWindowSpace(_ panel: TabBarPanel, windowID: CGWindowID) {
+        guard panel.windowNumber > 0 else { return }
+        let conn = CGSMainConnectionID()
+        let panelWID = CGWindowID(panel.windowNumber)
+
+        let windowSpaces = CGSCopySpacesForWindows(conn, 0x7, [windowID] as CFArray) as? [UInt64] ?? []
+        guard let targetSpace = windowSpaces.first else { return }
+
+        let panelSpaces = CGSCopySpacesForWindows(conn, 0x7, [panelWID] as CFArray) as? [UInt64] ?? []
+        if panelSpaces.first == targetSpace { return }
+
+        CGSMoveWindowsToManagedSpace(conn, [panelWID] as CFArray, targetSpace)
     }
 
     func switchTab(in group: TabGroup, to index: Int, panel: TabBarPanel) {

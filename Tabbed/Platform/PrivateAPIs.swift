@@ -12,6 +12,12 @@ func CGSMainConnectionID() -> UInt32
 @_silgen_name("CGSGetWindowLevel")
 func CGSGetWindowLevel(_ cid: UInt32, _ wid: CGWindowID, _ level: inout Int32) -> Int32
 
+@_silgen_name("CGSCopySpacesForWindows")
+func CGSCopySpacesForWindows(_ cid: UInt32, _ mask: UInt32, _ wids: CFArray) -> CFArray
+
+@_silgen_name("CGSMoveWindowsToManagedSpace")
+func CGSMoveWindowsToManagedSpace(_ cid: UInt32, _ wids: CFArray, _ sid: UInt64)
+
 // MARK: - Brute-Force Window Discovery
 
 /// Discovers AXUIElements across all Spaces for a given PID by brute-forcing element IDs.
