@@ -22,6 +22,7 @@ extension AppDelegate {
 
     func isGroupMaximized(_ group: TabGroup) -> (Bool, NSScreen?) {
         guard let screen = CoordinateConverter.screen(containingAXPoint: group.frame.origin) else {
+            Logger.log("[AutoCapture] isGroupMaximized: no screen for origin \(group.frame.origin)")
             return (false, nil)
         }
         let visibleFrame = CoordinateConverter.visibleFrameInAX(for: screen)
@@ -30,53 +31,45 @@ extension AppDelegate {
             squeezeDelta: group.tabBarSqueezeDelta,
             visibleFrame: visibleFrame
         )
+        if !maximized {
+            Logger.log("[AutoCapture] isGroupMaximized: NO — groupFrame=\(group.frame) delta=\(group.tabBarSqueezeDelta) visibleFrame=\(visibleFrame)")
+        }
         return (maximized, screen)
     }
 
-    func allWindowsOnScreenBelongToGroup(_ group: TabGroup, on screen: NSScreen) -> Bool {
-        let visibleFrame = CoordinateConverter.visibleFrameInAX(for: screen)
-        let allWindows = WindowDiscovery.currentSpace()
-
-        for window in allWindows {
-            guard !groupManager.isWindowGrouped(window.id) else { continue }
-            if Self.systemBundleIDs.contains(window.bundleID) { continue }
-            guard let frame = AccessibilityHelper.getFrame(of: window.element) else { continue }
-            if visibleFrame.intersects(frame) {
-                return false
-            }
-        }
-
-        let hasWindowOnScreen = group.windows.contains { window in
-            guard let frame = AccessibilityHelper.getFrame(of: window.element) else { return false }
-            return visibleFrame.intersects(frame)
-        }
-        return hasWindowOnScreen
-    }
-
     func evaluateAutoCapture() {
-        guard sessionConfig.autoCaptureEnabled else { return }
+        guard sessionConfig.autoCaptureEnabled else {
+            Logger.log("[AutoCapture] evaluate: disabled in config")
+            return
+        }
 
         if let activeGroup = autoCaptureGroup,
            let activeScreen = autoCaptureScreen {
             if !isGroupOnCurrentSpace(activeGroup) {
+                Logger.log("[AutoCapture] evaluate: group not on current space, deactivating")
                 deactivateAutoCapture()
                 return
             }
-            let (maximized, _) = isGroupMaximized(activeGroup)
-            if !maximized || !allWindowsOnScreenBelongToGroup(activeGroup, on: activeScreen) {
+            let (maximized, newScreen) = isGroupMaximized(activeGroup)
+            if !maximized {
+                Logger.log("[AutoCapture] evaluate: group no longer maximized, deactivating (frame=\(activeGroup.frame), delta=\(activeGroup.tabBarSqueezeDelta))")
                 deactivateAutoCapture()
+            } else if let newScreen, newScreen != activeScreen {
+                Logger.log("[AutoCapture] evaluate: group moved to \(newScreen.localizedName)")
+                autoCaptureScreen = newScreen
             }
             return
         }
 
+        Logger.log("[AutoCapture] evaluate: checking \(groupManager.groups.count) groups for activation")
         for group in groupManager.groups {
-            guard isGroupOnCurrentSpace(group) else { continue }
+            let onSpace = isGroupOnCurrentSpace(group)
             let (maximized, screen) = isGroupMaximized(group)
+            Logger.log("[AutoCapture] evaluate: group \(group.id) — onSpace=\(onSpace), maximized=\(maximized), frame=\(group.frame), delta=\(group.tabBarSqueezeDelta)")
+            guard onSpace else { continue }
             guard maximized, let screen else { continue }
-            if allWindowsOnScreenBelongToGroup(group, on: screen) {
-                activateAutoCapture(for: group, on: screen)
-                return
-            }
+            activateAutoCapture(for: group, on: screen)
+            return
         }
     }
 
@@ -254,20 +247,33 @@ extension AppDelegate {
 
     func captureWindowIfEligible(element: AXUIElement, pid: pid_t, source: String) {
         guard let group = autoCaptureGroup,
-              let screen = autoCaptureScreen else { return }
+              let screen = autoCaptureScreen else {
+            Logger.log("[AutoCapture] captureIfEligible[\(source)]: no active group/screen")
+            return
+        }
 
-        guard let window = WindowDiscovery.buildWindowInfo(element: element, pid: pid) else { return }
+        guard let window = WindowDiscovery.buildWindowInfo(element: element, pid: pid) else {
+            Logger.log("[AutoCapture] captureIfEligible[\(source)]: buildWindowInfo failed for pid \(pid)")
+            return
+        }
 
         guard !groupManager.isWindowGrouped(window.id) else { return }
 
         if let size = AccessibilityHelper.getSize(of: element),
            size.width < 200 || size.height < 150 {
+            Logger.log("[AutoCapture] captureIfEligible[\(source)]: too small \(size) — \(window.appName): \(window.title)")
             return
         }
 
-        guard let frame = AccessibilityHelper.getFrame(of: element) else { return }
+        guard let frame = AccessibilityHelper.getFrame(of: element) else {
+            Logger.log("[AutoCapture] captureIfEligible[\(source)]: no frame — \(window.appName): \(window.title)")
+            return
+        }
         let visibleFrame = CoordinateConverter.visibleFrameInAX(for: screen)
-        guard visibleFrame.intersects(frame) else { return }
+        guard visibleFrame.intersects(frame) else {
+            Logger.log("[AutoCapture] captureIfEligible[\(source)]: not on screen — \(window.appName): \(window.title) frame=\(frame) visible=\(visibleFrame)")
+            return
+        }
 
         Logger.log("[AutoCapture] Capturing window \(window.id) (\(window.appName): \(window.title)) [\(source)]")
         setExpectedFrame(group.frame, for: [window.id])

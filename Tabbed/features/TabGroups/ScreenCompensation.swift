@@ -38,7 +38,22 @@ enum ScreenCompensation {
         squeezeDelta: CGFloat,
         visibleFrame: CGRect
     ) -> Bool {
-        // Reconstruct the "logical" frame as if the squeeze hadn't happened
+        if fillsFrame(groupFrame: groupFrame, squeezeDelta: squeezeDelta, visibleFrame: visibleFrame) {
+            return true
+        }
+        // Squeeze delta may be 0 if session restore didn't preserve it —
+        // also try with the tab bar height as the assumed delta.
+        if squeezeDelta == 0 {
+            return fillsFrame(groupFrame: groupFrame, squeezeDelta: tabBarHeight, visibleFrame: visibleFrame)
+        }
+        return false
+    }
+
+    private static func fillsFrame(
+        groupFrame: CGRect,
+        squeezeDelta: CGFloat,
+        visibleFrame: CGRect
+    ) -> Bool {
         let logicalRect = CGRect(
             x: groupFrame.origin.x,
             y: groupFrame.origin.y - squeezeDelta,
