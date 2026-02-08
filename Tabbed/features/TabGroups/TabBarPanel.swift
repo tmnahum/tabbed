@@ -189,6 +189,7 @@ class TabBarPanel: NSPanel {
             }
 
         case .leftMouseUp:
+            let wasBarDragging = isBarDragging
             if isBarDragging {
                 onBarDragEnded?()
             }
@@ -196,7 +197,11 @@ class TabBarPanel: NSPanel {
             barDragStartPanelOrigin = nil
             isBarDragging = false
             isTabDrag = false
-            super.sendEvent(event)
+            // Don't pass mouseUp to SwiftUI after a bar drag — otherwise
+            // interactive views (like the + button) fire from the original mouseDown.
+            if !wasBarDragging {
+                super.sendEvent(event)
+            }
 
         default:
             super.sendEvent(event)
@@ -248,9 +253,9 @@ class TabBarPanel: NSPanel {
             tabContentWidth = availableWidth
         }
 
-        let tabContentEndX = dragHandleEnd + tabContentWidth + TabBarView.addButtonWidth
+        let tabContentEndX = dragHandleEnd + tabContentWidth
 
-        // After tab content + add button = background
+        // After tab content = background (+ button still clickable via mouseDown passthrough)
         if point.x > tabContentEndX {
             return true
         }
