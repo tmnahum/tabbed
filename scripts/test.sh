@@ -13,8 +13,11 @@ if [ -z "$DEVELOPMENT_TEAM" ]; then
   exit 1
 fi
 
-xcodegen generate
-xcodebuild -project Tabbed.xcodeproj -scheme TabbedTests -derivedDataPath build \
-  DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
-  -allowProvisioningUpdates \
-  test
+OUTPUT=$(xcodegen generate 2>&1 && \
+  xcodebuild -project Tabbed.xcodeproj -scheme TabbedTests -derivedDataPath build \
+    DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
+    -allowProvisioningUpdates \
+    test 2>&1) || {
+  echo "$OUTPUT"
+  exit 1
+}

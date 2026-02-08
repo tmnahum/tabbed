@@ -1,4 +1,1 @@
-- build with env var DEVELOPMENT_TEAM=LS679A9VV4 set - or can use the sh files build.sh test.sh which include this
-- do web research when you are not sure about something or an approach is not working
-- after making changes: high confidence: commit then run code review, low confidence: run code review then commit
-- when debugging, consider multiple potential causes of the bug from multiple angles
+- build with scripts/build.sh & scripts/test.sh , they include setting the env var DEVELOPMENT_TEAM=LS679A9VV4 for signing, and they only output on failure

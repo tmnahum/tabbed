@@ -1,3 +1,5 @@
+- make height 24 instead of 28 to match menu bar on my m1 mac air
+
 
 - simplify session restore config options maybe
 
