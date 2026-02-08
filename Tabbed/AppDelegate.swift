@@ -197,7 +197,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 self?.focusWindow(window)
             },
             onDisbandGroup: { [weak self] group in
-                self?.popover.performClose(nil)
                 self?.disbandGroup(group)
             },
             onSettings: { [weak self] in
