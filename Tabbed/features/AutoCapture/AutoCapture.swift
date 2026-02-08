@@ -10,6 +10,16 @@ extension AppDelegate {
         "com.apple.Spotlight",
     ]
 
+    /// Check if a group has any windows visible on the current Space.
+    /// Uses the on-screen CG window list which only includes current-space windows.
+    func isGroupOnCurrentSpace(_ group: TabGroup) -> Bool {
+        let onScreenIDs = Set(
+            AccessibilityHelper.getWindowList()
+                .compactMap { $0[kCGWindowNumber as String] as? CGWindowID }
+        )
+        return group.windows.contains { onScreenIDs.contains($0.id) }
+    }
+
     func isGroupMaximized(_ group: TabGroup) -> (Bool, NSScreen?) {
         guard let screen = CoordinateConverter.screen(containingAXPoint: group.frame.origin) else {
             return (false, nil)
@@ -56,6 +66,10 @@ extension AppDelegate {
 
         if let activeGroup = autoCaptureGroup,
            let activeScreen = autoCaptureScreen {
+            if !isGroupOnCurrentSpace(activeGroup) {
+                deactivateAutoCapture()
+                return
+            }
             let (maximized, _) = isGroupMaximized(activeGroup)
             if !maximized || !allWindowsOnScreenBelongToGroup(activeGroup, on: activeScreen) {
                 deactivateAutoCapture()
@@ -64,6 +78,7 @@ extension AppDelegate {
         }
 
         for group in groupManager.groups {
+            guard isGroupOnCurrentSpace(group) else { continue }
             let (maximized, screen) = isGroupMaximized(group)
             guard maximized, let screen else { continue }
             if allWindowsOnScreenBelongToGroup(group, on: screen) {
