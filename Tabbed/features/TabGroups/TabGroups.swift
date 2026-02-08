@@ -73,10 +73,7 @@ extension AppDelegate {
 
         guard let group = setupGroup(with: windows, frame: windowFrame, squeezeDelta: squeezeDelta) else { return }
         if let activeWindow = group.activeWindow {
-            raiseAndUpdate(activeWindow, in: group)
-            if let panel = tabBarPanels[group.id] {
-                panel.orderAbove(windowID: activeWindow.id)
-            }
+            bringTabToFront(activeWindow, in: group)
         }
     }
 
@@ -190,12 +187,22 @@ extension AppDelegate {
         return group
     }
 
-    func raiseAndUpdate(_ window: WindowInfo, in group: TabGroup) {
+    /// Bring a tab to front: raise its window, activate its app, and order the
+    /// tab bar panel above it.  This is the single entry point for making a
+    /// grouped window visible — every tab switch, window addition, and
+    /// "show next tab after removal" path goes through here.
+    ///
+    /// Silently no-ops when the group is on a different Space, preventing
+    /// cross-space focus stealing.  For intentional cross-space switches
+    /// (e.g. QuickSwitcher), use `focusWindow(_:)` directly instead.
+    func bringTabToFront(_ window: WindowInfo, in group: TabGroup) {
+        guard isGroupOnCurrentSpace(group) else { return }
         if let freshElement = AccessibilityHelper.raiseWindow(window) {
             if let idx = group.windows.firstIndex(where: { $0.id == window.id }) {
                 group.windows[idx].element = freshElement
             }
         }
+        tabBarPanels[group.id]?.orderAbove(windowID: window.id)
     }
 
     /// Move the tab bar panel to the same Space as the given window, if they differ.
@@ -220,8 +227,7 @@ extension AppDelegate {
         setExpectedFrame(group.frame, for: [window.id])
         AccessibilityHelper.setFrame(of: window.element, to: group.frame)
 
-        raiseAndUpdate(window, in: group)
-        panel.orderAbove(windowID: window.id)
+        bringTabToFront(window, in: group)
     }
 
     func releaseTab(at index: Int, from group: TabGroup, panel: TabBarPanel) {
@@ -270,8 +276,7 @@ extension AppDelegate {
         if !groupManager.groups.contains(where: { $0.id == group.id }) {
             handleGroupDissolution(group: group, panel: panel)
         } else if let newActive = group.activeWindow {
-            raiseAndUpdate(newActive, in: group)
-            panel.orderAbove(windowID: newActive.id)
+            bringTabToFront(newActive, in: group)
         }
         evaluateAutoCapture()
     }
@@ -295,10 +300,7 @@ extension AppDelegate {
         let newIndex = group.windows.firstIndex(where: { $0.id == window.id }) ?? group.windows.count - 1
         group.switchTo(index: newIndex)
         lastActiveGroupID = group.id
-        raiseAndUpdate(window, in: group)
-        if let panel = tabBarPanels[group.id] {
-            panel.orderAbove(windowID: window.id)
-        }
+        bringTabToFront(window, in: group)
         evaluateAutoCapture()
     }
 
@@ -569,8 +571,7 @@ extension AppDelegate {
         if !groupManager.groups.contains(where: { $0.id == sourceGroup.id }) {
             handleGroupDissolution(group: sourceGroup, panel: sourcePanel)
         } else if let newActive = sourceGroup.activeWindow {
-            raiseAndUpdate(newActive, in: sourceGroup)
-            sourcePanel.orderAbove(windowID: newActive.id)
+            bringTabToFront(newActive, in: sourceGroup)
         }
 
         // Add each window to target at insertion index
@@ -587,8 +588,7 @@ extension AppDelegate {
             targetGroup.switchTo(index: newIndex)
             lastActiveGroupID = targetGroup.id
             targetGroup.recordFocus(windowID: firstMoved.id)
-            raiseAndUpdate(firstMoved, in: targetGroup)
-            targetPanel.orderAbove(windowID: firstMoved.id)
+            bringTabToFront(firstMoved, in: targetGroup)
         }
 
         evaluateAutoCapture()
@@ -649,16 +649,12 @@ extension AppDelegate {
         if !groupManager.groups.contains(where: { $0.id == group.id }) {
             handleGroupDissolution(group: group, panel: panel)
         } else if let newActive = group.activeWindow {
-            raiseAndUpdate(newActive, in: group)
-            panel.orderAbove(windowID: newActive.id)
+            bringTabToFront(newActive, in: group)
         }
 
         guard let newGroup = setupGroup(with: windowsToMove, frame: frame, squeezeDelta: squeezeDelta) else { return }
         if let activeWindow = newGroup.activeWindow {
-            raiseAndUpdate(activeWindow, in: newGroup)
-            if let newPanel = tabBarPanels[newGroup.id] {
-                newPanel.orderAbove(windowID: activeWindow.id)
-            }
+            bringTabToFront(activeWindow, in: newGroup)
         }
     }
 
@@ -675,8 +671,7 @@ extension AppDelegate {
         if !groupManager.groups.contains(where: { $0.id == group.id }) {
             handleGroupDissolution(group: group, panel: panel)
         } else if let newActive = group.activeWindow {
-            raiseAndUpdate(newActive, in: group)
-            panel.orderAbove(windowID: newActive.id)
+            bringTabToFront(newActive, in: group)
         }
         evaluateAutoCapture()
     }
@@ -704,10 +699,8 @@ extension AppDelegate {
                     panel.close()
                     tabBarPanels.removeValue(forKey: group.id)
                 }
-            } else if let panel = tabBarPanels[group.id],
-                      let newActive = group.activeWindow {
-                raiseAndUpdate(newActive, in: group)
-                panel.orderAbove(windowID: newActive.id)
+            } else if let newActive = group.activeWindow {
+                bringTabToFront(newActive, in: group)
             }
         }
     }

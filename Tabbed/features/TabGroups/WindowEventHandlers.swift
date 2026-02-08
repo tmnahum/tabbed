@@ -106,8 +106,7 @@ extension AppDelegate {
             if !groupManager.groups.contains(where: { $0.id == group.id }) {
                 handleGroupDissolution(group: group, panel: panel)
             } else if let newActive = group.activeWindow {
-                raiseAndUpdate(newActive, in: group)
-                panel.orderAbove(windowID: newActive.id)
+                bringTabToFront(newActive, in: group)
             }
             return
         }
@@ -237,8 +236,7 @@ extension AppDelegate {
         if !groupManager.groups.contains(where: { $0.id == group.id }) {
             handleGroupDissolution(group: group, panel: panel)
         } else if let newActive = group.activeWindow {
-            raiseAndUpdate(newActive, in: group)
-            panel.orderAbove(windowID: newActive.id)
+            bringTabToFront(newActive, in: group)
         }
         evaluateAutoCapture()
     }
@@ -332,9 +330,8 @@ extension AppDelegate {
 
             if !groupManager.groups.contains(where: { $0.id == group.id }) {
                 handleGroupDissolution(group: group, panel: panel)
-            } else if let newActive = group.activeWindow, isGroupOnCurrentSpace(group) {
-                raiseAndUpdate(newActive, in: group)
-                panel.orderAbove(windowID: newActive.id)
+            } else if let newActive = group.activeWindow {
+                bringTabToFront(newActive, in: group)
             }
         }
         evaluateAutoCapture()
