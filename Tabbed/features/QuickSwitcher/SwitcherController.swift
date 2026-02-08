@@ -180,9 +180,9 @@ class SwitcherController {
             let available = screenSize.width * 0.85
             maxItems = max(3, Int((available - 40) / 112))
         case .titles:
-            // Each title row is ~38px tall
+            // Each title row is ~42px tall (14pt font + 16px vertical padding + 2px spacing)
             let available = screenSize.height * 0.85
-            maxItems = max(3, Int((available - 32) / 38))
+            maxItems = max(3, Int((available - 32) / 42))
         }
 
         guard items.count > maxItems else {

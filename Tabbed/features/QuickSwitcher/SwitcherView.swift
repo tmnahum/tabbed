@@ -11,6 +11,8 @@ struct SwitcherView: View {
 
     /// Maximum icons to show stacked for a group entry.
     private static let maxGroupIcons = 8
+    /// Maximum characters for a window title before truncation.
+    private static let maxTitleLength = 80
 
     var body: some View {
         Group {
@@ -30,12 +32,21 @@ struct SwitcherView: View {
 
     // MARK: - Display Helpers
 
+    /// Truncates a title to the maximum length, adding ellipsis if needed.
+    private func truncatedTitle(_ title: String) -> String {
+        guard title.count > Self.maxTitleLength else { return title }
+        return String(title.prefix(Self.maxTitleLength)) + "…"
+    }
+
     /// Returns the display title for an item, accounting for sub-selection.
     private func displayTitle(for item: SwitcherItem, isSelected: Bool) -> String {
+        let raw: String
         if isSelected, let subIndex = subSelectedWindowIndex, let window = item.window(at: subIndex) {
-            return window.title.isEmpty ? window.appName : window.title
+            raw = window.title.isEmpty ? window.appName : window.title
+        } else {
+            raw = item.displayTitle
         }
-        return item.displayTitle
+        return truncatedTitle(raw)
     }
 
     /// Returns the app name for an item, accounting for sub-selection.
@@ -169,7 +180,7 @@ struct SwitcherView: View {
                     .padding(.vertical, 2)
             }
         }
-        .frame(minWidth: 340)
+        .frame(minWidth: 420)
         .padding(4)
     }
 
@@ -195,7 +206,7 @@ struct SwitcherView: View {
             }
 
             Text("\(appName) — \(title)")
-                .font(.system(size: 13))
+                .font(.system(size: 14))
                 .lineLimit(1)
                 .truncationMode(.tail)
 
@@ -219,8 +230,8 @@ struct SwitcherView: View {
                 }
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill(isSelected ? Color.accentColor.opacity(0.25) : Color.clear)
