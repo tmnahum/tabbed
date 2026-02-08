@@ -35,7 +35,7 @@ class GroupManager: ObservableObject {
     func addWindow(_ window: WindowInfo, to group: TabGroup, at index: Int? = nil) {
         guard groups.contains(where: { $0.id == group.id }) else { return }
         guard !isWindowGrouped(window.id) else { return }
-        withAnimation(.easeOut(duration: 0.15)) {
+        withAnimation(.easeOut(duration: 0.1)) {
             group.addWindow(window, at: index)
         }
         objectWillChange.send()
@@ -43,7 +43,9 @@ class GroupManager: ObservableObject {
 
     func releaseWindow(withID windowID: CGWindowID, from group: TabGroup) {
         guard groups.contains(where: { $0.id == group.id }) else { return }
-        guard group.removeWindow(withID: windowID) != nil else { return }
+        withAnimation(.easeOut(duration: 0.1)) {
+            guard group.removeWindow(withID: windowID) != nil else { return }
+        }
 
         if group.windows.isEmpty {
             dissolveGroup(group)
@@ -57,7 +59,10 @@ class GroupManager: ObservableObject {
     @discardableResult
     func releaseWindows(withIDs ids: Set<CGWindowID>, from group: TabGroup) -> [WindowInfo] {
         guard groups.contains(where: { $0.id == group.id }) else { return [] }
-        let removed = group.removeWindows(withIDs: ids)
+        var removed: [WindowInfo] = []
+        withAnimation(.easeOut(duration: 0.1)) {
+            removed = group.removeWindows(withIDs: ids)
+        }
 
         if group.windows.isEmpty {
             dissolveGroup(group)

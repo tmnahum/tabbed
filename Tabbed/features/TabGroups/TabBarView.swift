@@ -29,13 +29,11 @@ struct TabBarView: View {
         }
     }
 
-    private static let tabInsertTransition: AnyTransition = .asymmetric(
-        insertion: .modifier(
+    private static let tabExpandTransition: AnyTransition =
+        .modifier(
             active: HorizontalScale(fraction: 0.01),
             identity: HorizontalScale(fraction: 1)
-        ).combined(with: .opacity),
-        removal: .opacity
-    )
+        ).combined(with: .opacity)
 
     @State private var hoveredWindowID: CGWindowID? = nil
     @State private var draggingID: CGWindowID? = nil
@@ -75,7 +73,7 @@ struct TabBarView: View {
                                 y: isDragging ? 1 : 0
                             )
                             .animation(isDragging ? nil : .easeInOut(duration: 0.15), value: targetIndex)
-                            .transition(Self.tabInsertTransition)
+                            .transition(Self.tabExpandTransition)
                             .gesture(
                                 DragGesture(minimumDistance: 5)
                                     .onChanged { value in
