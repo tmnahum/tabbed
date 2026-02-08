@@ -21,14 +21,7 @@ struct MenuBarView: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
             } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(groupManager.groups) { group in
-                            groupRow(group)
-                        }
-                    }
-                }
-                .frame(maxHeight: 300)
+                groupList
             }
 
             menuItem("New Group", systemImage: "plus") {
@@ -57,6 +50,22 @@ struct MenuBarView: View {
             }
         }
         .padding(4)
+    }
+
+    @ViewBuilder
+    private var groupList: some View {
+        let rows = VStack(alignment: .leading, spacing: 0) {
+            ForEach(groupManager.groups) { group in
+                groupRow(group)
+            }
+        }
+
+        if groupManager.groups.count > 8 {
+            ScrollView { rows }
+                .frame(maxHeight: 300)
+        } else {
+            rows
+        }
     }
 
     private func menuItem(_ title: String, systemImage: String? = nil, action: @escaping () -> Void) -> some View {
