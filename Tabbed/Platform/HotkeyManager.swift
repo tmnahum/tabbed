@@ -37,6 +37,80 @@ private func hotkeyEventTapCallback(
     return Unmanaged.passUnretained(event)
 }
 
+// MARK: - System Shortcut Overrides
+
+/// Manages disabling/restoring macOS system shortcuts that conflict with user bindings.
+/// Uses com.apple.symbolichotkeys to disable WindowServer-level shortcuts that
+/// CGEvent taps cannot intercept (e.g., Cmd+` "Move focus to next window").
+private enum SystemShortcutOverride {
+    /// Symbolic hotkey IDs and the (keyCode, cmdModifiers) they correspond to.
+    /// ID 27 = "Move focus to next window" = Cmd+` (keyCode 50, Cmd)
+    /// Note: Cmd+Tab is handled by the Dock, not symbolic hotkeys — the CGEvent tap alone suppresses it.
+    private static let overrides: [(id: Int, keyCode: UInt16, ascii: Int, modifierMask: Int)] = [
+        (27, KeyBinding.keyCodeBacktick, 96, 1048576),  // Cmd+`
+    ]
+
+    /// IDs we've disabled during this session.
+    private static var disabledIDs: Set<Int> = []
+
+    static func syncWithConfig(_ config: ShortcutConfig) {
+        let bindings = [config.cycleTab, config.globalSwitcher]
+        for entry in overrides {
+            let needsDisable = bindings.contains { binding in
+                !binding.isUnbound && binding.keyCode == entry.keyCode &&
+                // Binding uses Cmd (possibly with other mods) and matches this system shortcut
+                (binding.modifiers & UInt(entry.modifierMask)) == UInt(entry.modifierMask)
+            }
+            if needsDisable {
+                disable(id: entry.id, ascii: entry.ascii, keyCode: entry.keyCode, modifierMask: entry.modifierMask)
+            } else {
+                restore(id: entry.id, ascii: entry.ascii, keyCode: entry.keyCode, modifierMask: entry.modifierMask)
+            }
+        }
+    }
+
+    static func restoreAll() {
+        for entry in overrides where disabledIDs.contains(entry.id) {
+            restore(id: entry.id, ascii: entry.ascii, keyCode: entry.keyCode, modifierMask: entry.modifierMask)
+        }
+    }
+
+    private static func disable(id: Int, ascii: Int, keyCode: UInt16, modifierMask: Int) {
+        guard !disabledIDs.contains(id) else { return }
+        disabledIDs.insert(id)
+        writeSymbolicHotKey(id: id, enabled: false, ascii: ascii, keyCode: keyCode, modifierMask: modifierMask)
+        Logger.log("[HK] Disabled system shortcut ID \(id)")
+    }
+
+    private static func restore(id: Int, ascii: Int, keyCode: UInt16, modifierMask: Int) {
+        guard disabledIDs.remove(id) != nil else { return }
+        writeSymbolicHotKey(id: id, enabled: true, ascii: ascii, keyCode: keyCode, modifierMask: modifierMask)
+        Logger.log("[HK] Restored system shortcut ID \(id)")
+    }
+
+    private static func writeSymbolicHotKey(id: Int, enabled: Bool, ascii: Int, keyCode: UInt16, modifierMask: Int) {
+        let plist: [String: Any] = [
+            "enabled": enabled,
+            "value": [
+                "parameters": [ascii, Int(keyCode), modifierMask],
+                "type": "standard"
+            ] as [String: Any]
+        ]
+        // Read current hotkeys, update the specific key, write back
+        var hotkeys = UserDefaults(suiteName: "com.apple.symbolichotkeys")?
+            .dictionary(forKey: "AppleSymbolicHotKeys") as? [String: Any] ?? [:]
+        hotkeys[String(id)] = plist
+        UserDefaults(suiteName: "com.apple.symbolichotkeys")?
+            .set(hotkeys, forKey: "AppleSymbolicHotKeys")
+
+        // Apply immediately via the private SystemAdministration framework
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings")
+        task.arguments = ["-u"]
+        try? task.run()
+    }
+}
+
 // MARK: - HotkeyManager
 
 class HotkeyManager {
@@ -93,11 +167,13 @@ class HotkeyManager {
         runLoopSource = source
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
+        SystemShortcutOverride.syncWithConfig(config)
     }
 
     private var modifierPollTimer: Timer?
 
     func stop() {
+        SystemShortcutOverride.restoreAll()
         stopModifierWatch()
         if let tap = eventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
@@ -141,6 +217,7 @@ class HotkeyManager {
 
     func updateConfig(_ newConfig: ShortcutConfig) {
         config = newConfig
+        SystemShortcutOverride.syncWithConfig(config)
     }
 
     func handleFlagsChanged(_ event: NSEvent) {
