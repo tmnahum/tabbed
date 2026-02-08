@@ -133,6 +133,7 @@ extension AppDelegate {
     }
 
     func handleWindowDestroyed(_ windowID: CGWindowID) {
+        globalMRU.removeAll { $0 == .window(windowID) }
         guard let group = groupManager.group(for: windowID),
               let panel = tabBarPanels[group.id],
               let window = group.windows.first(where: { $0.id == windowID }) else { return }

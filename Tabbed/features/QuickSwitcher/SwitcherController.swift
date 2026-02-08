@@ -19,8 +19,8 @@ class SwitcherController {
     /// Value is an index into the group's `windows` array.
     private(set) var subSelectedWindowIndex: Int?
 
-    /// Called when the user commits a selection. Passes the selected SwitcherItem.
-    var onCommit: ((SwitcherItem) -> Void)?
+    /// Called when the user commits a selection. Passes the selected SwitcherItem and optional sub-selection index.
+    var onCommit: ((SwitcherItem, Int?) -> Void)?
     /// Called when the user dismisses without selecting.
     var onDismiss: (() -> Void)?
 
@@ -67,6 +67,36 @@ class SwitcherController {
         updatePanelContent()
     }
 
+    // MARK: - Directional Navigation
+
+    enum ArrowDirection { case left, right, up, down }
+
+    func handleArrowKey(_ direction: ArrowDirection) {
+        guard !items.isEmpty else { return }
+        let isPrimaryAxis: Bool
+        switch style {
+        case .appIcons: isPrimaryAxis = (direction == .left || direction == .right)
+        case .titles:   isPrimaryAxis = (direction == .up || direction == .down)
+        }
+        if isPrimaryAxis {
+            let isForward = (direction == .right || direction == .down)
+            if isForward { advance() } else { retreat() }
+        } else {
+            let isForward = (direction == .right || direction == .down)
+            if isForward { cycleWithinGroup() } else { cycleWithinGroupBackward() }
+        }
+    }
+
+    /// Cycle backward through windows within the currently selected group item.
+    func cycleWithinGroupBackward() {
+        guard scope == .global, !items.isEmpty, selectedIndex < items.count else { return }
+        guard case .group(let group) = items[selectedIndex], group.windows.count > 1 else { return }
+
+        let current = subSelectedWindowIndex ?? group.activeIndex
+        subSelectedWindowIndex = (current - 1 + group.windows.count) % group.windows.count
+        updatePanelContent()
+    }
+
     // MARK: - Commit / Dismiss
 
     func commit() {
@@ -75,8 +105,9 @@ class SwitcherController {
             return
         }
         let selected = items[selectedIndex]
+        let subIndex = subSelectedWindowIndex
         tearDown()
-        onCommit?(selected)
+        onCommit?(selected, subIndex)
     }
 
     func dismiss() {

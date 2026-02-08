@@ -206,6 +206,7 @@ extension AppDelegate {
     }
 
     func addWindow(_ window: WindowInfo, to group: TabGroup) {
+        globalMRU.removeAll { $0 == .window(window.id) }
         setExpectedFrame(group.frame, for: [window.id])
         AccessibilityHelper.setFrame(of: window.element, to: group.frame)
         groupManager.addWindow(window, to: group)
@@ -328,6 +329,7 @@ extension AppDelegate {
         for group in groupManager.groups {
             let affectedWindows = group.windows.filter { $0.ownerPID == pid }
             for window in affectedWindows {
+                globalMRU.removeAll { $0 == .window(window.id) }
                 expectedFrames.removeValue(forKey: window.id)
                 windowObserver.handleDestroyedWindow(pid: pid, elementHash: CFHash(window.element))
                 groupManager.releaseWindow(withID: window.id, from: group)

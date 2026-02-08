@@ -32,7 +32,7 @@ extension AppDelegate {
         let items = allWindows.map { SwitcherItem.singleWindow($0) }
         guard !items.isEmpty else { return }
 
-        switcherController.onCommit = { [weak self] item in
+        switcherController.onCommit = { [weak self] item, _ in
             guard let self, let (group, panel) = self.activeGroup() else { return }
             if let windowID = item.windowIDs.first,
                let index = group.windows.firstIndex(where: { $0.id == windowID }) {

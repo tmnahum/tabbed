@@ -126,14 +126,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         hkm.onGlobalSwitcher = { [weak self] in
             self?.handleGlobalSwitcher()
         }
-        hkm.onSwitcherAdvance = { [weak self] in
-            guard let self, self.switcherController.isActive else { return }
-            self.switcherController.advance()
-        }
-        hkm.onSwitcherRetreat = { [weak self] in
-            guard let self, self.switcherController.isActive else { return }
-            self.switcherController.retreat()
-        }
+        hkm.onArrowLeft  = { [weak self] in self?.handleSwitcherArrow(.left) }
+        hkm.onArrowRight = { [weak self] in self?.handleSwitcherArrow(.right) }
+        hkm.onArrowUp    = { [weak self] in self?.handleSwitcherArrow(.up) }
+        hkm.onArrowDown  = { [weak self] in self?.handleSwitcherArrow(.down) }
         hkm.onEscapePressed = { [weak self] in
             guard let self, self.switcherController.isActive else { return false }
             self.hotkeyManager?.stopModifierWatch()

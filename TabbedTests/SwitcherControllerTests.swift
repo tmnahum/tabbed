@@ -19,7 +19,7 @@ final class SwitcherControllerTests: XCTestCase {
         controller.advance() // -> 0 (wraps)
 
         var committed: SwitcherItem?
-        controller.onCommit = { committed = $0 }
+        controller.onCommit = { item, _ in committed = item }
         controller.commit()
         XCTAssertEqual(committed?.windowIDs, [1])
     }
@@ -33,7 +33,7 @@ final class SwitcherControllerTests: XCTestCase {
         controller.retreat() // -> 2 (wraps backward)
 
         var committed: SwitcherItem?
-        controller.onCommit = { committed = $0 }
+        controller.onCommit = { item, _ in committed = item }
         controller.commit()
         XCTAssertEqual(committed?.windowIDs, [3])
     }

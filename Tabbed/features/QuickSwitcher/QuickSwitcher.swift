@@ -77,8 +77,8 @@ extension AppDelegate {
 
         guard !items.isEmpty else { return }
 
-        switcherController.onCommit = { [weak self] item in
-            self?.commitSwitcherSelection(item)
+        switcherController.onCommit = { [weak self] item, subIndex in
+            self?.commitSwitcherSelection(item, subIndex: subIndex)
         }
         switcherController.onDismiss = nil
 
@@ -110,13 +110,18 @@ extension AppDelegate {
         cycleEndTime = Date()
     }
 
-    func commitSwitcherSelection(_ item: SwitcherItem) {
+    func handleSwitcherArrow(_ direction: SwitcherController.ArrowDirection) {
+        guard switcherController.isActive else { return }
+        switcherController.handleArrowKey(direction)
+    }
+
+    func commitSwitcherSelection(_ item: SwitcherItem, subIndex: Int?) {
         switch item {
         case .singleWindow(let window):
             recordGlobalActivation(.window(window.id))
             focusWindow(window)
         case .group(let group):
-            if let subIndex = switcherController.subSelectedWindowIndex {
+            if let subIndex {
                 group.switchTo(index: subIndex)
             }
             guard let activeWindow = group.activeWindow else { return }

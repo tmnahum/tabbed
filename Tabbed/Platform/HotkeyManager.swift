@@ -14,8 +14,10 @@ class HotkeyManager {
     var onModifierReleased: (() -> Void)?
     /// Fires when the escape key is pressed. Returns true if handled (event should be consumed).
     var onEscapePressed: (() -> Bool)?
-    var onSwitcherAdvance: (() -> Void)?
-    var onSwitcherRetreat: (() -> Void)?
+    var onArrowLeft: (() -> Void)?
+    var onArrowRight: (() -> Void)?
+    var onArrowUp: (() -> Void)?
+    var onArrowDown: (() -> Void)?
 
     init(config: ShortcutConfig) {
         self.config = config
@@ -112,12 +114,10 @@ class HotkeyManager {
         }
 
         // Arrow keys for switcher navigation
-        if event.keyCode == 123 || event.keyCode == 126 { // Left or Up arrow
-            onSwitcherRetreat?()
-        }
-        if event.keyCode == 124 || event.keyCode == 125 { // Right or Down arrow
-            onSwitcherAdvance?()
-        }
+        if event.keyCode == 123 { onArrowLeft?() }
+        if event.keyCode == 124 { onArrowRight?() }
+        if event.keyCode == 126 { onArrowUp?() }
+        if event.keyCode == 125 { onArrowDown?() }
 
         let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask).rawValue
         let hyper: UInt = 0x1E0000
