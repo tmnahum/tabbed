@@ -266,4 +266,22 @@ final class GroupManagerTests: XCTestCase {
         XCTAssertNil(group.dropIndicatorIndex)
     }
 
+    // MARK: - Space ID
+
+    func testCreateGroupSetsSpaceID() {
+        let gm = GroupManager()
+        let windows = [makeWindow(id: 1), makeWindow(id: 2)]
+        let group = gm.createGroup(with: windows, frame: .zero, spaceID: 42)
+        XCTAssertNotNil(group)
+        XCTAssertEqual(group?.spaceID, 42)
+    }
+
+    func testCreateGroupWithoutSpaceIDDefaultsToZero() {
+        let gm = GroupManager()
+        let windows = [makeWindow(id: 1), makeWindow(id: 2)]
+        let group = gm.createGroup(with: windows, frame: .zero)
+        XCTAssertNotNil(group)
+        XCTAssertEqual(group?.spaceID, 0)
+    }
+
 }

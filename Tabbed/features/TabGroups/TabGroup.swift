@@ -10,6 +10,8 @@ class TabGroup: Identifiable, ObservableObject {
     @Published var dropIndicatorIndex: Int? = nil
     /// How many pixels the window was squeezed down when the group was created (0 if no squeeze was needed).
     var tabBarSqueezeDelta: CGFloat = 0
+    /// The macOS Space this group belongs to. 0 means unknown (e.g. restored groups that couldn't resolve their space).
+    var spaceID: UInt64
 
     /// MRU focus history — most recently focused window ID first.
     private(set) var focusHistory: [CGWindowID] = []
@@ -24,10 +26,11 @@ class TabGroup: Identifiable, ObservableObject {
         return windows[activeIndex]
     }
 
-    init(windows: [WindowInfo], frame: CGRect) {
+    init(windows: [WindowInfo], frame: CGRect, spaceID: UInt64 = 0) {
         self.windows = windows
         self.activeIndex = 0
         self.frame = frame
+        self.spaceID = spaceID
         // Seed focus history with initial window order
         self.focusHistory = windows.map(\.id)
     }
