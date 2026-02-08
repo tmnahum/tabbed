@@ -85,6 +85,28 @@ extension AppDelegate {
                 activeIndex: frontmostIndex
             )
         }
+
+        // Sync active tab to the user's actual focused window.
+        // The frontmostIndex heuristic above uses z-order which can diverge from
+        // real focus (e.g. macOS ordering quirks, stale z-order from frame expansion).
+        // This corrects it by querying the accessibility-level focused window.
+        if let frontApp = NSWorkspace.shared.frontmostApplication {
+            let appElement = AccessibilityHelper.appElement(for: frontApp.processIdentifier)
+            var focusedValue: AnyObject?
+            let result = AXUIElementCopyAttributeValue(
+                appElement, kAXFocusedWindowAttribute as CFString, &focusedValue
+            )
+            if result == .success, let focusedRef = focusedValue {
+                let windowElement = focusedRef as! AXUIElement // swiftlint:disable:this force_cast
+                if let windowID = AccessibilityHelper.windowID(for: windowElement),
+                   let group = groupManager.group(for: windowID) {
+                    group.switchTo(windowID: windowID)
+                    group.recordFocus(windowID: windowID)
+                    lastActiveGroupID = group.id
+                    Logger.log("[SessionRestore] synced active tab to focused window wid=\(windowID) in group=\(group.id)")
+                }
+            }
+        }
     }
 
     func restorePreviousSession() {
