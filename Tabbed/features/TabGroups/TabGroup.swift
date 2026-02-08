@@ -28,6 +28,15 @@ class TabGroup: Identifiable, ObservableObject {
         return windows[activeIndex]
     }
 
+    var fullscreenedWindowIDs: Set<CGWindowID> {
+        Set(windows.filter(\.isFullscreened).map(\.id))
+    }
+
+    /// Windows that are not in fullscreen — used for frame sync operations.
+    var visibleWindows: [WindowInfo] {
+        windows.filter { !$0.isFullscreened }
+    }
+
     init(windows: [WindowInfo], frame: CGRect, spaceID: UInt64 = 0) {
         self.windows = windows
         self.activeIndex = 0

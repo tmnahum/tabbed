@@ -256,4 +256,22 @@ final class TabGroupTests: XCTestCase {
         let dragged: Set<CGWindowID> = [2, 3]
         XCTAssertEqual(TabBarView.multiDragPositionDelta(for: 1, windowIDs: ids, draggedIDs: dragged, targetIndex: 0), 0)  // index 1 is dragged → not in remaining → returns 0
     }
+
+    func testWindowInfoIsFullscreenedDefaultsFalse() {
+        let window = makeWindow(id: 1)
+        XCTAssertFalse(window.isFullscreened)
+    }
+
+    func testFullscreenedWindowsProperty() {
+        let group = TabGroup(windows: [makeWindow(id: 1), makeWindow(id: 2), makeWindow(id: 3)], frame: .zero)
+        XCTAssertTrue(group.fullscreenedWindowIDs.isEmpty)
+        group.windows[1].isFullscreened = true
+        XCTAssertEqual(group.fullscreenedWindowIDs, [2])
+    }
+
+    func testVisibleWindowsExcludesFullscreened() {
+        let group = TabGroup(windows: [makeWindow(id: 1), makeWindow(id: 2), makeWindow(id: 3)], frame: .zero)
+        group.windows[1].isFullscreened = true
+        XCTAssertEqual(group.visibleWindows.map(\.id), [1, 3])
+    }
 }
