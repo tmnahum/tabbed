@@ -10,7 +10,7 @@ struct SwitcherView: View {
     var subSelectedWindowIndex: Int? = nil
 
     /// Maximum icons to show stacked for a group entry.
-    private static let maxGroupIcons = 4
+    private static let maxGroupIcons = 8
 
     var body: some View {
         Group {
@@ -105,30 +105,44 @@ struct SwitcherView: View {
     }
 
     /// Stacked/overlapping icons for a group entry.
+    /// Scales icon size down proportionally to fit more icons within a target width.
     private func groupedIconStack(icons: [NSImage?]) -> some View {
-        let capped = Array(icons.prefix(Self.maxGroupIcons))
-        let iconSize: CGFloat = 48
-        let overlap: CGFloat = 16
+        let count = icons.count
+        let maxWidth: CGFloat = 96
+        let overlapRatio: CGFloat = 1.0 / 3.0
+
+        // Scale icon size to fit within target width, preserving overlap proportions
+        let iconSize: CGFloat
+        let overlap: CGFloat
+        if count <= 1 {
+            iconSize = 48
+            overlap = 0
+        } else {
+            // totalWidth = iconSize * (1 + (count-1) * overlapRatio), solve for iconSize
+            iconSize = min(48, max(20, maxWidth / (1 + CGFloat(count - 1) * overlapRatio)))
+            overlap = iconSize * overlapRatio
+        }
+        let cornerRadius = iconSize * (10.0 / 48.0)
 
         return ZStack {
-            ForEach(Array(capped.enumerated()), id: \.offset) { index, icon in
+            ForEach(Array(icons.enumerated()), id: \.offset) { index, icon in
                 Group {
                     if let icon {
                         Image(nsImage: icon)
                             .resizable()
                     } else {
                         Image(systemName: "macwindow")
-                            .font(.system(size: 28))
+                            .font(.system(size: iconSize * 0.58))
                     }
                 }
                 .frame(width: iconSize, height: iconSize)
                 .background(
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: cornerRadius)
                         .fill(.background)
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
                 .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
-                .offset(x: CGFloat(index) * overlap - CGFloat(capped.count - 1) * overlap / 2)
+                .offset(x: CGFloat(index) * overlap - CGFloat(count - 1) * overlap / 2)
             }
         }
     }
@@ -167,8 +181,10 @@ struct SwitcherView: View {
             // Icon(s)
             if item.isGroup {
                 let frontIndex = isSelected ? subSelectedWindowIndex : nil
-                groupedIconRowStack(icons: item.iconsInMRUOrder(frontIndex: frontIndex, maxVisible: Self.maxGroupIcons))
-                    .frame(width: 32, height: 24)
+                let icons = item.iconsInMRUOrder(frontIndex: frontIndex, maxVisible: Self.maxGroupIcons)
+                let stackWidth = CGFloat(20 + max(0, icons.count - 1) * 8)
+                groupedIconRowStack(icons: icons)
+                    .frame(width: max(32, stackWidth), height: 24)
             } else if let icon = item.icons.first ?? nil {
                 Image(nsImage: icon)
                     .resizable()
@@ -217,12 +233,12 @@ struct SwitcherView: View {
 
     /// Small overlapping icons for the titles-style row.
     private func groupedIconRowStack(icons: [NSImage?]) -> some View {
-        let capped = Array(icons.prefix(Self.maxGroupIcons))
+        let count = icons.count
         let iconSize: CGFloat = 20
         let overlap: CGFloat = 8
 
         return ZStack {
-            ForEach(Array(capped.enumerated()), id: \.offset) { index, icon in
+            ForEach(Array(icons.enumerated()), id: \.offset) { index, icon in
                 Group {
                     if let icon {
                         Image(nsImage: icon)
@@ -235,7 +251,7 @@ struct SwitcherView: View {
                 .frame(width: iconSize, height: iconSize)
                 .clipShape(RoundedRectangle(cornerRadius: 4))
                 .shadow(color: .black.opacity(0.1), radius: 1, y: 0.5)
-                .offset(x: CGFloat(index) * overlap - CGFloat(capped.count - 1) * overlap / 2)
+                .offset(x: CGFloat(index) * overlap - CGFloat(count - 1) * overlap / 2)
             }
         }
     }
