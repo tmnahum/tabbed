@@ -347,6 +347,52 @@ final class SwitcherControllerTests: XCTestCase {
         XCTAssertNotNil(controller.subSelectedWindowIndex)
     }
 
+    // MARK: - selectAndCommit
+
+    func testSelectAndCommitSelectsAndCommits() {
+        let controller = SwitcherController()
+        let items = (1...5).map { SwitcherItem.singleWindow(makeWindow(id: CGWindowID($0))) }
+        controller.show(items: items, style: .appIcons, scope: .global)
+
+        var committedIDs: [CGWindowID]?
+        controller.onCommit = { item, subIdx in
+            committedIDs = item.windowIDs
+        }
+        controller.selectAndCommit(at: 3)
+        XCTAssertEqual(committedIDs, [4])
+        XCTAssertFalse(controller.isActive)
+    }
+
+    func testSelectAndCommitClearsSubSelection() {
+        let controller = SwitcherController()
+        let w1 = makeWindow(id: 200, appName: "A")
+        let w2 = makeWindow(id: 201, appName: "B")
+        let group = TabGroup(windows: [w1, w2], frame: .zero)
+        let single = makeWindow(id: 202, appName: "C")
+
+        let items: [SwitcherItem] = [.group(group), .singleWindow(single)]
+        controller.show(items: items, style: .appIcons, scope: .global)
+
+        controller.cycleWithinGroup() // sets sub-selection
+        XCTAssertNotNil(controller.subSelectedWindowIndex)
+
+        var committedSubIndex: Int? = 999
+        controller.onCommit = { _, subIdx in committedSubIndex = subIdx }
+        controller.selectAndCommit(at: 1) // click on the single window
+        XCTAssertNil(committedSubIndex)
+    }
+
+    func testSelectAndCommitOutOfBoundsIsNoOp() {
+        let controller = SwitcherController()
+        let items = [SwitcherItem.singleWindow(makeWindow(id: 1))]
+        controller.show(items: items, style: .appIcons, scope: .global)
+
+        var committed = false
+        controller.onCommit = { _, _ in committed = true }
+        controller.selectAndCommit(at: 5) // out of bounds
+        XCTAssertFalse(committed)
+    }
+
     // MARK: - cycleWithinGroup with focus history
 
     func testCycleWithinGroupFollowsMRUOrder() {

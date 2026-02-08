@@ -18,6 +18,7 @@ class SwitcherPanel: NSPanel {
         self.isOpaque = false
         self.backgroundColor = .clear
         self.isMovableByWindowBackground = false
+        self.acceptsMouseMovedEvents = true
         self.animationBehavior = .none
         self.collectionBehavior = [.transient, .ignoresCycle, .canJoinAllSpaces]
     }

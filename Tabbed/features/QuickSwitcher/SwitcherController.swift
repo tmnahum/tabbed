@@ -104,6 +104,14 @@ class SwitcherController {
 
     // MARK: - Commit / Dismiss
 
+    /// Select an item by its index in the full items array and commit immediately.
+    func selectAndCommit(at index: Int) {
+        guard !items.isEmpty, index >= 0, index < items.count else { return }
+        selectedIndex = index
+        subSelectedWindowIndex = nil
+        commit()
+    }
+
     func commit() {
         guard !items.isEmpty, selectedIndex < items.count else {
             dismiss()
@@ -135,13 +143,17 @@ class SwitcherController {
         guard let panel else { return }
 
         let visible = computeVisibleWindow()
+        let visibleStartOffset = selectedIndex - visible.adjustedIndex
         let view = SwitcherView(
             items: visible.items,
             selectedIndex: visible.adjustedIndex,
             style: style,
             showLeadingOverflow: visible.leadingOverflow,
             showTrailingOverflow: visible.trailingOverflow,
-            subSelectedWindowIndex: subSelectedWindowIndex
+            subSelectedWindowIndex: subSelectedWindowIndex,
+            onItemClicked: { [weak self] visibleIndex in
+                self?.selectAndCommit(at: visibleStartOffset + visibleIndex)
+            }
         )
 
         let hostingView: NSHostingView<SwitcherView>

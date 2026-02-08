@@ -8,6 +8,10 @@ struct SwitcherView: View {
     let showTrailingOverflow: Bool
     /// When non-nil, the selected group item has a sub-selected window at this index.
     var subSelectedWindowIndex: Int? = nil
+    /// Called when the user clicks an item. Parameter is the index in the visible items array.
+    var onItemClicked: ((Int) -> Void)? = nil
+
+    @State private var hoveredIndex: Int?
 
     /// Maximum icons to show stacked for a group entry.
     private static let maxGroupIcons = 8
@@ -68,7 +72,10 @@ struct SwitcherView: View {
                     .frame(width: 24)
             }
             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                iconCell(item: item, isSelected: index == selectedIndex)
+                iconCell(item: item, isSelected: index == selectedIndex, isHovered: index == hoveredIndex)
+                    .contentShape(Rectangle())
+                    .onHover { hovering in hoveredIndex = hovering ? index : nil }
+                    .onTapGesture { onItemClicked?(index) }
             }
             if showTrailingOverflow {
                 Text("⋯")
@@ -80,8 +87,15 @@ struct SwitcherView: View {
         .padding(8)
     }
 
-    private func iconCell(item: SwitcherItem, isSelected: Bool) -> some View {
-        VStack(spacing: 6) {
+    private func iconCell(item: SwitcherItem, isSelected: Bool, isHovered: Bool) -> some View {
+        let fillColor = isSelected ? Color.accentColor.opacity(0.3)
+            : isHovered ? Color.primary.opacity(0.1)
+            : Color.clear
+        let strokeColor = isSelected ? Color.accentColor
+            : isHovered ? Color.primary.opacity(0.2)
+            : Color.clear
+
+        return VStack(spacing: 6) {
             ZStack {
                 if item.isGroup {
                     let frontIndex = isSelected ? subSelectedWindowIndex : nil
@@ -100,11 +114,11 @@ struct SwitcherView: View {
             .padding(8)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(isSelected ? Color.accentColor.opacity(0.3) : Color.clear)
+                    .fill(fillColor)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2.5)
+                    .stroke(strokeColor, lineWidth: 2.5)
             )
 
             Text(displayAppName(for: item, isSelected: isSelected))
@@ -170,7 +184,10 @@ struct SwitcherView: View {
                     .padding(.vertical, 2)
             }
             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                titleRow(item: item, isSelected: index == selectedIndex)
+                titleRow(item: item, isSelected: index == selectedIndex, isHovered: index == hoveredIndex)
+                    .contentShape(Rectangle())
+                    .onHover { hovering in hoveredIndex = hovering ? index : nil }
+                    .onTapGesture { onItemClicked?(index) }
             }
             if showTrailingOverflow {
                 Text("⋯")
@@ -184,9 +201,15 @@ struct SwitcherView: View {
         .padding(4)
     }
 
-    private func titleRow(item: SwitcherItem, isSelected: Bool) -> some View {
+    private func titleRow(item: SwitcherItem, isSelected: Bool, isHovered: Bool) -> some View {
         let title = displayTitle(for: item, isSelected: isSelected)
         let appName = displayAppName(for: item, isSelected: isSelected)
+        let fillColor = isSelected ? Color.accentColor.opacity(0.25)
+            : isHovered ? Color.primary.opacity(0.1)
+            : Color.clear
+        let strokeColor = isSelected ? Color.accentColor
+            : isHovered ? Color.primary.opacity(0.2)
+            : Color.clear
 
         return HStack(spacing: 10) {
             // Icon(s)
@@ -234,11 +257,11 @@ struct SwitcherView: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isSelected ? Color.accentColor.opacity(0.25) : Color.clear)
+                .fill(fillColor)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 1.5)
+                .stroke(strokeColor, lineWidth: 1.5)
         )
     }
 
