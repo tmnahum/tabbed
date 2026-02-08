@@ -7,6 +7,7 @@ struct CrossPanelDropTarget {
 
 struct TabBarView: View {
     @ObservedObject var group: TabGroup
+    @ObservedObject var tabBarConfig: TabBarConfig
     var onSwitchTab: (Int) -> Void
     var onReleaseTab: (Int) -> Void
     var onCloseTab: (Int) -> Void
@@ -20,6 +21,7 @@ struct TabBarView: View {
 
     static let horizontalPadding: CGFloat = 8
     static let addButtonWidth: CGFloat = 20
+    static let maxCompactTabWidth: CGFloat = 240
 
     // Chrome/Firefox-style horizontal expand transition for new tabs
     private struct HorizontalScale: ViewModifier {
@@ -50,9 +52,16 @@ struct TabBarView: View {
     var body: some View {
         GeometryReader { geo in
             let tabCount = group.windows.count
-            let tabStep: CGFloat = tabCount > 0
-                ? (geo.size.width - Self.horizontalPadding - Self.addButtonWidth) / CGFloat(tabCount)
+            let isCompact = tabBarConfig.style == .compact
+            let availableWidth = geo.size.width - Self.horizontalPadding - Self.addButtonWidth
+            let totalSpacing: CGFloat = tabCount > 1 ? CGFloat(tabCount - 1) : 0
+            let equalTabStep: CGFloat = tabCount > 0
+                ? availableWidth / CGFloat(tabCount)
                 : 0
+            let compactTabWidth: CGFloat = tabCount > 0
+                ? min((availableWidth - totalSpacing) / CGFloat(tabCount), Self.maxCompactTabWidth)
+                : 0
+            let tabStep: CGFloat = isCompact ? compactTabWidth + 1 : equalTabStep
 
             let targetIndex = computeTargetIndex(tabStep: tabStep)
 
@@ -61,7 +70,7 @@ struct TabBarView: View {
                     ForEach(Array(group.windows.enumerated()), id: \.element.id) { index, window in
                         let isDragging = draggingIDs.contains(window.id)
 
-                        tabItem(for: window, at: index)
+                        tabItem(for: window, at: index, compactWidth: isCompact ? compactTabWidth : nil)
                             .offset(x: isDragging
                                 ? dragTranslation
                                 : shiftOffset(for: index, targetIndex: targetIndex, tabStep: tabStep))
@@ -113,6 +122,10 @@ struct TabBarView: View {
                             )
                     }
                     addButton
+
+                    if isCompact {
+                        Spacer(minLength: 0)
+                    }
                 }
                 .padding(.horizontal, 4)
                 .padding(.vertical, 2)
@@ -279,7 +292,7 @@ struct TabBarView: View {
     // MARK: - Tab Item
 
     @ViewBuilder
-    private func tabItem(for window: WindowInfo, at index: Int) -> some View {
+    private func tabItem(for window: WindowInfo, at index: Int, compactWidth: CGFloat? = nil) -> some View {
         let isActive = index == group.activeIndex
         let isHovered = hoveredWindowID == window.id && draggingID == nil
         let isSelected = selectedIDs.contains(window.id)
@@ -315,7 +328,7 @@ struct TabBarView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: compactWidth ?? .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill(isSelected

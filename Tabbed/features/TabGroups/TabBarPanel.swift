@@ -38,6 +38,7 @@ class TabBarPanel: NSPanel {
 
     func setContent(
         group: TabGroup,
+        tabBarConfig: TabBarConfig,
         onSwitchTab: @escaping (Int) -> Void,
         onReleaseTab: @escaping (Int) -> Void,
         onCloseTab: @escaping (Int) -> Void,
@@ -51,6 +52,7 @@ class TabBarPanel: NSPanel {
     ) {
         let tabBarView = TabBarView(
             group: group,
+            tabBarConfig: tabBarConfig,
             onSwitchTab: onSwitchTab,
             onReleaseTab: onReleaseTab,
             onCloseTab: onCloseTab,

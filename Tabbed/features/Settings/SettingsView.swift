@@ -5,6 +5,7 @@ struct SettingsView: View {
     @State private var config: ShortcutConfig
     @State private var sessionConfig: SessionConfig
     @State private var switcherConfig: SwitcherConfig
+    @ObservedObject var tabBarConfig: TabBarConfig
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var recordingAction: ShortcutAction?
     var onConfigChanged: (ShortcutConfig) -> Void
@@ -15,6 +16,7 @@ struct SettingsView: View {
         config: ShortcutConfig,
         sessionConfig: SessionConfig,
         switcherConfig: SwitcherConfig,
+        tabBarConfig: TabBarConfig,
         onConfigChanged: @escaping (ShortcutConfig) -> Void,
         onSessionConfigChanged: @escaping (SessionConfig) -> Void,
         onSwitcherConfigChanged: @escaping (SwitcherConfig) -> Void
@@ -22,6 +24,7 @@ struct SettingsView: View {
         self._config = State(initialValue: config)
         self._sessionConfig = State(initialValue: sessionConfig)
         self._switcherConfig = State(initialValue: switcherConfig)
+        self.tabBarConfig = tabBarConfig
         self.onConfigChanged = onConfigChanged
         self.onSessionConfigChanged = onSessionConfigChanged
         self.onSwitcherConfigChanged = onSwitcherConfigChanged
@@ -31,6 +34,8 @@ struct SettingsView: View {
         TabView {
             generalTab
                 .tabItem { Label("General", systemImage: "gear") }
+            appearanceTab
+                .tabItem { Label("Appearance", systemImage: "paintbrush") }
             switcherTab
                 .tabItem { Label("Switcher", systemImage: "rectangle.grid.1x2") }
         }
@@ -46,6 +51,9 @@ struct SettingsView: View {
         }
         .onChange(of: switcherConfig.tabCycleStyle) { _ in
             onSwitcherConfigChanged(switcherConfig)
+        }
+        .onChange(of: tabBarConfig.style) { _ in
+            tabBarConfig.save()
         }
         .background(ShortcutRecorderBridge(
             isRecording: recordingAction != nil,
@@ -170,6 +178,48 @@ struct SettingsView: View {
                 }
             }
             .padding(12)
+        }
+    }
+
+    // MARK: - Appearance Tab
+
+    private var appearanceTab: some View {
+        VStack(spacing: 0) {
+            Text("Tab Bar Style")
+                .font(.headline)
+                .padding(.top, 16)
+                .padding(.bottom, 4)
+
+            Text("Choose how tabs are laid out in the tab bar.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.bottom, 8)
+
+            Picker("Style", selection: $tabBarConfig.style) {
+                Text("Equal Width").tag(TabBarStyle.equal)
+                Text("Compact").tag(TabBarStyle.compact)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 12)
+
+            Text(tabBarStyleDescription)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12)
+                .padding(.top, 4)
+                .padding(.bottom, 12)
+
+            Spacer()
+        }
+    }
+
+    private var tabBarStyleDescription: String {
+        switch tabBarConfig.style {
+        case .equal:
+            return "Tabs expand to fill the entire bar width equally."
+        case .compact:
+            return "Tabs are left-aligned with a maximum width, like browser tabs."
         }
     }
 

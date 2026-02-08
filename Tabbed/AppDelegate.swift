@@ -28,6 +28,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var sessionConfig = SessionConfig.load()
     var switcherController = SwitcherController()
     var switcherConfig = SwitcherConfig.load()
+    var tabBarConfig = TabBarConfig.load()
     weak var cyclingGroup: TabGroup?
     var cycleEndTime: Date?
     static let cycleCooldownDuration: TimeInterval = 0.15
@@ -303,6 +304,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             config: hotkeyManager?.config ?? .default,
             sessionConfig: SessionConfig.load(),
             switcherConfig: switcherConfig,
+            tabBarConfig: tabBarConfig,
             onConfigChanged: { [weak self] newConfig in
                 newConfig.save()
                 self?.hotkeyManager?.updateConfig(newConfig)

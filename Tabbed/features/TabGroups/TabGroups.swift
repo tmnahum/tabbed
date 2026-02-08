@@ -103,6 +103,7 @@ extension AppDelegate {
         let panel = TabBarPanel()
         panel.setContent(
             group: group,
+            tabBarConfig: tabBarConfig,
             onSwitchTab: { [weak self, weak panel] index in
                 guard let panel else { return }
                 self?.switchTab(in: group, to: index, panel: panel)
