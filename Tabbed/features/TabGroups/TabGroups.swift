@@ -103,6 +103,10 @@ extension AppDelegate {
                 guard let panel else { return }
                 self?.releaseTab(at: index, from: group, panel: panel)
             },
+            onCloseTab: { [weak self, weak panel] index in
+                guard let panel else { return }
+                self?.closeTab(at: index, from: group, panel: panel)
+            },
             onAddWindow: { [weak self] in
                 self?.showWindowPicker(addingTo: group)
             }
@@ -199,6 +203,41 @@ extension AppDelegate {
         windowObserver.stopObserving(window: window)
         expectedFrames.removeValue(forKey: window.id)
 
+        // Expand the released window upward to cover the tab bar area.
+        // Size first so the window can grow, then position to move it up.
+        // Re-push position after a delay because some apps revert position
+        // changes asynchronously (same issue solved in applicationWillTerminate
+        // where the process is terminating and can't fight back).
+        if let frame = AccessibilityHelper.getFrame(of: window.element) {
+            let delta = max(group.tabBarSqueezeDelta, ScreenCompensation.tabBarHeight)
+            let expanded = ScreenCompensation.expandFrame(frame, undoingSqueezeDelta: delta)
+            let element = window.element
+            AccessibilityHelper.setSize(of: element, to: expanded.size)
+            AccessibilityHelper.setPosition(of: element, to: expanded.origin)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                AccessibilityHelper.setPosition(of: element, to: expanded.origin)
+                AccessibilityHelper.setSize(of: element, to: expanded.size)
+            }
+        }
+
+        groupManager.releaseWindow(withID: window.id, from: group)
+
+        if !groupManager.groups.contains(where: { $0.id == group.id }) {
+            handleGroupDissolution(group: group, panel: panel)
+        } else if let newActive = group.activeWindow {
+            // Don't raise the next tab — keep the released window focused
+            panel.orderAbove(windowID: newActive.id)
+        }
+        evaluateAutoCapture()
+    }
+
+    func closeTab(at index: Int, from group: TabGroup, panel: TabBarPanel) {
+        guard let window = group.windows[safe: index] else { return }
+
+        windowObserver.stopObserving(window: window)
+        expectedFrames.removeValue(forKey: window.id)
+
+        AccessibilityHelper.closeWindow(window.element)
         groupManager.releaseWindow(withID: window.id, from: group)
 
         if !groupManager.groups.contains(where: { $0.id == group.id }) {

@@ -152,6 +152,15 @@ enum AccessibilityHelper {
         return AXUIElementPerformAction(element, kAXRaiseAction as CFString)
     }
 
+    /// Press the close button on a window (equivalent to clicking the red traffic light).
+    @discardableResult
+    static func closeWindow(_ element: AXUIElement) -> Bool {
+        var buttonRef: AnyObject?
+        let result = AXUIElementCopyAttributeValue(element, kAXCloseButtonAttribute as CFString, &buttonRef)
+        guard result == .success, let button = buttonRef else { return false }
+        return AXUIElementPerformAction(button as! AXUIElement, kAXPressAction as CFString) == .success
+    }
+
     /// Activate the owning app and raise the window, with a fallback chain
     /// for stale AXUIElements:
     /// 1. Activate app + kAXRaiseAction on stored element

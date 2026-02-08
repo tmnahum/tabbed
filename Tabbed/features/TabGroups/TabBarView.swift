@@ -4,6 +4,7 @@ struct TabBarView: View {
     @ObservedObject var group: TabGroup
     var onSwitchTab: (Int) -> Void
     var onReleaseTab: (Int) -> Void
+    var onCloseTab: (Int) -> Void
     var onAddWindow: () -> Void
 
     private static let horizontalPadding: CGFloat = 8 // 4 per side via .padding(.horizontal, 4)
@@ -138,15 +139,18 @@ struct TabBarView: View {
             Spacer(minLength: 0)
 
             if isHovered {
-                Button {
-                    onReleaseTab(index)
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .frame(width: 16, height: 16)
+                Image(systemName: isActive ? "minus" : "xmark")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 16, height: 16)
+                    .contentShape(Rectangle())
+                    .highPriorityGesture(TapGesture().onEnded {
+                        if isActive {
+                            onReleaseTab(index)
+                        } else {
+                            onCloseTab(index)
+                        }
+                    })
             }
         }
         .padding(.horizontal, 8)

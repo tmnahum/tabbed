@@ -40,12 +40,14 @@ class TabBarPanel: NSPanel {
         group: TabGroup,
         onSwitchTab: @escaping (Int) -> Void,
         onReleaseTab: @escaping (Int) -> Void,
+        onCloseTab: @escaping (Int) -> Void,
         onAddWindow: @escaping () -> Void
     ) {
         let tabBarView = TabBarView(
             group: group,
             onSwitchTab: onSwitchTab,
             onReleaseTab: onReleaseTab,
+            onCloseTab: onCloseTab,
             onAddWindow: onAddWindow
         )
         // Remove previous hosting view if setContent is called again
