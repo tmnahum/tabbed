@@ -113,11 +113,22 @@ extension AppDelegate {
             return
         }
 
+        // If the height actually changed (e.g. macOS title bar zoom), reset
+        // squeeze delta so applyClamp performs a fresh full clamp rather than
+        // just re-pushing position (which would leave the window extending
+        // below the visible area).
+        let existingSqueeze: CGFloat
+        if abs(frame.height - group.frame.height) > Self.frameTolerance {
+            existingSqueeze = 0
+        } else {
+            existingSqueeze = group.tabBarSqueezeDelta
+        }
+
         let visibleFrame = CoordinateConverter.visibleFrameInAX(at: frame.origin)
         let (adjustedFrame, squeezeDelta) = applyClamp(
             element: activeWindow.element, windowID: windowID,
             frame: frame, visibleFrame: visibleFrame,
-            existingSqueezeDelta: group.tabBarSqueezeDelta
+            existingSqueezeDelta: existingSqueeze
         )
 
         group.frame = adjustedFrame
