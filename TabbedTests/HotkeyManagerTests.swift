@@ -15,6 +15,7 @@ final class HotkeyManagerTests: XCTestCase {
         if nsFlags.contains(.control) { cgFlags.insert(.maskControl) }
         if nsFlags.contains(.option) { cgFlags.insert(.maskAlternate) }
         if nsFlags.contains(.shift) { cgFlags.insert(.maskShift) }
+        if nsFlags.contains(.capsLock) { cgFlags.insert(.maskAlphaShift) }
         cgEvent.flags = cgFlags
         if isRepeat {
             cgEvent.setIntegerValueField(.keyboardEventAutorepeat, value: 1)
@@ -345,5 +346,41 @@ final class HotkeyManagerTests: XCTestCase {
 
         XCTAssertTrue(manager.handleKeyDown(event))
         XCTAssertTrue(called)
+    }
+
+    // MARK: - Hyper Key (Karabiner) Tests
+
+    private var hyperMods: UInt { KeyBinding.hyperModifiers }
+
+    /// Karabiner hyper key sends capsLock flag alongside cmd+ctrl+opt+shift.
+    /// CGEvent taps see these raw flags; matches() must still work.
+    private var hyperWithCapsLockMods: UInt {
+        hyperMods | NSEvent.ModifierFlags.capsLock.rawValue
+    }
+
+    func testHyperKeyMatchesWithCapsLockFlag() {
+        let binding = KeyBinding(modifiers: hyperMods, keyCode: KeyBinding.keyCodeT)
+        let event = makeKeyDown(keyCode: KeyBinding.keyCodeT, modifiers: hyperWithCapsLockMods)
+        XCTAssertTrue(binding.matches(event), "Hyper+T should match even when capsLock flag is present (Karabiner)")
+    }
+
+    func testHyperKeyHandleKeyDownWithCapsLock() {
+        var config = unboundConfig()
+        config.newTab = KeyBinding(modifiers: hyperMods, keyCode: KeyBinding.keyCodeT)
+        let manager = HotkeyManager(config: config)
+        var called = false
+        manager.onNewTab = { called = true }
+
+        let event = makeKeyDown(keyCode: KeyBinding.keyCodeT, modifiers: hyperWithCapsLockMods)
+        let result = manager.handleKeyDown(event)
+
+        XCTAssertTrue(result, "Should suppress Hyper+T with capsLock flag")
+        XCTAssertTrue(called, "Should fire onNewTab")
+    }
+
+    func testHyperKeyMatchesWithoutCapsLockFlag() {
+        let binding = KeyBinding(modifiers: hyperMods, keyCode: KeyBinding.keyCodeT)
+        let event = makeKeyDown(keyCode: KeyBinding.keyCodeT, modifiers: hyperMods)
+        XCTAssertTrue(binding.matches(event), "Hyper+T should still match without capsLock flag")
     }
 }

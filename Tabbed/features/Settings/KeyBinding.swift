@@ -4,10 +4,22 @@ struct KeyBinding: Codable, Equatable {
     var modifiers: UInt    // NSEvent.ModifierFlags.rawValue (device-independent)
     var keyCode: UInt16    // hardware scan code
 
+    /// Mask covering only the four intentional shortcut modifiers (Cmd, Ctrl, Opt, Shift).
+    /// CGEvent taps see raw flags that may include capsLock or function bits
+    /// (e.g. Karabiner hyper key sets capsLock alongside the four modifiers).
+    /// Stripping those avoids false negatives on exact-match comparisons.
+    static let shortcutModifiersMask: UInt = NSEvent.ModifierFlags(
+        [.command, .control, .option, .shift]
+    ).intersection(.deviceIndependentFlagsMask).rawValue
+
+    private func eventModifiers(_ event: NSEvent) -> UInt {
+        event.modifierFlags.intersection(.deviceIndependentFlagsMask).rawValue
+            & KeyBinding.shortcutModifiersMask
+    }
+
     func matches(_ event: NSEvent) -> Bool {
         guard !isUnbound else { return false }
-        let eventMods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        return eventMods.rawValue == modifiers && event.keyCode == keyCode
+        return eventModifiers(event) == modifiers && event.keyCode == keyCode
     }
 
     /// Returns true if the event matches this binding with Shift added on top.
@@ -16,8 +28,7 @@ struct KeyBinding: Codable, Equatable {
         guard !isUnbound else { return false }
         let shiftFlag = NSEvent.ModifierFlags.shift.intersection(.deviceIndependentFlagsMask).rawValue
         guard (modifiers & shiftFlag) == 0 else { return false }
-        let eventMods = event.modifierFlags.intersection(.deviceIndependentFlagsMask).rawValue
-        return eventMods == (modifiers | shiftFlag) && event.keyCode == keyCode
+        return eventModifiers(event) == (modifiers | shiftFlag) && event.keyCode == keyCode
     }
 
     /// Whether this binding is unset (cleared by conflict resolution).

@@ -150,7 +150,7 @@ class HotkeyManager {
 
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
+            place: .tailAppendEventTap,
             options: .defaultTap,
             eventsOfInterest: eventMask,
             callback: hotkeyEventTapCallback,
@@ -222,6 +222,7 @@ class HotkeyManager {
 
     func handleFlagsChanged(_ event: NSEvent) {
         let currentMods = event.modifierFlags.intersection(.deviceIndependentFlagsMask).rawValue
+            & KeyBinding.shortcutModifiersMask
         // Check if either switcher's required modifiers have been released.
         let cycleMods = config.cycleTab.modifiers
         let globalMods = config.globalSwitcher.modifiers
@@ -247,10 +248,11 @@ class HotkeyManager {
         if event.keyCode == 126 { onArrowUp?() }
         if event.keyCode == 125 { onArrowDown?() }
 
-        let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask).rawValue
+        let rawMods = event.modifierFlags.intersection(.deviceIndependentFlagsMask).rawValue
+        let mods = rawMods & KeyBinding.shortcutModifiersMask
         let hyper: UInt = 0x1E0000
         if (mods & hyper) == hyper {
-            Logger.log("[HK] hyper keyDown: keyCode=\(event.keyCode) mods=0x\(String(mods, radix: 16)) | newTab binding: keyCode=\(config.newTab.keyCode) mods=0x\(String(config.newTab.modifiers, radix: 16)) unbound=\(config.newTab.isUnbound)")
+            Logger.log("[HK] hyper keyDown: keyCode=\(event.keyCode) rawMods=0x\(String(rawMods, radix: 16)) mods=0x\(String(mods, radix: 16)) | newTab binding: keyCode=\(config.newTab.keyCode) mods=0x\(String(config.newTab.modifiers, radix: 16)) unbound=\(config.newTab.isUnbound)")
         }
         if config.newTab.matches(event) {
             Logger.log("[HK] newTab MATCHED — calling handler")
