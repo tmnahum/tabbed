@@ -40,7 +40,9 @@
       "Bash(find:*)",
       "Bash(xcode-build-server:*)",
       "Bash(tee:*)",
-      "Bash(code:*)"
+      "Bash(code:*)",
+      "Bash(scripts/build.sh:*)",
+      "Bash(bash:*)"
     ]
   }
 }

@@ -15,5 +15,5 @@
 	"workspace": "/Users/tmn/ccode/tabbed/version-a/.worktrees/quick-switcher/Tabbed.xcodeproj/project.xcworkspace",
 	"build_root": "/Users/tmn/Library/Developer/Xcode/DerivedData/Tabbed-gkvkvakjkpmdljdndlnnruualaha",
 	"scheme": "Tabbed",
-	"kind": "manual"
+	"kind": "xcode"
 }

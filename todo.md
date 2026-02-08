@@ -1,7 +1,17 @@
-- make height 24 instead of 28 to match menu bar on my m1 mac air
+- maybe: make height 24 instead of 28 to match menu bar on my m1 mac air (remove from padding)
+    - prompt: make the tab bar height 24 instead of 28: change tabBarHeight in TabBarPanel.swift to 24, change tab item .padding(.vertical, 4) to .padding(.vertical, 3) in TabBarView.swift, and change the outer HStack .padding(.vertical, 2) to .padding(.top, 1) .padding(.bottom, 1)  
 
 
 - simplify session restore config options maybe
+
+- switcher arrow keys
+
+BUGS:
+    - signal app specifically (most apps dont but others might) pick up control + tab key shortcut even though im pressing hyper tab
+    - selecting a tabbed window not by clicking does not bring the tabs panel to front
+    - switcher 
+        - 
+    - capture new windows when maximized doesnt work
 
 
 
@@ -35,6 +45,12 @@ Meta Dev:
 Maybe:
 - might be too complex
     - double click to fullscreen -> if allready in fullscreen double click restores to old behavior (like it would without this app)
+- not sure
+    - mode to turn off tab display entirely, focus ont he alttab clone aspect of the app
+        - should windows still stay together? probably not actually
+        - add a window with hyper t, then use alttab clone stuff to navigate in groups
+        - question: could this have all been desktop based, just have a seperate keybind for navigating within desktop (alttab already does this)
+            - maybe the answer is yes and so we dont need to support this
 
 ----- More ------
 
