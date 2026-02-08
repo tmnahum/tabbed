@@ -21,31 +21,31 @@ final class TabBarConfigTests: XCTestCase {
 
     func testDefaultStyle() {
         let config = TabBarConfig()
-        XCTAssertEqual(config.style, .equal)
+        XCTAssertEqual(config.style, .compact)
     }
 
     func testSaveAndLoad() {
-        let config = TabBarConfig(style: .compact)
+        let config = TabBarConfig(style: .equal)
         config.save()
 
         let loaded = TabBarConfig.load()
-        XCTAssertEqual(loaded.style, .compact)
+        XCTAssertEqual(loaded.style, .equal)
     }
 
     func testLoadReturnsDefaultWhenNoSavedData() {
         let loaded = TabBarConfig.load()
-        XCTAssertEqual(loaded.style, .equal)
+        XCTAssertEqual(loaded.style, .compact)
     }
 
     func testSaveOverwritesPreviousValue() {
-        let config1 = TabBarConfig(style: .compact)
+        let config1 = TabBarConfig(style: .equal)
         config1.save()
 
-        let config2 = TabBarConfig(style: .equal)
+        let config2 = TabBarConfig(style: .compact)
         config2.save()
 
         let loaded = TabBarConfig.load()
-        XCTAssertEqual(loaded.style, .equal)
+        XCTAssertEqual(loaded.style, .compact)
     }
 
     func testRoundTripEncoding() throws {
@@ -59,6 +59,6 @@ final class TabBarConfigTests: XCTestCase {
         // Simulate old config without style key
         let json = "{}".data(using: .utf8)!
         let decoded = try JSONDecoder().decode(TabBarConfig.self, from: json)
-        XCTAssertEqual(decoded.style, .equal)
+        XCTAssertEqual(decoded.style, .compact)
     }
 }

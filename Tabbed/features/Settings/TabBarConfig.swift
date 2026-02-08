@@ -12,9 +12,9 @@ class TabBarConfig: ObservableObject, Codable {
         }
     }
 
-    static let `default` = TabBarConfig(style: .equal)
+    static let `default` = TabBarConfig(style: .compact)
 
-    init(style: TabBarStyle = .equal) {
+    init(style: TabBarStyle = .compact) {
         self.style = style
     }
 
@@ -26,7 +26,7 @@ class TabBarConfig: ObservableObject, Codable {
 
     required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        style = try container.decodeIfPresent(TabBarStyle.self, forKey: .style) ?? .equal
+        style = try container.decodeIfPresent(TabBarStyle.self, forKey: .style) ?? .compact
     }
 
     func encode(to encoder: Encoder) throws {
