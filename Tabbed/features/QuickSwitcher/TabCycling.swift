@@ -4,10 +4,14 @@ import AppKit
 
 extension AppDelegate {
 
-    func handleHotkeyCycleTab() {
+    func handleHotkeyCycleTab(reverse: Bool) {
         // If the global switcher is active, cycle within the selected group
         if switcherController.isActive, switcherController.scope == .global {
-            switcherController.cycleWithinGroup()
+            if reverse {
+                switcherController.cycleWithinGroupBackward()
+            } else {
+                switcherController.cycleWithinGroup()
+            }
             return
         }
 
@@ -17,7 +21,7 @@ extension AppDelegate {
         cyclingGroup = group
 
         if switcherController.isActive {
-            switcherController.advance()
+            if reverse { switcherController.retreat() } else { switcherController.advance() }
             return
         }
 
@@ -57,7 +61,7 @@ extension AppDelegate {
             style: switcherConfig.tabCycleStyle,
             scope: .withinGroup
         )
-        switcherController.advance()
+        if reverse { switcherController.retreat() } else { switcherController.advance() }
         hotkeyManager?.startModifierWatch(modifiers: hotkeyManager?.config.cycleTab.modifiers ?? 0)
     }
 }

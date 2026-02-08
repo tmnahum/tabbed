@@ -1,9 +1,11 @@
 import SwiftUI
+import ServiceManagement
 
 struct SettingsView: View {
     @State private var config: ShortcutConfig
     @State private var sessionConfig: SessionConfig
     @State private var switcherConfig: SwitcherConfig
+    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var recordingAction: ShortcutAction?
     var onConfigChanged: (ShortcutConfig) -> Void
     var onSessionConfigChanged: (SessionConfig) -> Void
@@ -64,6 +66,31 @@ struct SettingsView: View {
 
     private var generalTab: some View {
         VStack(spacing: 0) {
+            Toggle(isOn: $launchAtLogin) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Start at Login")
+                    Text("Automatically launch Tabbed when you log in.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .padding(.top, 8)
+            .onChange(of: launchAtLogin) { newValue in
+                do {
+                    if newValue {
+                        try SMAppService.mainApp.register()
+                    } else {
+                        try SMAppService.mainApp.unregister()
+                    }
+                } catch {
+                    launchAtLogin = !newValue
+                }
+            }
+
+            Divider()
+
             Text("Session Restore")
                 .font(.headline)
                 .padding(.top, 16)
@@ -310,6 +337,42 @@ enum ShortcutAction: Equatable {
     }
 }
 
+// MARK: - CGEvent Tap Callback for Shortcut Recording (file-scope)
+
+private func recorderEventTapCallback(
+    proxy: CGEventTapProxy,
+    type: CGEventType,
+    event: CGEvent,
+    userInfo: UnsafeMutableRawPointer?
+) -> Unmanaged<CGEvent>? {
+    guard let userInfo else { return Unmanaged.passUnretained(event) }
+    let view = Unmanaged<ShortcutRecorderView>.fromOpaque(userInfo).takeUnretainedValue()
+
+    if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+        if let tap = view.recorderTap {
+            CGEvent.tapEnable(tap: tap, enable: true)
+        }
+        return Unmanaged.passUnretained(event)
+    }
+
+    guard type == .keyDown, let nsEvent = NSEvent(cgEvent: event) else {
+        return Unmanaged.passUnretained(event)
+    }
+
+    guard view.isRecording else { return Unmanaged.passUnretained(event) }
+
+    if nsEvent.keyCode == 53 { // Escape
+        view.onEscape?()
+        return nil
+    }
+
+    let mods = nsEvent.modifierFlags.intersection(.deviceIndependentFlagsMask)
+    guard !mods.isEmpty else { return Unmanaged.passUnretained(event) }
+
+    view.onKeyDown?(nsEvent)
+    return nil // suppress
+}
+
 // MARK: - NSEvent Bridge for Shortcut Recording
 
 /// Hosts an invisible NSView that captures key events for shortcut recording.
@@ -326,13 +389,19 @@ struct ShortcutRecorderBridge: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: ShortcutRecorderView, context: Context) {
-        nsView.isRecording = isRecording
         nsView.onKeyDown = onKeyDown
         nsView.onEscape = onEscape
+        let wasRecording = nsView.isRecording
+        nsView.isRecording = isRecording
         if isRecording {
+            if !wasRecording {
+                nsView.installRecorderTap()
+            }
             DispatchQueue.main.async {
                 nsView.window?.makeFirstResponder(nsView)
             }
+        } else if wasRecording {
+            nsView.removeRecorderTap()
         }
     }
 }
@@ -341,8 +410,57 @@ class ShortcutRecorderView: NSView {
     var isRecording = false
     var onKeyDown: ((NSEvent) -> Void)?
     var onEscape: (() -> Void)?
+    fileprivate var recorderTap: CFMachPort?
+    private var recorderRunLoopSource: CFRunLoopSource?
+    private var retainedSelf: Unmanaged<ShortcutRecorderView>?
 
     override var acceptsFirstResponder: Bool { true }
+
+    deinit {
+        removeRecorderTap()
+    }
+
+    func installRecorderTap() {
+        guard recorderTap == nil else { return } // idempotent
+
+        let eventMask: CGEventMask = 1 << CGEventType.keyDown.rawValue
+        retainedSelf = Unmanaged.passRetained(self)
+
+        guard let tap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .defaultTap,
+            eventsOfInterest: eventMask,
+            callback: recorderEventTapCallback,
+            userInfo: retainedSelf!.toOpaque()
+        ) else {
+            retainedSelf?.release()
+            retainedSelf = nil
+            return
+        }
+
+        recorderTap = tap
+        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+        recorderRunLoopSource = source
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+        CGEvent.tapEnable(tap: tap, enable: true)
+    }
+
+    func removeRecorderTap() {
+        if let tap = recorderTap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+            if let source = recorderRunLoopSource {
+                CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
+                recorderRunLoopSource = nil
+            }
+            CFMachPortInvalidate(tap)
+            recorderTap = nil
+        }
+        if let retained = retainedSelf {
+            retained.release()
+            retainedSelf = nil
+        }
+    }
 
     override func keyDown(with event: NSEvent) {
         guard isRecording else {

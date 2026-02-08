@@ -21,6 +21,8 @@ targets:
         CODE_SIGN_STYLE: "Automatic"
         ENABLE_HARDENED_RUNTIME: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.tabbed.Tabbed
+    dependencies:
+      - sdk: ServiceManagement.framework
     entitlements:
       path: Tabbed/Tabbed.entitlements
   TabbedTests:

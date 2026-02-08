@@ -1,16 +1,130 @@
 import AppKit
 
+// MARK: - CGEvent Tap Callback (file-scope, required by CGEventTapCallBack)
+
+private func hotkeyEventTapCallback(
+    proxy: CGEventTapProxy,
+    type: CGEventType,
+    event: CGEvent,
+    userInfo: UnsafeMutableRawPointer?
+) -> Unmanaged<CGEvent>? {
+    guard let userInfo else { return Unmanaged.passUnretained(event) }
+    let manager = Unmanaged<HotkeyManager>.fromOpaque(userInfo).takeUnretainedValue()
+
+    // Re-enable tap if macOS disabled it (timeout or user input)
+    if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+        if let tap = manager.eventTap {
+            CGEvent.tapEnable(tap: tap, enable: true)
+        }
+        return Unmanaged.passUnretained(event)
+    }
+
+    guard let nsEvent = NSEvent(cgEvent: event) else {
+        return Unmanaged.passUnretained(event)
+    }
+
+    switch type {
+    case .keyDown:
+        if manager.handleKeyDown(nsEvent) {
+            return nil // suppress
+        }
+    case .flagsChanged:
+        manager.handleFlagsChanged(nsEvent)
+    default:
+        break
+    }
+
+    return Unmanaged.passUnretained(event)
+}
+
+// MARK: - System Shortcut Overrides
+
+/// Manages disabling/restoring macOS system shortcuts that conflict with user bindings.
+/// Uses com.apple.symbolichotkeys to disable WindowServer-level shortcuts that
+/// CGEvent taps cannot intercept (e.g., Cmd+` "Move focus to next window").
+private enum SystemShortcutOverride {
+    /// Symbolic hotkey IDs and the (keyCode, cmdModifiers) they correspond to.
+    /// ID 27 = "Move focus to next window" = Cmd+` (keyCode 50, Cmd)
+    /// Note: Cmd+Tab is handled by the Dock, not symbolic hotkeys — the CGEvent tap alone suppresses it.
+    private static let overrides: [(id: Int, keyCode: UInt16, ascii: Int, modifierMask: Int)] = [
+        (27, KeyBinding.keyCodeBacktick, 96, 1048576),  // Cmd+`
+    ]
+
+    /// IDs we've disabled during this session.
+    private static var disabledIDs: Set<Int> = []
+
+    static func syncWithConfig(_ config: ShortcutConfig) {
+        let bindings = [config.cycleTab, config.globalSwitcher]
+        for entry in overrides {
+            let needsDisable = bindings.contains { binding in
+                !binding.isUnbound && binding.keyCode == entry.keyCode &&
+                // Binding uses Cmd (possibly with other mods) and matches this system shortcut
+                (binding.modifiers & UInt(entry.modifierMask)) == UInt(entry.modifierMask)
+            }
+            if needsDisable {
+                disable(id: entry.id, ascii: entry.ascii, keyCode: entry.keyCode, modifierMask: entry.modifierMask)
+            } else {
+                restore(id: entry.id, ascii: entry.ascii, keyCode: entry.keyCode, modifierMask: entry.modifierMask)
+            }
+        }
+    }
+
+    static func restoreAll() {
+        for entry in overrides where disabledIDs.contains(entry.id) {
+            restore(id: entry.id, ascii: entry.ascii, keyCode: entry.keyCode, modifierMask: entry.modifierMask)
+        }
+    }
+
+    private static func disable(id: Int, ascii: Int, keyCode: UInt16, modifierMask: Int) {
+        guard !disabledIDs.contains(id) else { return }
+        disabledIDs.insert(id)
+        writeSymbolicHotKey(id: id, enabled: false, ascii: ascii, keyCode: keyCode, modifierMask: modifierMask)
+        Logger.log("[HK] Disabled system shortcut ID \(id)")
+    }
+
+    private static func restore(id: Int, ascii: Int, keyCode: UInt16, modifierMask: Int) {
+        guard disabledIDs.remove(id) != nil else { return }
+        writeSymbolicHotKey(id: id, enabled: true, ascii: ascii, keyCode: keyCode, modifierMask: modifierMask)
+        Logger.log("[HK] Restored system shortcut ID \(id)")
+    }
+
+    private static func writeSymbolicHotKey(id: Int, enabled: Bool, ascii: Int, keyCode: UInt16, modifierMask: Int) {
+        let plist: [String: Any] = [
+            "enabled": enabled,
+            "value": [
+                "parameters": [ascii, Int(keyCode), modifierMask],
+                "type": "standard"
+            ] as [String: Any]
+        ]
+        // Read current hotkeys, update the specific key, write back
+        var hotkeys = UserDefaults(suiteName: "com.apple.symbolichotkeys")?
+            .dictionary(forKey: "AppleSymbolicHotKeys") as? [String: Any] ?? [:]
+        hotkeys[String(id)] = plist
+        UserDefaults(suiteName: "com.apple.symbolichotkeys")?
+            .set(hotkeys, forKey: "AppleSymbolicHotKeys")
+
+        // Apply immediately via the private SystemAdministration framework
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings")
+        task.arguments = ["-u"]
+        try? task.run()
+    }
+}
+
+// MARK: - HotkeyManager
+
 class HotkeyManager {
     private(set) var config: ShortcutConfig
-    private var globalMonitor: Any?
-    private var localMonitor: Any?
+    fileprivate var eventTap: CFMachPort?
+    private var runLoopSource: CFRunLoopSource?
+    private var retainedSelf: Unmanaged<HotkeyManager>?
 
     var onNewTab: (() -> Void)?
     var onReleaseTab: (() -> Void)?
     var onGroupAllInSpace: (() -> Void)?
-    var onCycleTab: (() -> Void)?
+    var onCycleTab: ((_ reverse: Bool) -> Void)?
     var onSwitchToTab: ((Int) -> Void)?
-    var onGlobalSwitcher: (() -> Void)?
+    var onGlobalSwitcher: ((_ reverse: Bool) -> Void)?
     /// Fires when modifier keys are released (used by both within-group and global switcher).
     var onModifierReleased: (() -> Void)?
     /// Fires when the escape key is pressed. Returns true if handled (event should be consumed).
@@ -24,43 +138,55 @@ class HotkeyManager {
         self.config = config
     }
 
+    deinit {
+        stop()
+    }
+
     func start() {
-        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] event in
-            switch event.type {
-            case .keyDown:
-                self?.handleKeyDown(event)
-            case .flagsChanged:
-                self?.handleFlagsChanged(event)
-            default:
-                break
-            }
+        guard eventTap == nil else { return }
+
+        let eventMask: CGEventMask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.flagsChanged.rawValue)
+        retainedSelf = Unmanaged.passRetained(self)
+
+        guard let tap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .defaultTap,
+            eventsOfInterest: eventMask,
+            callback: hotkeyEventTapCallback,
+            userInfo: retainedSelf!.toOpaque()
+        ) else {
+            Logger.log("[HK] CGEvent tap creation failed — accessibility permissions not granted?")
+            retainedSelf?.release()
+            retainedSelf = nil
+            return
         }
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] event in
-            switch event.type {
-            case .keyDown:
-                if self?.handleKeyDown(event) == true {
-                    return nil
-                }
-            case .flagsChanged:
-                self?.handleFlagsChanged(event)
-            default:
-                break
-            }
-            return event
-        }
+
+        eventTap = tap
+        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+        runLoopSource = source
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+        CGEvent.tapEnable(tap: tap, enable: true)
+        SystemShortcutOverride.syncWithConfig(config)
     }
 
     private var modifierPollTimer: Timer?
 
     func stop() {
+        SystemShortcutOverride.restoreAll()
         stopModifierWatch()
-        if let monitor = globalMonitor {
-            NSEvent.removeMonitor(monitor)
-            globalMonitor = nil
+        if let tap = eventTap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+            if let source = runLoopSource {
+                CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
+                runLoopSource = nil
+            }
+            CFMachPortInvalidate(tap)
+            eventTap = nil
         }
-        if let monitor = localMonitor {
-            NSEvent.removeMonitor(monitor)
-            localMonitor = nil
+        if let retained = retainedSelf {
+            retained.release()
+            retainedSelf = nil
         }
     }
 
@@ -91,9 +217,10 @@ class HotkeyManager {
 
     func updateConfig(_ newConfig: ShortcutConfig) {
         config = newConfig
+        SystemShortcutOverride.syncWithConfig(config)
     }
 
-    private func handleFlagsChanged(_ event: NSEvent) {
+    func handleFlagsChanged(_ event: NSEvent) {
         let currentMods = event.modifierFlags.intersection(.deviceIndependentFlagsMask).rawValue
         // Check if either switcher's required modifiers have been released.
         let cycleMods = config.cycleTab.modifiers
@@ -106,7 +233,7 @@ class HotkeyManager {
     }
 
     @discardableResult
-    private func handleKeyDown(_ event: NSEvent) -> Bool {
+    func handleKeyDown(_ event: NSEvent) -> Bool {
         // Escape — let the handler decide whether to consume
         if event.keyCode == 53 {
             if onEscapePressed?() == true {
@@ -138,12 +265,20 @@ class HotkeyManager {
             onGroupAllInSpace?()
             return true
         }
-        if config.cycleTab.matches(event), !event.isARepeat {
-            onCycleTab?()
+        if config.cycleTab.matches(event) {
+            if !event.isARepeat { onCycleTab?(false) }
+            return true  // suppress even repeats
+        }
+        if config.cycleTab.matchesWithExtraShift(event) {
+            if !event.isARepeat { onCycleTab?(true) }
             return true
         }
-        if config.globalSwitcher.matches(event), !event.isARepeat {
-            onGlobalSwitcher?()
+        if config.globalSwitcher.matches(event) {
+            if !event.isARepeat { onGlobalSwitcher?(false) }
+            return true  // suppress even repeats
+        }
+        if config.globalSwitcher.matchesWithExtraShift(event) {
+            if !event.isARepeat { onGlobalSwitcher?(true) }
             return true
         }
         for (i, binding) in config.switchToTab.enumerated() {

@@ -47,7 +47,12 @@
       "Bash(scripts/*:*)",
       "Bash(swift -e '\nimport AppKit\n// Check if Calculator icon is available via NSWorkspace\nlet ws = NSWorkspace.shared\nlet calcPath = \"\"/System/Applications/Calculator.app\"\"\nlet icon = ws.icon\\(forFile: calcPath\\)\nprint\\(\"\"Workspace icon size: \\\\\\(icon.size\\)\"\"\\)\n\n// Check running apps\nlet apps = ws.runningApplications.filter { $0.localizedName == \"\"Calculator\"\" }\nfor app in apps {\n    print\\(\"\"Running Calculator: pid=\\\\\\(app.processIdentifier\\), icon=\\\\\\(String\\(describing: app.icon\\)\\), iconSize=\\\\\\(app.icon?.size ?? .zero\\)\"\"\\)\n}\nif apps.isEmpty {\n    print\\(\"\"Calculator is not running\"\"\\)\n}\n')",
       "Skill(code-review:code-review)",
-      "Bash(xargs -I{} sh -c 'echo \"\"=== {} ===\"\" && git show {} -- Tabbed/AppDelegate.swift 2>/dev/null | grep -A5 -B2 \"\"applicationWillTerminate\\\\|expandFrame\\\\|setPosition\\\\|setSize\"\" | head -20')"
+      "Bash(xargs -I{} sh -c 'echo \"\"=== {} ===\"\" && git show {} -- Tabbed/AppDelegate.swift 2>/dev/null | grep -A5 -B2 \"\"applicationWillTerminate\\\\|expandFrame\\\\|setPosition\\\\|setSize\"\" | head -20')",
+      "Bash(for f in /Users/tmn/ccode/tabbed/version-a/Tabbed/AppDelegate.swift /Users/tmn/ccode/tabbed/version-a/Tabbed/Platform/*.swift /Users/tmn/ccode/tabbed/version-a/Tabbed/features/TabGroups/*.swift)",
+      "Bash(do wc -l \"$f\")",
+      "Bash(done)",
+      "Bash(for f in /Users/tmn/ccode/tabbed/version-a/Tabbed/features/WindowEventHandlers.swift /Users/tmn/ccode/tabbed/version-a/Tabbed/features/QuickSwitcher/QuickSwitcher.swift /Users/tmn/ccode/tabbed/version-a/Tabbed/features/AutoCapture/AutoCapture.swift)",
+      "Bash(defaults find:*)"
     ]
   }
 }

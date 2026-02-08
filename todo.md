@@ -1,20 +1,22 @@
 ## Next:
    
+- override system shortcuts if set to them (command tab command `)
+- ask to start on startup
+   
 >>>>
 
+---
+bugs
+- in window switch
+---
+
 - maybe: name windows for displation in quick switcher~
-
-- promote worktree branch to main
-
-
-
-- new tab pop in animation especially on auto detection add
-
-
 - fullscreen to unfullscreen restoration
-
 - make sure you can have multiple fullscreen windows on one space and the new app detection logic still joins it to the active one
-
+- space detection might want to be a more baked in primitive.
+    -> right now you can cheeze it which could be fun but its not intended. also no way to move tabs between spaces. need to be intentional here
+    
+- display title on hover tab (preview to hard) IF its shrunk enough
 
 - option to have tabs have a max size and left align, 
     - make sure dragging tab bar has sane behavior
@@ -28,33 +30,26 @@
     
 - maybe: option to always make all lone windows single tabbed windows
 
+
+- maybe: multispace windows: for annoying windows like codex. put it in multiple window groups across spaces, clicking the window moves it to where you are
+
+
 - maybe: option for quick switcher to bring window to you instead of you to window, this way there is no space switch animation
 - wait. this is also how we can clean up mission control view. clicking a tab brings the window here. all other windows live can live on their own desktop away from site (holy moly)
 
 - simplify session restore config options maybe
+~
 
-- close window functionality optional, also have close or disband in menubar prob
-
-hyper tab should allow you to do shift + hyper + tab to go backwards, if users keyboard already has shift, then it should work without shift. this is only listened to if we are already in hyper tab view. wait. hyper includes shift, oh no
+- quick switchers should allow you to do shift + (that shortcut) to go backwards, if users keyboard already has shift, we dont need to support going back
     should hyper be like f18 or something instead?
 
 
 BUGS:
     - signal app specifically (most apps dont but others might) pick up control + tab key shortcut even though im pressing hyper tab
-    - selecting a tabbed window not by clicking does not bring the tabs panel to front
-    - switcher 
-        - 
-    - capture new windows when maximized doesnt work
-    
-    - switching to a tab of a window briefly flashes that apps last used window before correctly showing the tab you clicked (probably activating that app before switching to it or something, but we get 1 frame of the wrong screen)
-    
+    - capture new windows when maximized doesnt work reliably
     - fullscreen restoration on app quit is 2px too short - sometimes. now its stopped
     
-    - session restore is having wrong tab ordering, shows wrong tab as active
-    
     - quiting new tab adder with esc (or any way) should refocus the current tab w/out requiring clickation
-    
-    - fullscreen adjustment stopped working out of nowhere again
 
 - option for quick switcher keys to overwrite command tab and command ` (by windowgroup > by app)
 
@@ -71,7 +66,6 @@ BUGS:
     
 
 Window Handling:
-    - drag tabs between windows. shift to select tabs to drag as group, drag out into its own window or into another window
     - handle changing spaces
         - ux:
             - either: drag tab bar to change, dragging window out does not change it
@@ -85,7 +79,6 @@ Window Handling:
 
 
 Meta Dev:
-    - create a build script that outputs nothing on sucessfull build to help avoid unesessary context stuff
     - set up vscode swift lsp
     - claude swift extension reduce the false positives
     
@@ -124,11 +117,6 @@ matching
 
 
 # Todo
-- If tabbed window is fullscreen AND all windows in space are part of the tabbed window, then any new windows opening in space auto join the tabbed window
-
-- proper alt tab feature with display, both within tabbed window group and system wide
-
-
 - change design
     - maybe make settings to cycle between many different design stlyles, to prototype them out, then pick one (or two?) and delete rest
         - what we have now
@@ -148,7 +136,6 @@ Maybe:
     - 
 
 ## Bugs
-- tab bar sometimes appears in wrong space (desktop)
 
 - going from focus on non-grouped app that is on top of tab bar into grouped app not by clicking can leave non grouped app obsuring the tab bar - or something like that
 

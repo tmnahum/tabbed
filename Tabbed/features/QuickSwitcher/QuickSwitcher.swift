@@ -15,10 +15,10 @@ extension AppDelegate {
         globalMRU.insert(entry, at: 0)
     }
 
-    func handleGlobalSwitcher() {
-        Logger.log("[GS] handleGlobalSwitcher ENTERED")
+    func handleGlobalSwitcher(reverse: Bool) {
+        Logger.log("[GS] handleGlobalSwitcher ENTERED reverse=\(reverse)")
         if switcherController.isActive {
-            switcherController.advance()
+            if reverse { switcherController.retreat() } else { switcherController.advance() }
             return
         }
 
@@ -87,7 +87,7 @@ extension AppDelegate {
             style: switcherConfig.globalStyle,
             scope: .global
         )
-        switcherController.advance()
+        if reverse { switcherController.retreat() } else { switcherController.advance() }
         hotkeyManager?.startModifierWatch(modifiers: hotkeyManager?.config.globalSwitcher.modifiers ?? 0)
     }
 
