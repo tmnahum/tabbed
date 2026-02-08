@@ -1,6 +1,19 @@
 import SwiftUI
 import ServiceManagement
 
+enum SettingsTab: Int {
+    case general, tabBar, shortcuts, switcher
+
+    var contentHeight: CGFloat {
+        switch self {
+        case .general:   return 260
+        case .tabBar:    return 150
+        case .shortcuts: return 520
+        case .switcher:  return 350
+        }
+    }
+}
+
 struct SettingsView: View {
     @State private var config: ShortcutConfig
     @State private var sessionConfig: SessionConfig
@@ -8,6 +21,7 @@ struct SettingsView: View {
     @ObservedObject var tabBarConfig: TabBarConfig
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var recordingAction: ShortcutAction?
+    @State private var selectedTab: SettingsTab = .general
     var onConfigChanged: (ShortcutConfig) -> Void
     var onSessionConfigChanged: (SessionConfig) -> Void
     var onSwitcherConfigChanged: (SwitcherConfig) -> Void
@@ -31,17 +45,24 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             generalTab
                 .tabItem { Label("General", systemImage: "gear") }
+                .tag(SettingsTab.general)
             tabBarTab
                 .tabItem { Label("Tab Bar", systemImage: "paintbrush") }
+                .tag(SettingsTab.tabBar)
             shortcutsTab
                 .tabItem { Label("Shortcuts", systemImage: "keyboard") }
+                .tag(SettingsTab.shortcuts)
             switcherTab
                 .tabItem { Label("Switcher", systemImage: "rectangle.grid.1x2") }
+                .tag(SettingsTab.switcher)
         }
-        .frame(width: 400, height: 540)
+        .frame(width: 400)
+        .onChange(of: selectedTab) { _ in
+            resizeWindowToFit()
+        }
         .onChange(of: sessionConfig.restoreMode) { _ in
             onSessionConfigChanged(sessionConfig)
         }
@@ -384,6 +405,23 @@ struct SettingsView: View {
             if action != .switchToTab(i + 1), config.switchToTab[i] == binding {
                 config.switchToTab[i] = unused
             }
+        }
+    }
+
+    private func resizeWindowToFit() {
+        guard let window = NSApp.windows.first(where: { $0.title == "Tabbed Settings" }) else { return }
+        let newHeight = selectedTab.contentHeight
+        var frame = window.frame
+        let contentHeight = window.contentRect(forFrameRect: frame).height
+        let chrome = frame.height - contentHeight
+        let targetHeight = newHeight + chrome
+        let delta = targetHeight - frame.height
+        frame.origin.y -= delta
+        frame.size.height = targetHeight
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.2
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            window.animator().setFrame(frame, display: true)
         }
     }
 }
