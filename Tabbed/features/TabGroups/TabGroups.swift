@@ -125,13 +125,16 @@ extension AppDelegate {
                   let activeWindow = group.activeWindow,
                   let actualFrame = AccessibilityHelper.getFrame(of: activeWindow.element) else { return }
 
-            let clamped = self.clampFrameForTabBar(actualFrame)
+            let visibleFrame = CoordinateConverter.visibleFrameInAX(at: actualFrame.origin)
+            let result = ScreenCompensation.clampResult(frame: actualFrame, visibleFrame: visibleFrame)
+            let clamped = result.frame
             if !self.framesMatch(clamped, group.frame) {
                 if clamped != actualFrame {
                     self.setExpectedFrame(clamped, for: [activeWindow.id])
                     AccessibilityHelper.setFrame(of: activeWindow.element, to: clamped)
                 }
                 group.frame = clamped
+                group.tabBarSqueezeDelta = result.squeezeDelta
                 let others = group.windows.filter { $0.id != activeWindow.id }
                 if !others.isEmpty {
                     self.setExpectedFrame(clamped, for: others.map(\.id))

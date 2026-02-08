@@ -13,15 +13,16 @@ extension AppDelegate {
 
         if shouldSuppress(windowID: windowID, currentFrame: frame) { return }
 
-        let adjustedFrame = clampFrameForTabBar(frame)
+        let visibleFrame = CoordinateConverter.visibleFrameInAX(at: frame.origin)
+        let clampResult = ScreenCompensation.clampResult(frame: frame, visibleFrame: visibleFrame)
+        let adjustedFrame = clampResult.frame
         if adjustedFrame != frame {
             setExpectedFrame(adjustedFrame, for: [windowID])
             AccessibilityHelper.setFrame(of: activeWindow.element, to: adjustedFrame)
         }
 
         group.frame = adjustedFrame
-        let visibleFrame = CoordinateConverter.visibleFrameInAX(at: frame.origin)
-        group.tabBarSqueezeDelta = ScreenCompensation.clampResult(frame: frame, visibleFrame: visibleFrame).squeezeDelta
+        group.tabBarSqueezeDelta = clampResult.squeezeDelta
 
         let otherIDs = group.windows.filter { $0.id != windowID }.map(\.id)
         setExpectedFrame(adjustedFrame, for: otherIDs)
@@ -56,15 +57,16 @@ extension AppDelegate {
             return
         }
 
-        let adjustedFrame = clampFrameForTabBar(frame)
+        let visibleFrame = CoordinateConverter.visibleFrameInAX(at: frame.origin)
+        let clampResult = ScreenCompensation.clampResult(frame: frame, visibleFrame: visibleFrame)
+        let adjustedFrame = clampResult.frame
         if adjustedFrame != frame {
             setExpectedFrame(adjustedFrame, for: [windowID])
             AccessibilityHelper.setFrame(of: activeWindow.element, to: adjustedFrame)
         }
 
         group.frame = adjustedFrame
-        let visibleFrame = CoordinateConverter.visibleFrameInAX(at: frame.origin)
-        group.tabBarSqueezeDelta = ScreenCompensation.clampResult(frame: frame, visibleFrame: visibleFrame).squeezeDelta
+        group.tabBarSqueezeDelta = clampResult.squeezeDelta
 
         let otherIDs = group.windows.filter { $0.id != windowID }.map(\.id)
         setExpectedFrame(adjustedFrame, for: otherIDs)
@@ -86,7 +88,9 @@ extension AppDelegate {
                   let activeWindow = group.activeWindow,
                   let currentFrame = AccessibilityHelper.getFrame(of: activeWindow.element) else { return }
 
-            let clamped = self.clampFrameForTabBar(currentFrame)
+            let visibleFrame = CoordinateConverter.visibleFrameInAX(at: currentFrame.origin)
+            let result = ScreenCompensation.clampResult(frame: currentFrame, visibleFrame: visibleFrame)
+            let clamped = result.frame
             guard clamped != group.frame else { return }
 
             if clamped != currentFrame {
@@ -94,6 +98,7 @@ extension AppDelegate {
                 AccessibilityHelper.setFrame(of: activeWindow.element, to: clamped)
             }
             group.frame = clamped
+            group.tabBarSqueezeDelta = result.squeezeDelta
             let others = group.windows.filter { $0.id != activeWindow.id }
             self.setExpectedFrame(clamped, for: others.map(\.id))
             for window in others {

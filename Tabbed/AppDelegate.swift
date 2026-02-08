@@ -233,12 +233,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             guard delta > 0 else { continue }
             for window in group.windows {
                 if let frame = AccessibilityHelper.getFrame(of: window.element) {
-                    let expandedFrame = CGRect(
-                        x: frame.origin.x,
-                        y: frame.origin.y - delta,
-                        width: frame.width,
-                        height: frame.height + delta
-                    )
+                    let expandedFrame = ScreenCompensation.expandFrame(frame, undoingSqueezeDelta: delta)
                     AccessibilityHelper.setFrame(of: window.element, to: expandedFrame)
                 }
             }
