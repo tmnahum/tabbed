@@ -224,6 +224,7 @@ extension AppDelegate {
     func handleGroupDissolution(group: TabGroup, panel: TabBarPanel) {
         if autoCaptureGroup === group { deactivateAutoCapture() }
         if lastActiveGroupID == group.id { lastActiveGroupID = nil }
+        globalMRU.removeAll { $0 == .group(group.id) }
 
         if cyclingGroup === group { cyclingGroup = nil }
         resyncWorkItems[group.id]?.cancel()
@@ -252,6 +253,7 @@ extension AppDelegate {
 
         if autoCaptureGroup === group { deactivateAutoCapture() }
         if lastActiveGroupID == group.id { lastActiveGroupID = nil }
+        globalMRU.removeAll { $0 == .group(group.id) }
 
         if cyclingGroup === group { cyclingGroup = nil }
         resyncWorkItems[group.id]?.cancel()

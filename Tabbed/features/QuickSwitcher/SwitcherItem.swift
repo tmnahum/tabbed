@@ -59,4 +59,10 @@ enum SwitcherItem: Identifiable {
         case .group(let g): return g.windows.map(\.id)
         }
     }
+
+    /// Returns a specific window from a group by index, or nil for single windows.
+    func window(at index: Int) -> WindowInfo? {
+        guard case .group(let g) = self else { return nil }
+        return g.windows[safe: index]
+    }
 }

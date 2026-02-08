@@ -1,12 +1,18 @@
 import AppKit
 
+/// Identifies a switchable entity in the global MRU list.
+enum MRUEntry: Equatable {
+    case group(UUID)        // a tab group, tracked by its stable UUID
+    case window(CGWindowID) // a standalone (ungrouped) window
+}
+
 // MARK: - Global Switcher
 
 extension AppDelegate {
 
-    func recordGlobalActivation(pid: pid_t) {
-        globalAppMRU.removeAll { $0 == pid }
-        globalAppMRU.insert(pid, at: 0)
+    func recordGlobalActivation(_ entry: MRUEntry) {
+        globalMRU.removeAll { $0 == entry }
+        globalMRU.insert(entry, at: 0)
     }
 
     func handleGlobalSwitcher() {
@@ -17,63 +23,57 @@ extension AppDelegate {
         }
 
         let zWindows = WindowDiscovery.allSpaces()
-
-        let sortedWindows: [WindowInfo]
-        if globalAppMRU.isEmpty {
-            sortedWindows = zWindows
-        } else {
-            var placed = Set<CGWindowID>()
-            var result: [WindowInfo] = []
-
-            for pid in globalAppMRU {
-                if let window = zWindows.first(where: { $0.ownerPID == pid && !placed.contains($0.id) }) {
-                    result.append(window)
-                    placed.insert(window.id)
-                }
-            }
-
-            for window in zWindows where !placed.contains(window.id) {
-                result.append(window)
-            }
-
-            sortedWindows = result
-        }
-
         let groupFrames = groupManager.groups.map { $0.frame }
 
         var items: [SwitcherItem] = []
         var seenGroupIDs: Set<UUID> = []
+        var seenWindowIDs: Set<CGWindowID> = []
 
-        Logger.log("[GS] groups=\(groupManager.groups.count) windows=\(sortedWindows.count)")
-        for window in sortedWindows {
+        // Phase 1: place items in MRU order
+        for entry in globalMRU {
+            switch entry {
+            case .group(let groupID):
+                guard let group = groupManager.groups.first(where: { $0.id == groupID }),
+                      seenGroupIDs.insert(groupID).inserted else { continue }
+                items.append(.group(group))
+                seenWindowIDs.formUnion(group.windows.map(\.id))
+            case .window(let windowID):
+                guard let window = zWindows.first(where: { $0.id == windowID }),
+                      !seenWindowIDs.contains(windowID),
+                      groupManager.group(for: windowID) == nil else { continue }
+                items.append(.singleWindow(window))
+                seenWindowIDs.insert(windowID)
+            }
+        }
+
+        // Phase 2: remaining windows/groups in z-order
+        for window in zWindows where !seenWindowIDs.contains(window.id) {
             if let group = groupManager.group(for: window.id) {
                 if seenGroupIDs.insert(group.id).inserted {
                     items.append(.group(group))
+                    seenWindowIDs.formUnion(group.windows.map(\.id))
                 }
-                continue
-            }
-
-            if let frame = window.cgBounds {
-                let matchesGroupFrame = groupFrames.contains { gf in
-                    abs(frame.origin.x - gf.origin.x) < 2 &&
-                    abs(frame.origin.y - gf.origin.y) < 2 &&
-                    abs(frame.width - gf.width) < 2 &&
-                    abs(frame.height - gf.height) < 2
+            } else {
+                if let frame = window.cgBounds {
+                    let matchesGroupFrame = groupFrames.contains { gf in
+                        abs(frame.origin.x - gf.origin.x) < 2 &&
+                        abs(frame.origin.y - gf.origin.y) < 2 &&
+                        abs(frame.width - gf.width) < 2 &&
+                        abs(frame.height - gf.height) < 2
+                    }
+                    if matchesGroupFrame { continue }
                 }
-                if matchesGroupFrame { continue }
+                items.append(.singleWindow(window))
+                seenWindowIDs.insert(window.id)
             }
-
-            items.append(.singleWindow(window))
         }
 
+        // Phase 3: groups with no visible members (e.g., on another space)
         for group in groupManager.groups where !seenGroupIDs.contains(group.id) {
             items.append(.group(group))
         }
 
-        if case .singleWindow(let w) = items.first, groupManager.groups.count > 0 {
-            Logger.log("[GS] WARNING: frontmost window \(w.id) is singleWindow but groups exist — possible stale ID")
-        }
-        Logger.log("[GS] items=\(items.map { $0.isGroup ? "G" : "W" }.joined())")
+        Logger.log("[GS] groups=\(groupManager.groups.count) mru=\(globalMRU.count) items=\(items.map { $0.isGroup ? "G" : "W" }.joined())")
 
         guard !items.isEmpty else { return }
 
@@ -113,12 +113,16 @@ extension AppDelegate {
     func commitSwitcherSelection(_ item: SwitcherItem) {
         switch item {
         case .singleWindow(let window):
-            recordGlobalActivation(pid: window.ownerPID)
+            recordGlobalActivation(.window(window.id))
             focusWindow(window)
         case .group(let group):
+            if let subIndex = switcherController.subSelectedWindowIndex {
+                group.switchTo(index: subIndex)
+            }
             guard let activeWindow = group.activeWindow else { return }
-            recordGlobalActivation(pid: activeWindow.ownerPID)
+            recordGlobalActivation(.group(group.id))
             lastActiveGroupID = group.id
+            group.recordFocus(windowID: activeWindow.id)
             focusWindow(activeWindow)
             if let panel = tabBarPanels[group.id] {
                 panel.orderAbove(windowID: activeWindow.id)

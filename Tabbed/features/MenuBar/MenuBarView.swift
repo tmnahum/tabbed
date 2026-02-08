@@ -97,6 +97,7 @@ struct MenuBarView: View {
                 .fill(Color.primary.opacity(0.05))
         )
         .padding(.horizontal, 4)
+        .padding(.vertical, 2)
     }
 }
 

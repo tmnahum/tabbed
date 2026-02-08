@@ -30,7 +30,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     weak var cyclingGroup: TabGroup?
     var cycleEndTime: Date?
     static let cycleCooldownDuration: TimeInterval = 0.15
-    var globalAppMRU: [pid_t] = []
+    var globalMRU: [MRUEntry] = []
 
     var isCycleCooldownActive: Bool {
         cycleEndTime.map { Date().timeIntervalSince($0) < Self.cycleCooldownDuration } ?? false

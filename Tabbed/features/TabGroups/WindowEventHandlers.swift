@@ -175,8 +175,6 @@ extension AppDelegate {
         guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
         let pid = app.processIdentifier
 
-        recordGlobalActivation(pid: pid)
-
         let appElement = AccessibilityHelper.appElement(for: pid)
         var focusedValue: AnyObject?
         let result = AXUIElementCopyAttributeValue(
@@ -185,9 +183,19 @@ extension AppDelegate {
         guard result == .success,
               let focusedRef = focusedValue else { return }
         let windowElement = focusedRef as! AXUIElement // swiftlint:disable:this force_cast
+        guard let windowID = AccessibilityHelper.windowID(for: windowElement) else { return }
 
-        guard let windowID = AccessibilityHelper.windowID(for: windowElement),
-              let group = groupManager.group(for: windowID),
+        // Record entity-level MRU (skip during active switcher sessions)
+        if !switcherController.isActive {
+            if let group = groupManager.group(for: windowID) {
+                recordGlobalActivation(.group(group.id))
+            } else {
+                recordGlobalActivation(.window(windowID))
+            }
+        }
+
+        // Group state updates
+        guard let group = groupManager.group(for: windowID),
               let panel = tabBarPanels[group.id] else { return }
 
         let previousID = group.activeWindow?.id

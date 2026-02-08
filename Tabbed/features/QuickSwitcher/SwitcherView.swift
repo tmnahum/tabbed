@@ -6,6 +6,8 @@ struct SwitcherView: View {
     let style: SwitcherStyle
     let showLeadingOverflow: Bool
     let showTrailingOverflow: Bool
+    /// When non-nil, the selected group item has a sub-selected window at this index.
+    var subSelectedWindowIndex: Int? = nil
 
     /// Maximum icons to show stacked for a group entry.
     private static let maxGroupIcons = 4
@@ -24,6 +26,24 @@ struct SwitcherView: View {
             VisualEffectBackground(material: .hudWindow, blendingMode: .behindWindow)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
         )
+    }
+
+    // MARK: - Display Helpers
+
+    /// Returns the display title for an item, accounting for sub-selection.
+    private func displayTitle(for item: SwitcherItem, isSelected: Bool) -> String {
+        if isSelected, let subIndex = subSelectedWindowIndex, let window = item.window(at: subIndex) {
+            return window.title.isEmpty ? window.appName : window.title
+        }
+        return item.displayTitle
+    }
+
+    /// Returns the app name for an item, accounting for sub-selection.
+    private func displayAppName(for item: SwitcherItem, isSelected: Bool) -> String {
+        if isSelected, let subIndex = subSelectedWindowIndex, let window = item.window(at: subIndex) {
+            return window.appName
+        }
+        return item.appName
     }
 
     // MARK: - App Icons Style
@@ -52,7 +72,18 @@ struct SwitcherView: View {
     private func iconCell(item: SwitcherItem, isSelected: Bool) -> some View {
         VStack(spacing: 6) {
             ZStack {
-                if item.isGroup {
+                if isSelected, let subIndex = subSelectedWindowIndex, let window = item.window(at: subIndex) {
+                    // Sub-selected: show the specific window's icon
+                    if let icon = window.icon {
+                        Image(nsImage: icon)
+                            .resizable()
+                            .frame(width: 64, height: 64)
+                    } else {
+                        Image(systemName: "macwindow")
+                            .font(.system(size: 40))
+                            .frame(width: 64, height: 64)
+                    }
+                } else if item.isGroup {
                     groupedIconStack(icons: item.icons)
                 } else if let icon = item.icons.first ?? nil {
                     Image(nsImage: icon)
@@ -75,7 +106,7 @@ struct SwitcherView: View {
                     .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2.5)
             )
 
-            Text(item.appName)
+            Text(displayAppName(for: item, isSelected: isSelected))
                 .font(.system(size: 11))
                 .lineLimit(1)
                 .foregroundStyle(isSelected ? .primary : .secondary)
@@ -139,9 +170,22 @@ struct SwitcherView: View {
     }
 
     private func titleRow(item: SwitcherItem, isSelected: Bool) -> some View {
-        HStack(spacing: 10) {
+        let title = displayTitle(for: item, isSelected: isSelected)
+        let appName = displayAppName(for: item, isSelected: isSelected)
+
+        return HStack(spacing: 10) {
             // Icon(s)
-            if item.isGroup {
+            if isSelected, let subIndex = subSelectedWindowIndex, let window = item.window(at: subIndex) {
+                // Sub-selected: show the specific window's icon
+                if let icon = window.icon {
+                    Image(nsImage: icon)
+                        .resizable()
+                        .frame(width: 24, height: 24)
+                } else {
+                    Image(systemName: "macwindow")
+                        .frame(width: 24, height: 24)
+                }
+            } else if item.isGroup {
                 groupedIconRowStack(icons: item.icons)
                     .frame(width: 32, height: 24)
             } else if let icon = item.icons.first ?? nil {
@@ -153,7 +197,7 @@ struct SwitcherView: View {
                     .frame(width: 24, height: 24)
             }
 
-            Text("\(item.appName) — \(item.displayTitle)")
+            Text("\(appName) — \(title)")
                 .font(.system(size: 13))
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -161,12 +205,21 @@ struct SwitcherView: View {
             Spacer()
 
             if item.windowCount > 1 {
-                Text("\(item.windowCount)")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(Color.primary.opacity(0.08)))
+                if isSelected, let subIndex = subSelectedWindowIndex {
+                    Text("\(subIndex + 1)/\(item.windowCount)")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Color.accentColor.opacity(0.15)))
+                } else {
+                    Text("\(item.windowCount)")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Color.primary.opacity(0.08)))
+                }
             }
         }
         .padding(.horizontal, 10)

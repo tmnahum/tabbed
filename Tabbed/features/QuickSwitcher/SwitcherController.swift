@@ -13,7 +13,11 @@ class SwitcherController {
     private var items: [SwitcherItem] = []
     private var selectedIndex: Int = 0
     private var style: SwitcherStyle = .appIcons
-    private var scope: Scope = .global
+    private(set) var scope: Scope = .global
+
+    /// When non-nil, the user is sub-selecting within a group item.
+    /// Value is an index into the group's `windows` array.
+    private(set) var subSelectedWindowIndex: Int?
 
     /// Called when the user commits a selection. Passes the selected SwitcherItem.
     var onCommit: ((SwitcherItem) -> Void)?
@@ -31,6 +35,7 @@ class SwitcherController {
         self.style = style
         self.scope = scope
         self.selectedIndex = 0
+        self.subSelectedWindowIndex = nil
 
         updatePanel()
     }
@@ -39,13 +44,26 @@ class SwitcherController {
 
     func advance() {
         guard !items.isEmpty else { return }
+        subSelectedWindowIndex = nil
         selectedIndex = (selectedIndex + 1) % items.count
         updatePanelContent()
     }
 
     func retreat() {
         guard !items.isEmpty else { return }
+        subSelectedWindowIndex = nil
         selectedIndex = (selectedIndex - 1 + items.count) % items.count
+        updatePanelContent()
+    }
+
+    /// Cycle through windows within the currently selected group item.
+    /// No-op if the selected item is not a multi-window group.
+    func cycleWithinGroup() {
+        guard scope == .global, !items.isEmpty, selectedIndex < items.count else { return }
+        guard case .group(let group) = items[selectedIndex], group.windows.count > 1 else { return }
+
+        let current = subSelectedWindowIndex ?? group.activeIndex
+        subSelectedWindowIndex = (current + 1) % group.windows.count
         updatePanelContent()
     }
 
@@ -86,7 +104,8 @@ class SwitcherController {
             selectedIndex: visible.adjustedIndex,
             style: style,
             showLeadingOverflow: visible.leadingOverflow,
-            showTrailingOverflow: visible.trailingOverflow
+            showTrailingOverflow: visible.trailingOverflow,
+            subSelectedWindowIndex: subSelectedWindowIndex
         )
 
         let hostingView: NSHostingView<SwitcherView>
@@ -160,5 +179,6 @@ class SwitcherController {
         panel = nil
         items = []
         selectedIndex = 0
+        subSelectedWindowIndex = nil
     }
 }

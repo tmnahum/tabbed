@@ -5,6 +5,12 @@ import AppKit
 extension AppDelegate {
 
     func handleHotkeyCycleTab() {
+        // If the global switcher is active, cycle within the selected group
+        if switcherController.isActive, switcherController.scope == .global {
+            switcherController.cycleWithinGroup()
+            return
+        }
+
         guard let (group, _) = activeGroup() else { return }
         guard group.windows.count > 1 else { return }
 
