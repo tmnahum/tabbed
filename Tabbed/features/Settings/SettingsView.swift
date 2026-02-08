@@ -60,7 +60,6 @@ struct SettingsView: View {
                 .tag(SettingsTab.switcher)
         }
         .frame(width: 400)
-        .transaction { $0.animation = nil }
         .onChange(of: selectedTab) { _ in
             resizeWindowToFit()
         }
@@ -432,11 +431,7 @@ struct SettingsView: View {
         let delta = targetHeight - frame.height
         frame.origin.y -= delta
         frame.size.height = targetHeight
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.2
-            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            window.animator().setFrame(frame, display: true)
-        }
+        window.setFrame(frame, display: true)
     }
 }
 
