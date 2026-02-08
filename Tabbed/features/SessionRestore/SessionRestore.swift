@@ -25,8 +25,10 @@ extension AppDelegate {
             let restoredFrame = clampFrameForTabBar(savedFrame)
             let squeezeDelta = restoredFrame.origin.y - savedFrame.origin.y
             let effectiveSqueezeDelta = max(snapshot.tabBarSqueezeDelta, squeezeDelta)
-            // Default to whichever matched window is already frontmost (z-order)
-            // rather than the saved activeIndex, so we don't need to raise/activate.
+            // Intentionally use the frontmost window (z-order) as the active tab
+            // rather than the saved activeIndex. This ensures the highlighted tab
+            // matches what's visually on top, so the user's current view isn't
+            // disrupted by raising a different window during restore.
             let frontmostIndex = matchedWindows.indices.min(by: { a, b in
                 let zA = liveWindows.firstIndex(where: { $0.id == matchedWindows[a].id }) ?? .max
                 let zB = liveWindows.firstIndex(where: { $0.id == matchedWindows[b].id }) ?? .max
