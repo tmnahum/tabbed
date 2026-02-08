@@ -3,6 +3,7 @@ import CoreGraphics
 
 /// A serializable snapshot of a single window within a group.
 struct WindowSnapshot: Codable {
+    let windowID: CGWindowID   // exact match when the window still exists
     let bundleID: String
     let title: String
     let appName: String

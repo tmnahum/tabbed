@@ -11,6 +11,7 @@ enum SessionManager {
             GroupSnapshot(
                 windows: group.windows.map { window in
                     WindowSnapshot(
+                        windowID: window.id,
                         bundleID: window.bundleID,
                         title: window.title,
                         appName: window.appName
@@ -39,8 +40,10 @@ enum SessionManager {
     /// Returns nil if the group can't be restored under the given mode.
     /// Returns matched WindowInfos (in snapshot order) on success.
     ///
-    /// Space-aware: after the first window is matched, subsequent candidates
-    /// prefer windows on the same Space to avoid cross-space capture.
+    /// Matching priority:
+    /// 1. CGWindowID — same window still exists (app stayed running)
+    /// 2. bundleID + title — app restarted but window title matches
+    /// 3. No match — skip the entry (no bundleID-only fallback)
     static func matchGroup(
         snapshot: GroupSnapshot,
         liveWindows: [WindowInfo],
@@ -49,45 +52,31 @@ enum SessionManager {
     ) -> [WindowInfo]? {
         var claimed = alreadyClaimed
         var matched: [WindowInfo] = []
-        var groupSpace: UInt64?
 
         for snap in snapshot.windows {
-            let candidates = liveWindows.filter { w in
-                !claimed.contains(w.id) && w.bundleID == snap.bundleID
-            }
-
-            // Prefer candidates on the same Space as already-matched windows
-            let preferred: [WindowInfo]
-            if let space = groupSpace {
-                let sameSpace = candidates.filter { spaceForWindow($0.id) == space }
-                preferred = sameSpace.isEmpty ? candidates : sameSpace
-            } else {
-                preferred = candidates
-            }
-
-            if let window = preferred.first(where: { $0.title == snap.title })
-                          ?? candidates.first(where: { $0.title == snap.title })
-                          ?? preferred.first
-                          ?? candidates.first {
-                matched.append(window)
-                claimed.insert(window.id)
-                if groupSpace == nil { groupSpace = spaceForWindow(window.id) }
+            // 1. Exact CGWindowID match — window still exists
+            if let byID = liveWindows.first(where: { $0.id == snap.windowID && !claimed.contains($0.id) }) {
+                matched.append(byID)
+                claimed.insert(byID.id)
                 continue
             }
 
-            // No candidates at all (app not running).
-            // Smart mode: ALL apps must be present, so fail the whole group.
+            // 2. Fallback: bundleID + title (app restarted, window has same title)
+            if let byTitle = liveWindows.first(where: {
+                !claimed.contains($0.id) && $0.bundleID == snap.bundleID && $0.title == snap.title
+            }) {
+                matched.append(byTitle)
+                claimed.insert(byTitle.id)
+                continue
+            }
+
+            // 3. No match — skip this window.
+            // Smart mode: ALL windows must be present, so fail the whole group.
             if mode == .smart {
                 return nil
             }
         }
 
         return matched.isEmpty ? nil : matched
-    }
-
-    private static func spaceForWindow(_ windowID: CGWindowID) -> UInt64? {
-        let conn = CGSMainConnectionID()
-        let spaces = CGSCopySpacesForWindows(conn, 0x7, [windowID] as CFArray) as? [UInt64] ?? []
-        return spaces.first
     }
 }

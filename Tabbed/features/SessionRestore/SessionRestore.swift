@@ -5,7 +5,7 @@ import AppKit
 extension AppDelegate {
 
     func restoreSession(snapshots: [GroupSnapshot], mode: RestoreMode) {
-        let liveWindows = WindowDiscovery.allSpaces(includeHidden: true).filter {
+        let liveWindows = WindowDiscovery.allSpaces().filter {
             !groupManager.isWindowGrouped($0.id)
         }
 
