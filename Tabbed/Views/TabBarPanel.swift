@@ -21,7 +21,7 @@ class TabBarPanel: NSPanel {
         self.backgroundColor = .clear
         self.isMovableByWindowBackground = false
         self.animationBehavior = .none
-        self.collectionBehavior = [.transient, .ignoresCycle, .fullScreenDisallowsTiling]
+        self.collectionBehavior = [.managed, .ignoresCycle, .fullScreenDisallowsTiling]
 
         let visualEffect = NSVisualEffectView(frame: self.contentView!.bounds)
         visualEffect.autoresizingMask = [.width, .height]

@@ -1,3 +1,11 @@
+# uncommited from main branch
+1. Frame-based notification suppression (e8a572c) — replaced time-based suppression with frame-based
+    - (related to distinguishing movement notifs that came from itself type shit)                                                    
+3. Focus-change listener for auto-capture (0bc3f81) — replaced polling with a focus-change listener for tab drag-outs                 
+4. Simplified session restore (9ef511c) — single toggle (restoreOnLaunch) instead of the restore mode enum, plus cross-Space window 
+matching   
+
+
 # Todo
 - If tabbed window is fullscreen AND all windows in space are part of the tabbed window, then any new windows opening in space auto join the tabbed window
 
