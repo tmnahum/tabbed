@@ -369,7 +369,7 @@ struct TabBarView: View {
                 onMoveToNewGroup(targets)
             }
             Divider()
-            Button("Close Windows") {
+            Button(targets.count == 1 ? "Close Window" : "Close Windows") {
                 selectedIDs = []
                 onCloseTabs(targets)
             }
