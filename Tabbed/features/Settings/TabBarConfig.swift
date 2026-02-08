@@ -6,7 +6,11 @@ enum TabBarStyle: String, Codable, CaseIterable {
 }
 
 class TabBarConfig: ObservableObject, Codable {
-    @Published var style: TabBarStyle
+    @Published var style: TabBarStyle {
+        didSet {
+            if style != oldValue { save() }
+        }
+    }
 
     static let `default` = TabBarConfig(style: .equal)
 

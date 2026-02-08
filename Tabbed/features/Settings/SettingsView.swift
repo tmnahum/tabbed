@@ -52,9 +52,7 @@ struct SettingsView: View {
         .onChange(of: switcherConfig.tabCycleStyle) { _ in
             onSwitcherConfigChanged(switcherConfig)
         }
-        .onChange(of: tabBarConfig.style) { _ in
-            tabBarConfig.save()
-        }
+        // tabBarConfig auto-saves via didSet on its style property
         .background(ShortcutRecorderBridge(
             isRecording: recordingAction != nil,
             onKeyDown: { event in
