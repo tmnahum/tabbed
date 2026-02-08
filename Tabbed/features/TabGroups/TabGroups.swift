@@ -87,7 +87,9 @@ extension AppDelegate {
         squeezeDelta: CGFloat,
         activeIndex: Int = 0
     ) -> TabGroup? {
-        guard let group = groupManager.createGroup(with: windows, frame: frame) else { return nil }
+        let spaceID = windows.first.flatMap { SpaceUtils.spaceID(for: $0.id) } ?? 0
+        guard let group = groupManager.createGroup(with: windows, frame: frame, spaceID: spaceID) else { return nil }
+        Logger.log("[SPACE] Created group \(group.id) on space \(spaceID)")
         group.tabBarSqueezeDelta = squeezeDelta
         group.switchTo(index: activeIndex)
 
