@@ -2,9 +2,21 @@ import XCTest
 @testable import Tabbed
 
 final class TabBarConfigTests: XCTestCase {
+    private var savedConfigData: Data?
+
     override func setUp() {
         super.setUp()
+        savedConfigData = UserDefaults.standard.data(forKey: "tabBarConfig")
         UserDefaults.standard.removeObject(forKey: "tabBarConfig")
+    }
+
+    override func tearDown() {
+        if let data = savedConfigData {
+            UserDefaults.standard.set(data, forKey: "tabBarConfig")
+        } else {
+            UserDefaults.standard.removeObject(forKey: "tabBarConfig")
+        }
+        super.tearDown()
     }
 
     func testDefaultStyle() {
