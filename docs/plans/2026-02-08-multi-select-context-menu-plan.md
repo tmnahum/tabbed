@@ -176,6 +176,15 @@ func testMoveTabsNoOpWhenAlreadyInPlace() {
     group.moveTabs(withIDs: [1, 2], toIndex: 0)
     XCTAssertEqual(group.windows.map(\.id), [1, 2, 3])
 }
+
+func testMoveTabsActiveNotMoved() {
+    let group = TabGroup(windows: [makeWindow(id: 1), makeWindow(id: 2), makeWindow(id: 3), makeWindow(id: 4)], frame: .zero)
+    group.switchTo(index: 1) // Window 2 is active
+    // Move windows 3,4 to the beginning; window 2 should stay active
+    group.moveTabs(withIDs: [3, 4], toIndex: 0)
+    XCTAssertEqual(group.windows.map(\.id), [3, 4, 1, 2])
+    XCTAssertEqual(group.activeWindow?.id, 2)
+}
 ```
 
 **Step 2: Run test to verify it fails**
@@ -403,6 +412,9 @@ struct TabBarView: View {
             // Clear stale selection when windows are externally added/removed
             let validIDs = Set(group.windows.map(\.id))
             selectedIDs = selectedIDs.intersection(validIDs)
+            if let idx = lastClickedIndex, idx >= group.windows.count {
+                lastClickedIndex = nil
+            }
         }
     }
 
