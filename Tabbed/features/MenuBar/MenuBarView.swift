@@ -21,9 +21,14 @@ struct MenuBarView: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
             } else {
-                ForEach(groupManager.groups) { group in
-                    groupRow(group)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(groupManager.groups) { group in
+                            groupRow(group)
+                        }
+                    }
                 }
+                .frame(maxHeight: 300)
             }
 
             menuItem("New Group", systemImage: "plus") {
