@@ -1,18 +1,19 @@
-## Next:
-- drag window conflicts with drag out tabs
+## todo:
 
-- fullscreen restoration
-- display title on hover tab (preview to hard) IF the tabs are shrunk enough
+- [x] fullscreen restoration
+    - can maybe improve was tired when designed this
+- [x]display title on hover tab (preview to hard) IF the tabs are shrunk enough
 - new tab to the right (right click on tab)
 
 - virtual tabs (brainstorm w superpowers)
     - if a tab is virtual, it can exist in multiple spaces at once
-    - 
+    - ok nevermind switching spaces is impoossible
 
 - pinned tabs:
     - tabs are left aliggned. jut show their icon. still draggable but only among other left aligned stuff
     - right click to pin/unpin, can also drag into / outof pin area
-    
+
+--- 
 - launch app? / spotlight alternative?
     - alt new tab ui
     - either: inspired by chrome/ff, or by arc
@@ -24,8 +25,12 @@
                 - 2) windows outside of space (virtualized badge)
                 - 3) apps to launch in space and then capture
                 - 4) web pages, powered by connection to browser of your choice, opening these opens a new window of browser of your choice in new tab
-   
->>>>
+
+- glassify the new tab pane
+
+- run code simplifier, do throrough review and refactor, in new branch for saftey
+
+- new feature: browser integration
 
 - separate keyboard shortcut for remove current tab from space and close current tab
  -> ig theres q for app... but im thinking hyper w should close it. maybe command or hyper shift w should which is already browsers standard
