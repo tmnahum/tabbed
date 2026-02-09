@@ -397,7 +397,7 @@ extension AppDelegate {
 
         Logger.log("[AutoCapture] Capturing window \(window.id) (\(window.appName): \(window.title)) [\(source)]")
         setExpectedFrame(group.frame, for: [window.id])
-        addWindow(window, to: group)
+        addWindow(window, to: group, afterActive: true)
         // Note: addWindow already calls evaluateAutoCapture()
         return true
     }

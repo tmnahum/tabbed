@@ -324,7 +324,7 @@ extension AppDelegate {
         evaluateAutoCapture()
     }
 
-    func addWindow(_ window: WindowInfo, to group: TabGroup) {
+    func addWindow(_ window: WindowInfo, to group: TabGroup, afterActive: Bool = false) {
         if group.spaceID != 0,
            let windowSpace = SpaceUtils.spaceID(for: window.id),
            windowSpace != group.spaceID {
@@ -334,8 +334,8 @@ extension AppDelegate {
         globalMRU.removeAll { $0 == .window(window.id) }
         setExpectedFrame(group.frame, for: [window.id])
         AccessibilityHelper.setFrame(of: window.element, to: group.frame)
-        // If active tab is from the same app, insert right after it
-        let insertAfterActive = group.activeWindow.map { $0.bundleID == window.bundleID } ?? false
+        // Insert right after active tab if forced (auto-capture) or same app
+        let insertAfterActive = afterActive || (group.activeWindow.map { $0.bundleID == window.bundleID } ?? false)
         let insertionIndex = insertAfterActive ? group.activeIndex + 1 : nil
         groupManager.addWindow(window, to: group, at: insertionIndex)
         windowObserver.observe(window: window)
