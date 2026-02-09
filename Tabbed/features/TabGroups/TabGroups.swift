@@ -24,10 +24,6 @@ extension AppDelegate {
                 self?.createGroup(with: windows)
                 self?.dismissWindowPicker()
             },
-            onTabAllInSpace: { [weak self] in
-                self?.tabAllInSpace()
-                self?.dismissWindowPicker()
-            },
             onAddToGroup: { [weak self] window in
                 guard let group = group else { return }
                 self?.addWindow(window, to: group, at: insertAt)
@@ -67,14 +63,6 @@ extension AppDelegate {
         let ungrouped = allWindows.filter { !groupManager.isWindowGrouped($0.id) }
         guard !ungrouped.isEmpty else { return }
         createGroup(with: ungrouped)
-    }
-
-    func tabAllInSpace() {
-        let allWindows = WindowDiscovery.currentSpace()
-        let ungrouped = allWindows.filter { !groupManager.isWindowGrouped($0.id) }
-        for window in ungrouped {
-            createGroup(with: [window])
-        }
     }
 
     func createGroup(with windows: [WindowInfo]) {

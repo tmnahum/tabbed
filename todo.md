@@ -1,3 +1,6 @@
+- tab all in space to easy to click
+- bug, double clicking to confirm close accidentally double clicks the tab bar and fullscreens
+
 ## todo:
 
 - [x] fullscreen restoration

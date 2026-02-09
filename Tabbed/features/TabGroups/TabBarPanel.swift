@@ -183,15 +183,23 @@ class TabBarPanel: NSPanel {
         switch event.type {
         case .leftMouseDown:
             dismissTooltip()
-            if event.clickCount == 2 {
-                onBarDoubleClicked?()
-                return
-            }
             barDragStartMouse = NSEvent.mouseLocation
             barDragStartPanelOrigin = self.frame.origin
             mouseDownLocalPoint = event.locationInWindow
             isBarDragging = false
             isTabDrag = false
+
+            // Treat double-click as a zoom/“titlebar” double-click when it lands
+            // either on the bar background *or* on a tab body, but never when it
+            // lands on tab controls (close/confirm, release, etc.).
+            if event.clickCount == 2 {
+                let localPoint = mouseDownLocalPoint ?? event.locationInWindow
+                if isOnBackground(localPoint) || !isOnTabControl(localPoint) {
+                    onBarDoubleClicked?()
+                    return
+                }
+            }
+
             super.sendEvent(event)
 
         case .leftMouseDragged:
@@ -315,6 +323,71 @@ class TabBarPanel: NSPanel {
         // After tab content = background (+ button still clickable via mouseDown passthrough)
         if point.x > tabContentEndX {
             return true
+        }
+
+        return false
+    }
+
+    /// Check if a point is within the trailing control area of any tab
+    /// (close/confirm, release, etc.). Used to *suppress* treating double-clicks
+    /// as zoom when the user is interacting with those controls.
+    private func isOnTabControl(_ point: NSPoint) -> Bool {
+        // Background (including left/right padding and areas with no tabs)
+        // is never considered a control region.
+        if isOnBackground(point) {
+            return false
+        }
+
+        guard let group,
+              let tabBarConfig,
+              !group.windows.isEmpty else {
+            return false
+        }
+
+        let tabCount = group.windows.count
+        let panelWidth = frame.width
+        let panelHeight = frame.height
+
+        let verticalPad: CGFloat = 2
+        let showHandle = tabBarConfig.showDragHandle
+        let leadingPad: CGFloat = showHandle ? 4 : 2
+        let trailingPad: CGFloat = 4
+        let handleWidth: CGFloat = showHandle ? TabBarView.dragHandleWidth : 0
+
+        // Points in top/bottom padding are not on controls
+        if point.y < verticalPad || point.y > panelHeight - verticalPad {
+            return false
+        }
+
+        let availableWidth = panelWidth - leadingPad - trailingPad - TabBarView.addButtonWidth - handleWidth
+        let isCompact = tabBarConfig.style == .compact
+
+        let spacing: CGFloat = tabCount > 1 ? 1 : 0
+        let tabWidth: CGFloat
+        if isCompact {
+            tabWidth = min(
+                (availableWidth - spacing * CGFloat(max(0, tabCount - 1))) / CGFloat(tabCount),
+                TabBarView.maxCompactTabWidth
+            )
+        } else {
+            tabWidth = availableWidth / CGFloat(tabCount)
+        }
+
+        let tabContentStartX = leadingPad + handleWidth
+
+        // Approximate the trailing control hit area as the last 22pt of each tab.
+        // The actual close/confirm button is a 16×16 square with horizontal padding,
+        // so 22pt is a safe, slightly generous bound.
+        let controlInset: CGFloat = 22
+
+        for index in 0..<tabCount {
+            let tabOriginX = tabContentStartX + CGFloat(index) * (tabWidth + spacing)
+            let tabEndX = tabOriginX + tabWidth
+            let controlStartX = max(tabOriginX, tabEndX - controlInset)
+
+            if point.x >= controlStartX && point.x <= tabEndX {
+                return true
+            }
         }
 
         return false

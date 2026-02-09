@@ -7,7 +7,6 @@ struct MenuBarView: View {
     var shortcutConfig: ShortcutConfig
     var onNewGroup: () -> Void
     var onAllInSpace: () -> Void
-    var onTabAllInSpace: () -> Void
     var onRestoreSession: () -> Void
     var onFocusWindow: (WindowInfo) -> Void
     var onDisbandGroup: (TabGroup) -> Void
@@ -32,10 +31,6 @@ struct MenuBarView: View {
 
             menuItem("Group All in Space", systemImage: "rectangle.stack.fill", shortcutHint: shortcutConfig.groupAllInSpace.displayString) {
                 onAllInSpace()
-            }
-
-            menuItem("Tab All in Space", systemImage: "square.stack") {
-                onTabAllInSpace()
             }
 
             if sessionState.hasPendingSession {

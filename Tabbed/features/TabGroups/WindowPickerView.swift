@@ -4,7 +4,6 @@ struct WindowPickerView: View {
     @ObservedObject var windowManager: WindowManager
     @ObservedObject var groupManager: GroupManager
     let onCreateGroup: ([WindowInfo]) -> Void
-    let onTabAllInSpace: () -> Void
     let onAddToGroup: (WindowInfo) -> Void
     let onMergeGroup: (TabGroup) -> Void
     let onDismiss: () -> Void
@@ -327,10 +326,6 @@ struct WindowPickerView: View {
                     let allUngrouped = windowManager.availableWindows.filter { !groupManager.isWindowGrouped($0.id) }
                     guard !allUngrouped.isEmpty else { return }
                     onCreateGroup(allUngrouped)
-                }
-                .disabled(windowManager.availableWindows.filter { !groupManager.isWindowGrouped($0.id) }.isEmpty)
-                Button("Tab All in Space") {
-                    onTabAllInSpace()
                 }
                 .disabled(windowManager.availableWindows.filter { !groupManager.isWindowGrouped($0.id) }.isEmpty)
                 Spacer()
