@@ -208,6 +208,8 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            .toggleStyle(.checkbox)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
 
@@ -221,6 +223,8 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            .toggleStyle(.checkbox)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
 
@@ -491,7 +495,7 @@ enum ShortcutAction: Equatable {
         case .groupAllInSpace: return "Group All in Space"
         case .cycleTab: return "Cycle Tabs (MRU)"
         case .globalSwitcher: return "Global Switcher"
-        case .switchToTab(let n): return "Switch to Tab \(n)"
+        case .switchToTab(let n): return n == 9 ? "Switch to Last Tab" : "Switch to Tab \(n)"
         }
     }
 }
