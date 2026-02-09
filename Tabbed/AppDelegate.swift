@@ -211,10 +211,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 self?.popover.performClose(nil)
                 self?.groupAllInSpace()
             },
-            onTabAllInSpace: { [weak self] in
-                self?.popover.performClose(nil)
-                self?.tabAllInSpace()
-            },
             onRestoreSession: { [weak self] in
                 self?.popover.performClose(nil)
                 self?.restorePreviousSession()
