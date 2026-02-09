@@ -12,8 +12,9 @@ struct WindowInfo: Identifiable, Equatable {
     /// CG-reported bounds; available for all windows including off-space ones
     /// where the AX element is a placeholder app element.
     var cgBounds: CGRect?
+    var isFullscreened: Bool = false
 
     static func == (lhs: WindowInfo, rhs: WindowInfo) -> Bool {
-        lhs.id == rhs.id
+        lhs.id == rhs.id && lhs.isFullscreened == rhs.isFullscreened
     }
 }

@@ -66,13 +66,18 @@ enum SwitcherItem: Identifiable {
         return g.windows[safe: index]
     }
 
-    /// Icons for ZStack display, capped to `maxVisible`.
+    /// Icon + fullscreen state for ZStack display, capped to `maxVisible`.
     /// Shows a sliding window into the MRU list anchored on the target.
     ///
     /// ZStack renders last element on top, so returned array is:
     ///   [0] = furthest from target (back)  ...  [last] = target (top)
-    func iconsInMRUOrder(frontIndex: Int?, maxVisible: Int) -> [NSImage?] {
-        guard case .group(let g) = self else { return icons }
+    func iconsInMRUOrder(frontIndex: Int?, maxVisible: Int) -> [(icon: NSImage?, isFullscreened: Bool)] {
+        guard case .group(let g) = self else {
+            if case .singleWindow(let w) = self {
+                return [(icon: w.icon, isFullscreened: w.isFullscreened)]
+            }
+            return []
+        }
 
         // Build MRU list: most-recent first, windows without history at the end
         let windowIDs = Set(g.windows.map(\.id))
@@ -97,6 +102,16 @@ enum SwitcherItem: Identifiable {
         }
 
         // Reverse for ZStack: target (first in visible) becomes last (on top)
-        return visible.reversed().map(\.icon)
+        return visible.reversed().map { (icon: $0.icon, isFullscreened: $0.isFullscreened) }
+    }
+
+    /// Whether the sub-selected (or active) window is fullscreened.
+    func isWindowFullscreened(at index: Int?) -> Bool {
+        switch self {
+        case .singleWindow(let w): return w.isFullscreened
+        case .group(let g):
+            if let index { return g.windows[safe: index]?.isFullscreened ?? false }
+            return g.activeWindow?.isFullscreened ?? false
+        }
     }
 }

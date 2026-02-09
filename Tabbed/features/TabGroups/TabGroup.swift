@@ -28,6 +28,15 @@ class TabGroup: Identifiable, ObservableObject {
         return windows[activeIndex]
     }
 
+    var fullscreenedWindowIDs: Set<CGWindowID> {
+        Set(windows.filter(\.isFullscreened).map(\.id))
+    }
+
+    /// Windows that are not in fullscreen — used for frame sync operations.
+    var visibleWindows: [WindowInfo] {
+        windows.filter { !$0.isFullscreened }
+    }
+
     init(windows: [WindowInfo], frame: CGRect, spaceID: UInt64 = 0) {
         self.windows = windows
         self.activeIndex = 0
@@ -122,12 +131,12 @@ class TabGroup: Identifiable, ObservableObject {
     /// Returns the index of the next window in MRU order.
     /// Snapshots the MRU order on first call so mid-cycle focus events can't cause revisits.
     func nextInMRUCycle() -> Int? {
-        guard windows.count > 1 else { return nil }
+        guard windows.filter({ !$0.isFullscreened }).count > 1 else { return nil }
 
         if !isCycling {
             isCycling = true
             // Snapshot: freeze MRU order, filtered to windows still in the group
-            let windowIDs = Set(windows.map(\.id))
+            let windowIDs = Set(windows.filter { !$0.isFullscreened }.map(\.id))
             cycleOrder = focusHistory.filter { windowIDs.contains($0) }
             if cycleOrder.isEmpty { cycleOrder = windows.map(\.id) }
             cyclePosition = 0

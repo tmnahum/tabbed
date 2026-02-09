@@ -256,4 +256,38 @@ final class TabGroupTests: XCTestCase {
         let dragged: Set<CGWindowID> = [2, 3]
         XCTAssertEqual(TabBarView.multiDragPositionDelta(for: 1, windowIDs: ids, draggedIDs: dragged, targetIndex: 0), 0)  // index 1 is dragged → not in remaining → returns 0
     }
+
+    func testWindowInfoIsFullscreenedDefaultsFalse() {
+        let window = makeWindow(id: 1)
+        XCTAssertFalse(window.isFullscreened)
+    }
+
+    func testFullscreenedWindowsProperty() {
+        let group = TabGroup(windows: [makeWindow(id: 1), makeWindow(id: 2), makeWindow(id: 3)], frame: .zero)
+        XCTAssertTrue(group.fullscreenedWindowIDs.isEmpty)
+        group.windows[1].isFullscreened = true
+        XCTAssertEqual(group.fullscreenedWindowIDs, [2])
+    }
+
+    func testVisibleWindowsExcludesFullscreened() {
+        let group = TabGroup(windows: [makeWindow(id: 1), makeWindow(id: 2), makeWindow(id: 3)], frame: .zero)
+        group.windows[1].isFullscreened = true
+        XCTAssertEqual(group.visibleWindows.map(\.id), [1, 3])
+    }
+
+    func testMRUCycleSkipsFullscreenedWindows() {
+        let group = TabGroup(windows: [makeWindow(id: 1), makeWindow(id: 2), makeWindow(id: 3)], frame: .zero)
+        group.recordFocus(windowID: 1)
+        group.recordFocus(windowID: 2)
+        group.recordFocus(windowID: 3)
+        // Fullscreen window 2
+        group.windows[1].isFullscreened = true
+        // Cycle: should skip window 2
+        let next1 = group.nextInMRUCycle()
+        XCTAssertNotNil(next1)
+        // The returned index should not point to window 2
+        if let idx = next1 {
+            XCTAssertNotEqual(group.windows[idx].id, 2)
+        }
+    }
 }

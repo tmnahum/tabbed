@@ -366,17 +366,18 @@ struct TabBarView: View {
                 Image(nsImage: icon)
                     .resizable()
                     .frame(width: 16, height: 16)
+                    .opacity(window.isFullscreened ? 0.4 : 1.0)
             }
             Text(window.title.isEmpty ? window.appName : window.title)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .font(.system(size: 12))
-                .foregroundStyle(isActive ? .primary : .secondary)
+                .foregroundStyle(window.isFullscreened ? .tertiary : isActive ? .primary : .secondary)
 
             Spacer(minLength: 0)
 
             if isHovered && !isSelected {
-                if isActive {
+                if window.isFullscreened || isActive {
                     Image(systemName: "minus")
                         .font(.system(size: 8, weight: .bold))
                         .foregroundStyle(.secondary)

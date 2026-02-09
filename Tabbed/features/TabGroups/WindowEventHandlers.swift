@@ -80,9 +80,9 @@ extension AppDelegate {
         group.frame = adjustedFrame
         group.tabBarSqueezeDelta = squeezeDelta
 
-        let otherIDs = group.windows.filter { $0.id != windowID }.map(\.id)
-        setExpectedFrame(adjustedFrame, for: otherIDs)
-        for window in group.windows where window.id != windowID {
+        let others = group.visibleWindows.filter { $0.id != windowID }
+        setExpectedFrame(adjustedFrame, for: others.map(\.id))
+        for window in others {
             AccessibilityHelper.setFrame(of: window.element, to: adjustedFrame)
         }
 
@@ -92,6 +92,21 @@ extension AppDelegate {
     }
 
     func handleWindowResized(_ windowID: CGWindowID) {
+        // Check if a fullscreened window is exiting fullscreen.
+        // This runs before the main guard because the fullscreened window
+        // won't be the activeWindow (a visible tab is active instead).
+        if let group = groupManager.group(for: windowID),
+           let idx = group.windows.firstIndex(where: { $0.id == windowID }),
+           idx < group.windows.count,
+           group.windows[idx].isFullscreened {
+            // Capture window reference safely to avoid multiple array accesses
+            let window = group.windows[idx]
+            if !AccessibilityHelper.isFullScreen(window.element) {
+                handleFullscreenExit(windowID: windowID, group: group)
+            }
+            return
+        }
+
         guard let group = groupManager.group(for: windowID),
               let panel = tabBarPanels[group.id],
               let activeWindow = group.activeWindow,
@@ -102,13 +117,18 @@ extension AppDelegate {
         if shouldSuppress(windowID: windowID, currentFrame: frame) { return }
 
         if AccessibilityHelper.isFullScreen(activeWindow.element) {
+            Logger.log("[FULLSCREEN] Window \(windowID) entered fullscreen in group \(group.id)")
             expectedFrames.removeValue(forKey: windowID)
-            windowObserver.stopObserving(window: activeWindow)
-            groupManager.releaseWindow(withID: windowID, from: group)
-            if !groupManager.groups.contains(where: { $0.id == group.id }) {
-                handleGroupDissolution(group: group, panel: panel)
-            } else if let newActive = group.activeWindow {
-                bringTabToFront(newActive, in: group)
+            if let idx = group.windows.firstIndex(where: { $0.id == windowID }) {
+                group.windows[idx].isFullscreened = true
+            }
+            // Switch to next visible tab if available
+            if let nextVisible = group.visibleWindows.first {
+                group.switchTo(windowID: nextVisible.id)
+                bringTabToFront(nextVisible, in: group)
+            } else {
+                // All windows fullscreened — hide the tab bar
+                panel.orderOut(nil)
             }
             evaluateAutoCapture()
             return
@@ -135,9 +155,9 @@ extension AppDelegate {
         group.frame = adjustedFrame
         group.tabBarSqueezeDelta = squeezeDelta
 
-        let otherIDs = group.windows.filter { $0.id != windowID }.map(\.id)
-        setExpectedFrame(adjustedFrame, for: otherIDs)
-        for window in group.windows where window.id != windowID {
+        let others = group.visibleWindows.filter { $0.id != windowID }
+        setExpectedFrame(adjustedFrame, for: others.map(\.id))
+        for window in others {
             AccessibilityHelper.setFrame(of: window.element, to: adjustedFrame)
         }
 
@@ -171,7 +191,7 @@ extension AppDelegate {
 
             group.frame = clamped
             group.tabBarSqueezeDelta = squeezeDelta
-            let others = group.windows.filter { $0.id != activeWindow.id }
+            let others = group.visibleWindows.filter { $0.id != activeWindow.id }
             self.setExpectedFrame(clamped, for: others.map(\.id))
             for window in others {
                 AccessibilityHelper.setFrame(of: window.element, to: clamped)
@@ -188,6 +208,10 @@ extension AppDelegate {
         guard let windowID = AccessibilityHelper.windowID(for: element),
               let group = groupManager.group(for: windowID),
               let panel = tabBarPanels[group.id] else { return }
+
+        // Don't let a fullscreened window become the active tab —
+        // it would confuse frame sync since it's on a different Space.
+        if let w = group.windows.first(where: { $0.id == windowID }), w.isFullscreened { return }
 
         // During an active switcher session or post-commit cooldown,
         // don't let OS focus events mutate group state — the switcher
@@ -296,6 +320,9 @@ extension AppDelegate {
         guard let group = groupManager.group(for: windowID),
               let panel = tabBarPanels[group.id] else { return }
 
+        // Don't let a fullscreened window become the active tab
+        if let w = group.windows.first(where: { $0.id == windowID }), w.isFullscreened { return }
+
         if !suppressGroupState {
             let previousID = group.activeWindow?.id
             if previousID != windowID {
@@ -360,6 +387,7 @@ extension AppDelegate {
             // Windows where the query returned nil are NOT marked stray — the window
             // server may not have settled yet, or the window is mid-transition.
             let strayIDs = group.windows.compactMap { window -> CGWindowID? in
+                guard !window.isFullscreened else { return nil }
                 guard let windowSpace = spaceMap[window.id],
                       windowSpace != group.spaceID else { return nil }
                 return window.id
@@ -404,5 +432,42 @@ extension AppDelegate {
         }
 
         evaluateAutoCapture()
+    }
+
+    // MARK: - Fullscreen Restoration
+
+    func handleFullscreenExit(windowID: CGWindowID, group: TabGroup) {
+        guard let panel = tabBarPanels[group.id],
+              let idx = group.windows.firstIndex(where: { $0.id == windowID }),
+              idx < group.windows.count else { return }
+
+        Logger.log("[FULLSCREEN] Window \(windowID) exited fullscreen in group \(group.id)")
+        group.windows[idx].isFullscreened = false
+
+        // Make this the active tab immediately so the tab bar updates
+        group.switchTo(windowID: windowID)
+        group.recordFocus(windowID: windowID)
+        lastActiveGroupID = group.id
+
+        // Ensure tab bar is visible (it may have been hidden if all were fullscreened)
+        panel.positionAbove(windowFrame: group.frame)
+        panel.show(above: group.frame, windowID: windowID)
+
+        // Delay frame restoration — macOS fullscreen exit animation takes ~0.7s.
+        // Setting the frame immediately fights the animation and looks janky.
+        let groupID = group.id
+        let targetFrame = group.frame
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+            guard let self,
+                  let group = self.groupManager.groups.first(where: { $0.id == groupID }),
+                  let idx = group.windows.firstIndex(where: { $0.id == windowID }),
+                  idx < group.windows.count,
+                  !group.windows[idx].isFullscreened else { return }
+
+            let element = group.windows[idx].element
+            self.setExpectedFrame(targetFrame, for: [windowID])
+            AccessibilityHelper.setFrame(of: element, to: targetFrame)
+            self.bringTabToFront(group.windows[idx], in: group)
+        }
     }
 }

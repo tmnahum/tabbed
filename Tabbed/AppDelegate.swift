@@ -275,7 +275,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             let delta = group.tabBarSqueezeDelta
             guard delta > 0 else { continue }
             for window in group.windows {
-                if let frame = AccessibilityHelper.getFrame(of: window.element) {
+                if !window.isFullscreened, let frame = AccessibilityHelper.getFrame(of: window.element) {
                     let expandedFrame = ScreenCompensation.expandFrame(frame, undoingSqueezeDelta: delta)
                     AccessibilityHelper.setFrame(of: window.element, to: expandedFrame)
                 }
