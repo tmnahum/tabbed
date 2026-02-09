@@ -97,8 +97,11 @@ extension AppDelegate {
         // won't be the activeWindow (a visible tab is active instead).
         if let group = groupManager.group(for: windowID),
            let idx = group.windows.firstIndex(where: { $0.id == windowID }),
+           idx < group.windows.count,
            group.windows[idx].isFullscreened {
-            if !AccessibilityHelper.isFullScreen(group.windows[idx].element) {
+            // Capture window reference safely to avoid multiple array accesses
+            let window = group.windows[idx]
+            if !AccessibilityHelper.isFullScreen(window.element) {
                 handleFullscreenExit(windowID: windowID, group: group)
             }
             return
@@ -380,7 +383,8 @@ extension AppDelegate {
 
     func handleFullscreenExit(windowID: CGWindowID, group: TabGroup) {
         guard let panel = tabBarPanels[group.id],
-              let idx = group.windows.firstIndex(where: { $0.id == windowID }) else { return }
+              let idx = group.windows.firstIndex(where: { $0.id == windowID }),
+              idx < group.windows.count else { return }
 
         Logger.log("[FULLSCREEN] Window \(windowID) exited fullscreen in group \(group.id)")
         group.windows[idx].isFullscreened = false
@@ -402,6 +406,7 @@ extension AppDelegate {
             guard let self,
                   let group = self.groupManager.groups.first(where: { $0.id == groupID }),
                   let idx = group.windows.firstIndex(where: { $0.id == windowID }),
+                  idx < group.windows.count,
                   !group.windows[idx].isFullscreened else { return }
 
             let element = group.windows[idx].element
