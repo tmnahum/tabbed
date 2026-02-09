@@ -35,7 +35,7 @@ extension AppDelegate {
             },
             onMergeGroup: { [weak self] sourceGroup in
                 guard let group = group else { return }
-                self?.mergeGroup(sourceGroup, into: group)
+                self?.mergeGroup(sourceGroup, into: group, at: insertAt)
                 self?.dismissWindowPicker()
             },
             onDismiss: { [weak self] in
@@ -447,7 +447,7 @@ extension AppDelegate {
         return (group, panel)
     }
 
-    func mergeGroup(_ source: TabGroup, into target: TabGroup) {
+    func mergeGroup(_ source: TabGroup, into target: TabGroup, at insertAt: Int? = nil) {
         guard let sourcePanel = tabBarPanels[source.id] else { return }
         if target.spaceID != 0, source.spaceID != 0, target.spaceID != source.spaceID {
             Logger.log("[SPACE] Rejected merge: source space \(source.spaceID) != target space \(target.spaceID)")
@@ -476,10 +476,11 @@ extension AppDelegate {
         tabBarPanels.removeValue(forKey: source.id)
 
         // Add all source windows to target group
-        for window in windowsToMerge {
+        for (offset, window) in windowsToMerge.enumerated() {
             setExpectedFrame(target.frame, for: [window.id])
             AccessibilityHelper.setFrame(of: window.element, to: target.frame)
-            groupManager.addWindow(window, to: target)
+            let index = insertAt.map { $0 + offset }
+            groupManager.addWindow(window, to: target, at: index)
             windowObserver.observe(window: window)
         }
 
