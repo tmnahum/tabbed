@@ -31,7 +31,7 @@ struct TabBarView: View {
     static let groupNameHorizontalPadding: CGFloat = 8
     static let groupNameFontSize: CGFloat = 11
     static let groupNameEmptyHitWidth: CGFloat = 3
-    static let groupNameEditingMinWidth: CGFloat = 110
+    static let groupNamePlaceholder = "Group name"
 
     static func displayedGroupName(from rawName: String?) -> String? {
         guard let rawName else { return nil }
@@ -39,16 +39,21 @@ struct TabBarView: View {
         return trimmed.isEmpty ? nil : trimmed
     }
 
-    static func groupNameReservedWidth(for rawName: String?, isEditing: Bool = false) -> CGFloat {
-        guard let name = displayedGroupName(from: rawName) else {
-            return isEditing ? groupNameEditingMinWidth + 6 : groupNameEmptyHitWidth
-        }
-        let textWidth = (name as NSString).size(
+    private static func measuredGroupNameReservedWidth(for displayedName: String) -> CGFloat {
+        let textWidth = (displayedName as NSString).size(
             withAttributes: [.font: NSFont.systemFont(ofSize: groupNameFontSize, weight: .semibold)]
         ).width
         let contentWidth = min(groupNameMaxWidth, textWidth + groupNameHorizontalPadding * 2)
-        let renderedWidth = contentWidth + 6
-        return isEditing ? max(renderedWidth, groupNameEditingMinWidth + 6) : renderedWidth
+        return contentWidth + 6
+    }
+
+    static func groupNameReservedWidth(for rawName: String?, isEditing: Bool = false) -> CGFloat {
+        guard let name = displayedGroupName(from: rawName) else {
+            return isEditing
+                ? measuredGroupNameReservedWidth(for: groupNamePlaceholder)
+                : groupNameEmptyHitWidth
+        }
+        return measuredGroupNameReservedWidth(for: name)
     }
 
     // Chrome/Firefox-style horizontal expand transition for new tabs
@@ -90,7 +95,8 @@ struct TabBarView: View {
             let tabCount = group.windows.count
             let isCompact = tabBarConfig.style == .compact
             let handleWidth: CGFloat = tabBarConfig.showDragHandle ? Self.dragHandleWidth : 0
-            let groupNameWidth = Self.groupNameReservedWidth(for: group.name, isEditing: isEditingGroupName)
+            let groupNameLayoutName = isEditingGroupName ? groupNameDraft : group.name
+            let groupNameWidth = Self.groupNameReservedWidth(for: groupNameLayoutName, isEditing: isEditingGroupName)
             let leadingPad: CGFloat = tabBarConfig.showDragHandle ? 4 : 2
             let trailingPad: CGFloat = 4
             let availableWidth = max(0, geo.size.width - leadingPad - trailingPad - Self.addButtonWidth - handleWidth - groupNameWidth)
@@ -525,7 +531,7 @@ struct TabBarView: View {
     @ViewBuilder
     private func groupNameControl(groupNameWidth: CGFloat) -> some View {
         if isEditingGroupName {
-            TextField("Group name", text: $groupNameDraft)
+            TextField(Self.groupNamePlaceholder, text: $groupNameDraft)
                 .textFieldStyle(.plain)
                 .font(.system(size: Self.groupNameFontSize, weight: .semibold))
                 .foregroundStyle(.secondary)
