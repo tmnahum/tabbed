@@ -274,6 +274,7 @@ extension AppDelegate {
 
     func releaseTab(at index: Int, from group: TabGroup, panel: TabBarPanel) {
         guard let window = group.windows[safe: index] else { return }
+        suppressAutoJoin(windowIDs: [window.id])
 
         windowObserver.stopObserving(window: window)
         expectedFrames.removeValue(forKey: window.id)
@@ -375,6 +376,7 @@ extension AppDelegate {
 
     func disbandGroup(_ group: TabGroup) {
         guard let panel = tabBarPanels[group.id] else { return }
+        suppressAutoJoin(windowIDs: group.windows.map(\.id))
 
         if barDraggingGroupID == group.id { barDraggingGroupID = nil }
         if autoCaptureGroup === group { deactivateAutoCapture() }
@@ -782,6 +784,7 @@ extension AppDelegate {
     func releaseTabs(withIDs ids: Set<CGWindowID>, from group: TabGroup, panel: TabBarPanel) {
         // Capture windows before removal so we can raise one afterward
         let releasedWindows = group.windows.filter { ids.contains($0.id) }
+        suppressAutoJoin(windowIDs: releasedWindows.map(\.id))
 
         for window in releasedWindows {
             windowObserver.stopObserving(window: window)

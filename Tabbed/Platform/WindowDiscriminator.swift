@@ -3,6 +3,11 @@ import Foundation
 
 enum WindowDiscriminator {
 
+    enum QualificationProfile {
+        case windowDiscovery
+        case autoJoin
+    }
+
     /// Determines whether a window should be shown in the switcher.
     ///
     /// Applies universal filters first (valid ID, minimum size), then checks
@@ -16,7 +21,8 @@ enum WindowDiscriminator {
         level: Int?,
         bundleIdentifier: String?,
         localizedName: String?,
-        executableURL: URL?
+        executableURL: URL?,
+        qualification: QualificationProfile = .windowDiscovery
     ) -> Bool {
         // Universal: must have valid window ID
         guard cgWindowID != 0 else { return false }
@@ -33,7 +39,8 @@ enum WindowDiscriminator {
                 subrole: subrole,
                 role: role,
                 title: title,
-                size: size
+                size: size,
+                qualification: qualification
             )
         }
 
@@ -50,11 +57,15 @@ enum WindowDiscriminator {
         }
 
         if path.contains("qemu-system") {
+            if qualification == .autoJoin {
+                return role == "AXWindow" &&
+                    !isUtilitySubroleForAutoJoin(subrole) &&
+                    title?.isEmpty == false
+            }
             return title?.isEmpty == false
         }
 
-        // Default: accept AXStandardWindow and AXDialog
-        return subrole == "AXStandardWindow" || subrole == "AXDialog"
+        return defaultDecision(subrole: subrole, role: role, qualification: qualification)
     }
 
     // MARK: - Private
@@ -75,18 +86,30 @@ enum WindowDiscriminator {
         subrole: String?,
         role: String?,
         title: String?,
-        size: CGSize?
+        size: CGSize?,
+        qualification: QualificationProfile
     ) -> Bool {
         // Accept-all apps (subrole glitches, non-standard windowing, etc.)
-        if acceptAllBundleIDs.contains(bundleID) { return true }
+        if acceptAllBundleIDs.contains(bundleID) {
+            if qualification == .windowDiscovery { return true }
+            return strictAcceptAllFallback(subrole: subrole, role: role, title: title, size: size)
+        }
 
         // Adobe: accept floating tool palettes
         if bundleID == "com.adobe.Audition" || bundleID == "com.adobe.AfterEffects" {
+            if qualification == .autoJoin {
+                return isStrictPrimaryWindow(subrole: subrole, role: role)
+            }
             return subrole == "AXStandardWindow" || subrole == "AXDialog" || subrole == "AXFloatingWindow"
         }
 
         // Steam: all windows are AXUnknown; dropdowns have empty title or nil role
         if bundleID == "com.valvesoftware.steam" {
+            if qualification == .autoJoin {
+                return role == "AXWindow" &&
+                    !isUtilitySubroleForAutoJoin(subrole) &&
+                    title?.isEmpty == false
+            }
             return title?.isEmpty == false && role != nil
         }
 
@@ -102,6 +125,10 @@ enum WindowDiscriminator {
 
         // Fusion 360: side panels have empty titles
         if bundleID == "com.autodesk.fusion360" {
+            if qualification == .autoJoin {
+                return title?.isEmpty == false &&
+                    isStrictPrimaryWindow(subrole: subrole, role: role)
+            }
             return title?.isEmpty == false && (subrole == "AXStandardWindow" || subrole == "AXDialog")
         }
 
@@ -112,6 +139,12 @@ enum WindowDiscriminator {
 
         // Firefox: fullscreen video = AXUnknown + large; tooltips = AXUnknown + small
         if bundleID.hasPrefix("org.mozilla.firefox") {
+            if qualification == .autoJoin {
+                guard isStrictPrimaryWindow(subrole: subrole, role: role),
+                      let size else { return false }
+                // Extension/tool popups are often much smaller than browser windows.
+                return size.width >= 700 && size.height >= 450
+            }
             return role == "AXWindow" && (size?.height ?? 0) > 400
         }
 
@@ -122,11 +155,24 @@ enum WindowDiscriminator {
 
         // AutoCAD: uses AXDocumentWindow for documents
         if bundleID.hasPrefix("com.autodesk.AutoCAD") {
+            if qualification == .autoJoin {
+                return isStrictPrimaryWindow(subrole: subrole, role: role)
+            }
             return subrole == "AXStandardWindow" || subrole == "AXDialog" || subrole == "AXDocumentWindow"
         }
 
         // JetBrains IDEs / Android Studio: filter splash screens and tool windows
         if bundleID.hasPrefix("com.jetbrains.") || bundleID.hasPrefix("com.google.android.studio") {
+            if qualification == .autoJoin {
+                if isStrictPrimaryWindow(subrole: subrole, role: role) { return true }
+                if let title = title, !title.isEmpty,
+                   role == "AXWindow",
+                   !isUtilitySubroleForAutoJoin(subrole),
+                   let size = size {
+                    return size.width >= 700 && size.height >= 400
+                }
+                return false
+            }
             if subrole == "AXStandardWindow" || subrole == "AXDialog" { return true }
             if let title = title, !title.isEmpty {
                 if let size = size {
@@ -137,7 +183,57 @@ enum WindowDiscriminator {
             return false
         }
 
-        // Default: accept AXStandardWindow and AXDialog
-        return subrole == "AXStandardWindow" || subrole == "AXDialog"
+        return defaultDecision(subrole: subrole, role: role, qualification: qualification)
+    }
+
+    private static let autoJoinUtilitySubroles: Set<String> = [
+        "AXDialog",
+        "AXSystemDialog",
+        "AXFloatingWindow",
+        "AXSheet",
+        "AXPopover",
+    ]
+
+    private static func isUtilitySubroleForAutoJoin(_ subrole: String?) -> Bool {
+        guard let subrole else { return false }
+        return autoJoinUtilitySubroles.contains(subrole)
+    }
+
+    private static func isStrictPrimaryWindow(subrole: String?, role: String?) -> Bool {
+        guard subrole == "AXStandardWindow" || subrole == "AXDocumentWindow" else { return false }
+        if let role, role != "AXWindow" { return false }
+        return true
+    }
+
+    private static func strictAcceptAllFallback(
+        subrole: String?,
+        role: String?,
+        title: String?,
+        size: CGSize?
+    ) -> Bool {
+        if isStrictPrimaryWindow(subrole: subrole, role: role) {
+            return true
+        }
+
+        guard role == "AXWindow",
+              !isUtilitySubroleForAutoJoin(subrole),
+              let title, !title.isEmpty,
+              let size else {
+            return false
+        }
+        return size.width >= 500 && size.height >= 300
+    }
+
+    private static func defaultDecision(
+        subrole: String?,
+        role: String?,
+        qualification: QualificationProfile
+    ) -> Bool {
+        switch qualification {
+        case .windowDiscovery:
+            return subrole == "AXStandardWindow" || subrole == "AXDialog"
+        case .autoJoin:
+            return isStrictPrimaryWindow(subrole: subrole, role: role)
+        }
     }
 }

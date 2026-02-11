@@ -1,5 +1,40 @@
 import AppKit
 
+enum AutoCapturePolicy {
+    static let launchGraceDuration: TimeInterval = 5.0
+    static let launchScanDelays: [TimeInterval] = [0.2, 0.6, 1.2, 2.5, 4.0]
+    static let createdRetryDelays: [TimeInterval] = [0.15, 0.35, 0.75, 1.5]
+
+    static func isWithinLaunchGrace(deadline: Date?, now: Date) -> Bool {
+        guard let deadline else { return false }
+        return now <= deadline
+    }
+
+    static func shouldAttemptFocusCapture(
+        pid: pid_t,
+        windowID: CGWindowID,
+        now: Date,
+        launchGraceUntilByPID: [pid_t: Date],
+        knownWindowIDsByPID: [pid_t: Set<CGWindowID>]
+    ) -> Bool {
+        guard isWithinLaunchGrace(deadline: launchGraceUntilByPID[pid], now: now) else { return false }
+        let knownWindowIDs = knownWindowIDsByPID[pid] ?? []
+        return !knownWindowIDs.contains(windowID)
+    }
+
+    static func prunedSuppressedWindowIDs(
+        _ suppressedWindowIDs: Set<CGWindowID>,
+        windowExists: (CGWindowID) -> Bool
+    ) -> Set<CGWindowID> {
+        Set(suppressedWindowIDs.filter { windowExists($0) })
+    }
+}
+
+struct AutoCaptureRetryKey: Hashable {
+    let pid: pid_t
+    let windowID: CGWindowID
+}
+
 // MARK: - Auto-Capture
 
 extension AppDelegate {
@@ -140,7 +175,7 @@ extension AppDelegate {
         for app in NSWorkspace.shared.runningApplications where app.activationPolicy == .regular {
             let pid = app.processIdentifier
             guard pid != ownPID else { continue }
-            addAutoCaptureObserver(for: pid)
+            addAutoCaptureObserver(for: pid, seedKnownWindows: true)
         }
 
         let launchToken = NSWorkspace.shared.notificationCenter.addObserver(
@@ -148,8 +183,20 @@ extension AppDelegate {
             object: nil,
             queue: .main
         ) { [weak self] notification in
-            guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
-            self?.addAutoCaptureObserver(for: app.processIdentifier)
+            guard let self,
+                  let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                  app.activationPolicy == .regular else { return }
+
+            let pid = app.processIdentifier
+            if pid == ProcessInfo.processInfo.processIdentifier { return }
+
+            self.addAutoCaptureObserver(for: pid, seedKnownWindows: false)
+            self.launchGraceUntilByPID[pid] = Date().addingTimeInterval(AutoCapturePolicy.launchGraceDuration)
+            if self.knownWindowIDsByPID[pid] == nil {
+                self.knownWindowIDsByPID[pid] = []
+            }
+            self.scheduleLaunchReconciliation(for: pid)
+            Logger.log("[AutoCapture] launch-grace started for pid \(pid) (\(AutoCapturePolicy.launchGraceDuration)s)")
         }
 
         let terminateToken = NSWorkspace.shared.notificationCenter.addObserver(
@@ -220,13 +267,26 @@ extension AppDelegate {
         }
         autoCaptureDefaultCenterTokens.removeAll()
 
+        for (_, workItem) in captureRetryWorkItems {
+            workItem.cancel()
+        }
+        captureRetryWorkItems.removeAll()
+        knownWindowIDsByPID.removeAll()
+        launchGraceUntilByPID.removeAll()
+
         Logger.log("[AutoCapture] Deactivated")
         autoCaptureGroup = nil
         autoCaptureScreen = nil
     }
 
-    func addAutoCaptureObserver(for pid: pid_t) {
-        guard autoCaptureObservers[pid] == nil else { return }
+    func addAutoCaptureObserver(for pid: pid_t, seedKnownWindows: Bool = true) {
+        if autoCaptureObservers[pid] != nil {
+            if seedKnownWindows {
+                seedKnownWindowIDs(for: pid)
+                launchGraceUntilByPID.removeValue(forKey: pid)
+            }
+            return
+        }
 
         let callback: AXObserverCallback = { _, element, notification, refcon in
             guard let refcon else { return }
@@ -261,11 +321,24 @@ extension AppDelegate {
         )
         autoCaptureObservers[pid] = observer
         autoCaptureAppElements[pid] = appElement
+
+        if seedKnownWindows {
+            seedKnownWindowIDs(for: pid)
+            launchGraceUntilByPID.removeValue(forKey: pid)
+        } else {
+            if knownWindowIDsByPID[pid] == nil {
+                knownWindowIDsByPID[pid] = []
+            }
+        }
     }
 
     func removeAutoCaptureObserver(for pid: pid_t) {
-        guard let observer = autoCaptureObservers.removeValue(forKey: pid) else { return }
         pendingAutoCaptureWindows.removeAll { $0.pid == pid }
+        launchGraceUntilByPID.removeValue(forKey: pid)
+        knownWindowIDsByPID.removeValue(forKey: pid)
+        cancelCaptureRetries(for: pid)
+
+        guard let observer = autoCaptureObservers.removeValue(forKey: pid) else { return }
         if let appElement = autoCaptureAppElements.removeValue(forKey: pid) {
             AccessibilityHelper.removeNotification(
                 observer: observer,
@@ -281,8 +354,22 @@ extension AppDelegate {
         AccessibilityHelper.removeObserver(observer)
     }
 
+    func suppressAutoJoin(windowIDs: [CGWindowID]) {
+        pruneSuppressedAutoJoinWindowIDs()
+        for windowID in windowIDs {
+            let inserted = suppressedAutoJoinWindowIDs.insert(windowID).inserted
+            if inserted {
+                Logger.log("[AutoCapture] suppressed wid=\(windowID) until close")
+            }
+        }
+    }
+
     func handleWindowCreated(element: AXUIElement, pid: pid_t) {
         guard autoCaptureGroup != nil else { return }
+
+        if let windowID = AccessibilityHelper.windowID(for: element) {
+            knownWindowIDsByPID[pid, default: []].insert(windowID)
+        }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             guard let self, self.autoCaptureGroup != nil else { return }
@@ -292,6 +379,7 @@ extension AppDelegate {
             // Window not ready yet (still being dragged, animating, etc.)
             // Watch for resize/move events to retry when the window settles.
             self.watchPendingWindow(element: element, pid: pid)
+            self.scheduleCreatedRetry(element: element, pid: pid, attempt: 0)
         }
     }
 
@@ -310,7 +398,21 @@ extension AppDelegate {
             windowElement = ref as! AXUIElement // swiftlint:disable:this force_cast
         }
 
-        captureWindowIfEligible(element: windowElement, pid: pid, source: "focus")
+        guard let windowID = AccessibilityHelper.windowID(for: windowElement) else { return }
+        let now = Date()
+        guard AutoCapturePolicy.shouldAttemptFocusCapture(
+            pid: pid,
+            windowID: windowID,
+            now: now,
+            launchGraceUntilByPID: launchGraceUntilByPID,
+            knownWindowIDsByPID: knownWindowIDsByPID
+        ) else {
+            Logger.log("[AutoCapture] focus ignored wid=\(windowID) pid=\(pid) (outside grace or already known)")
+            return
+        }
+
+        knownWindowIDsByPID[pid, default: []].insert(windowID)
+        _ = captureWindowIfEligible(element: windowElement, pid: pid, source: "focus-grace")
     }
 
     // MARK: - Pending Window Watchers
@@ -342,6 +444,7 @@ extension AppDelegate {
     }
 
     func removePendingWindowWatch(element: AXUIElement, pid: pid_t) {
+        pendingAutoCaptureWindows.removeAll { $0.element === element }
         guard let observer = autoCaptureObservers[pid] else { return }
         AccessibilityHelper.removeNotification(
             observer: observer, element: element,
@@ -351,7 +454,6 @@ extension AppDelegate {
             observer: observer, element: element,
             notification: kAXResizedNotification as String
         )
-        pendingAutoCaptureWindows.removeAll { $0.element === element }
     }
 
     // MARK: - Capture
@@ -364,8 +466,25 @@ extension AppDelegate {
             return false
         }
 
-        guard let window = WindowDiscovery.buildWindowInfo(element: element, pid: pid) else {
-            Logger.log("[AutoCapture] captureIfEligible[\(source)]: buildWindowInfo failed for pid \(pid)")
+        pruneSuppressedAutoJoinWindowIDs()
+
+        guard let candidateWindowID = AccessibilityHelper.windowID(for: element) else {
+            Logger.log("[AutoCapture] captureIfEligible[\(source)]: no windowID for pid \(pid)")
+            return false
+        }
+        knownWindowIDsByPID[pid, default: []].insert(candidateWindowID)
+
+        guard !suppressedAutoJoinWindowIDs.contains(candidateWindowID) else {
+            Logger.log("[AutoCapture] captureIfEligible[\(source)]: suppressed wid=\(candidateWindowID)")
+            return false
+        }
+
+        guard let window = WindowDiscovery.buildWindowInfo(
+            element: element,
+            pid: pid,
+            qualification: .autoJoin
+        ) else {
+            Logger.log("[AutoCapture] captureIfEligible[\(source)]: strict-filter-reject for pid \(pid), wid=\(candidateWindowID)")
             return false
         }
 
@@ -398,7 +517,110 @@ extension AppDelegate {
         Logger.log("[AutoCapture] Capturing window \(window.id) (\(window.appName): \(window.title)) [\(source)]")
         setExpectedFrame(group.frame, for: [window.id])
         addWindow(window, to: group, afterActive: true)
+        cancelCaptureRetry(for: pid, windowID: window.id)
         // Note: addWindow already calls evaluateAutoCapture()
         return true
+    }
+}
+
+// MARK: - AutoCapture Internals
+
+private extension AppDelegate {
+
+    func seedKnownWindowIDs(for pid: pid_t) {
+        let windowIDs = Set(
+            AccessibilityHelper.windowElements(for: pid)
+                .compactMap { AccessibilityHelper.windowID(for: $0) }
+        )
+        knownWindowIDsByPID[pid] = windowIDs
+        if !windowIDs.isEmpty {
+            Logger.log("[AutoCapture] seeded \(windowIDs.count) known windows for pid \(pid)")
+        }
+    }
+
+    func pruneSuppressedAutoJoinWindowIDs() {
+        suppressedAutoJoinWindowIDs = AutoCapturePolicy.prunedSuppressedWindowIDs(
+            suppressedAutoJoinWindowIDs,
+            windowExists: { AccessibilityHelper.windowExists(id: $0) }
+        )
+    }
+
+    func scheduleLaunchReconciliation(for pid: pid_t) {
+        for delay in AutoCapturePolicy.launchScanDelays {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.runLaunchReconciliationScan(for: pid)
+            }
+        }
+    }
+
+    func runLaunchReconciliationScan(for pid: pid_t) {
+        guard autoCaptureGroup != nil else { return }
+        let now = Date()
+        guard AutoCapturePolicy.isWithinLaunchGrace(deadline: launchGraceUntilByPID[pid], now: now) else {
+            launchGraceUntilByPID.removeValue(forKey: pid)
+            return
+        }
+
+        let windowElements = AccessibilityHelper.windowElements(for: pid)
+        guard !windowElements.isEmpty else { return }
+
+        Logger.log("[AutoCapture] launch-scan pid=\(pid) candidates=\(windowElements.count)")
+        for element in windowElements {
+            _ = captureWindowIfEligible(element: element, pid: pid, source: "launch-scan")
+        }
+    }
+
+    func scheduleCreatedRetry(element: AXUIElement, pid: pid_t, attempt: Int) {
+        guard let windowID = AccessibilityHelper.windowID(for: element) else { return }
+        guard attempt < AutoCapturePolicy.createdRetryDelays.count else {
+            let key = AutoCaptureRetryKey(pid: pid, windowID: windowID)
+            captureRetryWorkItems.removeValue(forKey: key)
+            return
+        }
+
+        let key = AutoCaptureRetryKey(pid: pid, windowID: windowID)
+        if attempt == 0, captureRetryWorkItems[key] != nil {
+            return
+        }
+
+        let delay = AutoCapturePolicy.createdRetryDelays[attempt]
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            guard self.autoCaptureGroup != nil else {
+                self.captureRetryWorkItems.removeValue(forKey: key)
+                return
+            }
+
+            if self.captureWindowIfEligible(
+                element: element,
+                pid: pid,
+                source: "created-retry-\(attempt + 1)"
+            ) {
+                self.removePendingWindowWatch(element: element, pid: pid)
+                return
+            }
+
+            self.scheduleCreatedRetry(element: element, pid: pid, attempt: attempt + 1)
+        }
+
+        captureRetryWorkItems[key]?.cancel()
+        captureRetryWorkItems[key] = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+    }
+
+    func cancelCaptureRetry(for pid: pid_t, windowID: CGWindowID) {
+        let key = AutoCaptureRetryKey(pid: pid, windowID: windowID)
+        if let workItem = captureRetryWorkItems.removeValue(forKey: key) {
+            workItem.cancel()
+        }
+    }
+
+    func cancelCaptureRetries(for pid: pid_t) {
+        let keys = captureRetryWorkItems.keys.filter { $0.pid == pid }
+        for key in keys {
+            if let workItem = captureRetryWorkItems.removeValue(forKey: key) {
+                workItem.cancel()
+            }
+        }
     }
 }

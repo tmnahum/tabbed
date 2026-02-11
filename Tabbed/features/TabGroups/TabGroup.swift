@@ -64,13 +64,20 @@ class TabGroup: Identifiable, ObservableObject {
 
     func removeWindow(at index: Int) -> WindowInfo? {
         guard index >= 0, index < windows.count else { return nil }
+        let previousActiveIndex = activeIndex
         let removed = windows.remove(at: index)
         focusHistory.removeAll { $0 == removed.id }
         cycleOrder.removeAll { $0 == removed.id }
-        if activeIndex >= windows.count {
-            activeIndex = max(0, windows.count - 1)
-        } else if index < activeIndex {
-            activeIndex -= 1
+
+        if windows.isEmpty {
+            activeIndex = 0
+        } else if previousActiveIndex == index {
+            // If the active tab was removed, prefer the tab immediately before it.
+            activeIndex = max(0, min(index - 1, windows.count - 1))
+        } else if previousActiveIndex > index {
+            activeIndex = previousActiveIndex - 1
+        } else {
+            activeIndex = min(previousActiveIndex, windows.count - 1)
         }
         return removed
     }
@@ -85,7 +92,9 @@ class TabGroup: Identifiable, ObservableObject {
         guard !ids.isEmpty else { return [] }
 
         let activeID = activeWindow?.id
+        let previousActiveIndex = activeIndex
         var removed: [WindowInfo] = []
+        var removedOriginalIndices: [Int] = []
 
         // Remove from end to avoid index shifting issues
         for index in stride(from: windows.count - 1, through: 0, by: -1) {
@@ -94,6 +103,7 @@ class TabGroup: Identifiable, ObservableObject {
                 focusHistory.removeAll { $0 == window.id }
                 cycleOrder.removeAll { $0 == window.id }
                 removed.append(window)
+                removedOriginalIndices.append(index)
             }
         }
         removed.reverse() // Restore original order
@@ -104,7 +114,9 @@ class TabGroup: Identifiable, ObservableObject {
         } else if let activeID, let newIndex = windows.firstIndex(where: { $0.id == activeID }) {
             activeIndex = newIndex
         } else {
-            activeIndex = max(0, min(activeIndex, windows.count - 1))
+            let removedBeforeActive = removedOriginalIndices.filter { $0 < previousActiveIndex }.count
+            let preferredIndex = previousActiveIndex - removedBeforeActive - 1
+            activeIndex = max(0, min(preferredIndex, windows.count - 1))
         }
 
         return removed

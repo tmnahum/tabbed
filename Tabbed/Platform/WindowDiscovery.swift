@@ -67,7 +67,8 @@ enum WindowDiscovery {
                 level: 0, // CG getWindowList pre-filters to layer 0
                 bundleIdentifier: app.bundleIdentifier,
                 localizedName: app.localizedName,
-                executableURL: app.executableURL
+                executableURL: app.executableURL,
+                qualification: .windowDiscovery
             ) else { continue }
 
             results.append(WindowInfo(
@@ -194,7 +195,8 @@ enum WindowDiscovery {
                         level: level,
                         bundleIdentifier: snap.bundleID,
                         localizedName: snap.localizedName,
-                        executableURL: snap.executableURL
+                        executableURL: snap.executableURL,
+                        qualification: .windowDiscovery
                     ) else { continue }
 
                     appWindows.append(WindowInfo(
@@ -226,7 +228,11 @@ enum WindowDiscovery {
     // MARK: - Single Window Validation
 
     /// Validate a single AX element as a real window, verifying it against the CG window list.
-    static func buildWindowInfo(element: AXUIElement, pid: pid_t) -> WindowInfo? {
+    static func buildWindowInfo(
+        element: AXUIElement,
+        pid: pid_t,
+        qualification: WindowDiscriminator.QualificationProfile = .windowDiscovery
+    ) -> WindowInfo? {
         guard let windowID = AccessibilityHelper.windowID(for: element) else { return nil }
 
         // Verify this window is on-screen at layer 0
@@ -253,7 +259,8 @@ enum WindowDiscovery {
             level: 0,
             bundleIdentifier: app?.bundleIdentifier,
             localizedName: app?.localizedName,
-            executableURL: app?.executableURL
+            executableURL: app?.executableURL,
+            qualification: qualification
         ) else { return nil }
 
         return WindowInfo(

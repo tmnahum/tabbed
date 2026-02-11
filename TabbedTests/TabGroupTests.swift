@@ -103,6 +103,14 @@ final class TabGroupTests: XCTestCase {
         XCTAssertEqual(group.activeIndex, 0)
     }
 
+    func testRemoveActiveWindowPrefersPreviousTab() {
+        let group = TabGroup(windows: [makeWindow(id: 1), makeWindow(id: 2), makeWindow(id: 3)], frame: .zero)
+        group.switchTo(index: 1) // Window 2 active
+        group.removeWindow(at: 1)
+        XCTAssertEqual(group.activeIndex, 0)
+        XCTAssertEqual(group.activeWindow?.id, 1)
+    }
+
     func testRemoveWindowBeforeActiveAdjustsIndex() {
         let group = TabGroup(windows: [makeWindow(id: 1), makeWindow(id: 2), makeWindow(id: 3), makeWindow(id: 4)], frame: .zero)
         group.switchTo(index: 2) // Window 3 is active
@@ -151,6 +159,15 @@ final class TabGroupTests: XCTestCase {
         XCTAssertEqual(group.windows.map(\.id), [2, 4])
         // Active was window 3 (removed), should fall to valid index
         XCTAssertTrue(group.activeIndex >= 0 && group.activeIndex < group.windows.count)
+    }
+
+    func testRemoveWindowsWithIDsActiveRemovedPrefersPreviousTab() {
+        let group = TabGroup(windows: [makeWindow(id: 1), makeWindow(id: 2), makeWindow(id: 3), makeWindow(id: 4)], frame: .zero)
+        group.switchTo(index: 2) // Window 3 active
+        let removed = group.removeWindows(withIDs: [3])
+        XCTAssertEqual(removed.map(\.id), [3])
+        XCTAssertEqual(group.activeWindow?.id, 2)
+        XCTAssertEqual(group.activeIndex, 1)
     }
 
     func testRemoveWindowsWithIDsPreservesOrder() {

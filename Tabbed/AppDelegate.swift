@@ -25,6 +25,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var autoCaptureNotificationTokens: [NSObjectProtocol] = []
     var autoCaptureDefaultCenterTokens: [NSObjectProtocol] = []
     var pendingAutoCaptureWindows: [(element: AXUIElement, pid: pid_t)] = []
+    var knownWindowIDsByPID: [pid_t: Set<CGWindowID>] = [:]
+    var launchGraceUntilByPID: [pid_t: Date] = [:]
+    var suppressedAutoJoinWindowIDs: Set<CGWindowID> = []
+    var captureRetryWorkItems: [AutoCaptureRetryKey: DispatchWorkItem] = [:]
     var sessionConfig = SessionConfig.load()
     var switcherController = SwitcherController()
     var switcherConfig = SwitcherConfig.load()
