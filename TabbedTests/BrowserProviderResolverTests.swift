@@ -86,4 +86,28 @@ final class BrowserProviderResolverTests: XCTestCase {
 
         XCTAssertFalse(hasURLOrSearch)
     }
+
+    func testManualSelectionDetectsKnownChromiumEngine() {
+        let resolver = BrowserProviderResolver(appURLLookup: { _ in nil })
+        let selection = resolver.manualSelection(forBundleID: " com.google.Chrome ", fallbackEngine: .firefox)
+
+        XCTAssertEqual(selection.bundleID, "com.google.Chrome")
+        XCTAssertEqual(selection.engine, .chromium)
+    }
+
+    func testManualSelectionDetectsKnownFirefoxEngine() {
+        let resolver = BrowserProviderResolver(appURLLookup: { _ in nil })
+        let selection = resolver.manualSelection(forBundleID: "org.mozilla.firefox", fallbackEngine: .chromium)
+
+        XCTAssertEqual(selection.bundleID, "org.mozilla.firefox")
+        XCTAssertEqual(selection.engine, .firefox)
+    }
+
+    func testManualSelectionFallsBackForUnknownBundle() {
+        let resolver = BrowserProviderResolver(appURLLookup: { _ in nil })
+        let selection = resolver.manualSelection(forBundleID: "com.example.CustomBrowser", fallbackEngine: .firefox)
+
+        XCTAssertEqual(selection.bundleID, "com.example.CustomBrowser")
+        XCTAssertEqual(selection.engine, .firefox)
+    }
 }

@@ -1,12 +1,6 @@
-- auto detects modal windows and stuff (maybe just have minimum size? or investigate a smarter solution as well)
-- on window close should go to last tab in mru not next tab (eg if modal gets caputured)
-
-- quick switcher performance issues
+- if there is a clear sign of a url, namely a dot, prioritize it above launchable apps (but not above windows in space). also, new feature: build up a reccomendation system of commonly visited urls (not searches though)
 
 
-
-- Feature: New Tab can also launch apps
-    - consider this
 
 - platofrm structure me understanding issues and also refactor?
 - preemptive detailed logging
@@ -23,10 +17,11 @@
     - mru maybe doesnt get updated on all window changes, just app changes and in-group window changes?, idk
 
 - make settings window show up as window (it does show up in alttab, maybe reconsider what we're targetting)
-- autojoin: pretection against picking up ui elements as winodws to autojoin
-- autojoin: autojoin too agressive with stealing windows that are already open and it steals them when we switch back to them
-     - ie even when we ungroup them then switch back it gobbbles them, should only gobble on app launch
-- autojoin still sometimes misses windows though
+- [o] autojoin improvements
+    - autojoin: pretection against picking up ui elements as winodws to autojoin
+    - autojoin: autojoin too agressive with stealing windows that are already open and it steals them when we switch back to them
+        - ie even when we ungroup them then switch back it gobbbles them, should only gobble on app launch
+    - autojoin still sometimes misses windows though
 
 - close buttons default reconsider and make configurable in settings
     - can turn off confirm to close
@@ -37,9 +32,14 @@
     - turns out we can draw tab bar (so maybe have it show up on mouse top of screen?)
     - right now behaviro somewhat unspecified. did a feature which i didnt merge, need to redo
 
+- hyper t when not in a window has option for add all in space
+- option to auto 1-tab-group all new windows if not matched to existing window
+
+- make new branch main branch and main branch "old" branch
 
 Future:
 - pinned tabs
+- hide tab bar mode (just focused on alt tab navigation)
 - maybe: virtual tabs in which they belong to multiple windows (for apps with one window max like codex)
     - limitation: pretty much unfeasable to be able to switch what space a window is in
 

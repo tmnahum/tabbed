@@ -16,6 +16,8 @@ enum SettingsTab: Int {
 }
 
 struct SettingsView: View {
+    static let contentWidth: CGFloat = 560
+
     @State private var config: ShortcutConfig
     @State private var sessionConfig: SessionConfig
     @State private var switcherConfig: SwitcherConfig
@@ -24,6 +26,8 @@ struct SettingsView: View {
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var recordingAction: ShortcutAction?
     @State private var selectedTab: SettingsTab = .general
+    @State private var manualProviderError: String?
+    private let browserProviderResolver = BrowserProviderResolver()
     var onConfigChanged: (ShortcutConfig) -> Void
     var onSessionConfigChanged: (SessionConfig) -> Void
     var onSwitcherConfigChanged: (SwitcherConfig) -> Void
@@ -69,7 +73,7 @@ struct SettingsView: View {
                 .tabItem { Label("Switcher", systemImage: "rectangle.grid.1x2") }
                 .tag(SettingsTab.switcher)
         }
-        .frame(width: 400)
+        .frame(width: Self.contentWidth)
         .onChange(of: selectedTab) { _ in
             resizeWindowToFit()
         }
@@ -241,8 +245,37 @@ struct SettingsView: View {
                         Text("Manual Provider")
                             .font(.headline)
 
-                        TextField("Bundle ID (e.g. com.google.Chrome)", text: $launcherConfig.manualSelection.bundleID)
-                            .textFieldStyle(.roundedBorder)
+                        HStack(spacing: 8) {
+                            Button("Choose Browser App…") {
+                                chooseManualBrowserApp()
+                            }
+                            .controlSize(.small)
+
+                            if launcherConfig.hasManualSelection {
+                                Button("Clear") {
+                                    launcherConfig.manualSelection.bundleID = ""
+                                    manualProviderError = nil
+                                }
+                                .controlSize(.small)
+                            }
+                        }
+
+                        Text(manualProviderNameText)
+                            .font(.subheadline)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        if launcherConfig.hasManualSelection {
+                            Text(manualProviderBundleIDText)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                        }
+
+                        if let manualProviderError {
+                            Text(manualProviderError)
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                        }
 
                         Picker("Engine", selection: $launcherConfig.manualSelection.engine) {
                             Text("Chromium").tag(BrowserEngine.chromium)
@@ -528,8 +561,24 @@ struct SettingsView: View {
         case .auto:
             return "Auto prefers Helium, then known Chromium providers, then Firefox providers."
         case .manual:
-            return "Manual uses your bundle ID and selected engine adapter."
+            return "Manual uses the browser app you select and a matching engine adapter."
         }
+    }
+
+    private var manualProviderBundleIDText: String {
+        launcherConfig.manualSelection.bundleID.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var manualProviderNameText: String {
+        guard launcherConfig.hasManualSelection else {
+            return "No browser selected."
+        }
+
+        let bundleID = manualProviderBundleIDText
+        if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            return appURL.deletingPathExtension().lastPathComponent
+        }
+        return bundleID
     }
 
     private func shortcutRow(_ action: ShortcutAction) -> some View {
@@ -628,6 +677,34 @@ struct SettingsView: View {
         frame.origin.y -= delta
         frame.size.height = targetHeight
         window.setFrame(frame, display: true)
+    }
+
+    private func chooseManualBrowserApp() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        panel.allowedFileTypes = ["app"]
+        panel.allowsOtherFileTypes = false
+        panel.directoryURL = URL(fileURLWithPath: "/Applications", isDirectory: true)
+        panel.prompt = "Choose Browser"
+        panel.message = "Select a browser app for URL and web search actions."
+
+        guard panel.runModal() == .OK, let appURL = panel.url else { return }
+        applyManualProviderSelection(appURL: appURL)
+    }
+
+    private func applyManualProviderSelection(appURL: URL) {
+        guard let bundleID = Bundle(url: appURL)?.bundleIdentifier else {
+            manualProviderError = "Could not read a bundle identifier from the selected app."
+            return
+        }
+
+        launcherConfig.manualSelection = browserProviderResolver.manualSelection(
+            forBundleID: bundleID,
+            fallbackEngine: launcherConfig.manualSelection.engine
+        )
+        manualProviderError = nil
     }
 }
 

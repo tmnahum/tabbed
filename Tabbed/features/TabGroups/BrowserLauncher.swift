@@ -89,6 +89,14 @@ final class BrowserProviderResolver {
         }
         return nil
     }
+
+    func manualSelection(forBundleID bundleID: String, fallbackEngine: BrowserEngine = .chromium) -> BrowserProviderSelection {
+        let trimmedBundleID = bundleID.trimmingCharacters(in: .whitespacesAndNewlines)
+        return BrowserProviderSelection(
+            bundleID: trimmedBundleID,
+            engine: engine(for: trimmedBundleID) ?? fallbackEngine
+        )
+    }
 }
 
 protocol BrowserLauncher {

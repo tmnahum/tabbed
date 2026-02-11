@@ -323,7 +323,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 400, height: SettingsTab.general.contentHeight),
+            contentRect: NSRect(x: 0, y: 0, width: SettingsView.contentWidth, height: SettingsTab.general.contentHeight),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
