@@ -1,7 +1,6 @@
 # Development Guidelines
-- build with scripts/build.sh & scripts/test.sh , they include setting the env var DEVELOPMENT_TEAM=LS679A9VV4 for signing, and they only output on failure
+- build with scripts/build.sh & scripts/test.sh (test includes building within it), they include setting the env var DEVELOPMENT_TEAM=LS679A9VV4 for signing, and they only output on failure.
 - write tests
-- use superpowers skills
 
 
 ## What is Tabbed

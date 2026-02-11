@@ -2,6 +2,7 @@
 - Window names feature - replace the enter name popup with an inline name solution where you type directly into the tab bar. entering a blank name sets it back to an empty name. right click menu option focuses the text box, but you can also click it if you click in just the right exact spot (however no name should still not take up more space than it is now or if it does as little as possible)
 
 - Feature: New Tab can also launch apps
+
 - auto detection reliability issues
 - quick switcher performance issues
 - platofrm structure me understanding issues and also refactor?
@@ -9,14 +10,19 @@
 - quick switcher when switching to window and back to old window it sometimes opens the app you were just in instead of the window you teid to tab back into
 - quick switcher style
 - quick switcher general reliablitiy
+- quick switcher sometimes does not get order right until like two focuses sometimes
 
 - make settings window show up as window (it does show up in alttab, maybe reconsider what we're targetting)
-- pretection against picking up ui elements as winodws to autojoin
+- autojoin: pretection against picking up ui elements as winodws to autojoin
+- autojoin: autojoin too agressive with stealing windows that are already open and it steals them when we switch back to them
 
 Future:
 - pinned tabs
+- maybe: virtual tabs in which they belong to multiple windows (for apps with one window max like codex)
+    - limitation: pretty much unfeasable to be able to switch what space a window is in
 
-
+In the future (maybe present?) ai / ralph loop should be able to take a list like the above and do it correctly. already usually can from code perspective but not design perspective, but idk. Maybe need a prompt -> prompt step
+    - one real issue with this app is that it is too difficult / i haven't set up an ai visual viewer, so i need to be in the loop to test if result looks right, easier to do this for browser apps currently
 --------
 ## todo:
 

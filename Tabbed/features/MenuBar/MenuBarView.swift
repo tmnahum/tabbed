@@ -73,8 +73,21 @@ struct MenuBarView: View {
         MenuItemButton(title: title, systemImage: systemImage, shortcutHint: shortcutHint, action: action)
     }
 
+    private func groupLabel(_ group: TabGroup) -> String {
+        group.displayName ?? ""
+    }
+
     private func groupRow(_ group: TabGroup) -> some View {
         HStack(spacing: 4) {
+            let label = groupLabel(group)
+            if !label.isEmpty {
+                Text(label)
+                    .font(.system(size: 12, weight: .medium))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .help(label)
+            }
+
             ForEach(group.windows) { window in
                 Button {
                     onFocusWindow(window)

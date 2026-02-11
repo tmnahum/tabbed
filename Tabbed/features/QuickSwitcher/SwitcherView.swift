@@ -18,6 +18,9 @@ struct SwitcherView: View {
     private static let maxGroupIcons = 8
     /// Maximum characters for a window title before truncation.
     private static let maxTitleLength = 80
+    /// Hard cap for titles-mode panel width to keep long names on-screen.
+    private static let maxTitlesPanelWidth: CGFloat = 900
+    private static let minTitlesPanelWidth: CGFloat = 420
 
     var body: some View {
         Group {
@@ -67,27 +70,71 @@ struct SwitcherView: View {
         if case .group(let group) = item,
            !(isSelected && subSelectedWindowIndex != nil),
            let groupName = group.displayName {
-            switch namedGroupLabelMode {
-            case .groupNameOnly:
-                return truncatedTitle(groupName)
-            case .groupAppWindow:
-                let appName = group.activeWindow?.appName ?? ""
-                let windowTitle = group.activeWindow.map { $0.title.isEmpty ? $0.appName : $0.title } ?? ""
-                return truncatedTitle("\(groupName) - \(appName) - \(windowTitle)")
-            }
+            let appName = group.activeWindow?.appName ?? ""
+            let windowTitle = group.activeWindow.map { $0.title.isEmpty ? $0.appName : $0.title } ?? ""
+            return truncatedTitle(
+                SwitcherTextFormatter.namedGroupLabel(
+                    groupName: groupName,
+                    appName: appName,
+                    windowTitle: windowTitle,
+                    mode: namedGroupLabelMode,
+                    style: .appIcons
+                )
+            )
         }
         return displayAppName(for: item, isSelected: isSelected)
     }
 
     private func groupHeaderText(_ group: TabGroup) -> Text {
+        let groupName = group.displayName ?? ""
         switch namedGroupLabelMode {
         case .groupNameOnly:
-            return Text(group.displayName ?? "")
+            return Text(groupName).bold()
         case .groupAppWindow:
             let appName = group.activeWindow?.appName ?? ""
             let windowTitle = group.activeWindow.map { $0.title.isEmpty ? $0.appName : $0.title } ?? ""
-            return Text(group.displayName ?? "").bold() + Text(" - \(appName) - \(windowTitle)")
+            let suffix = SwitcherTextFormatter.namedGroupTitleSuffix(appName: appName, windowTitle: windowTitle)
+            return Text(groupName).bold() + Text(suffix)
         }
+    }
+
+    private var visibleScreenWidth: CGFloat {
+        let screen = NSScreen.screens.first(where: {
+            NSMouseInRect(NSEvent.mouseLocation, $0.frame, false)
+        }) ?? NSScreen.main
+        return screen?.visibleFrame.width ?? 1440
+    }
+
+    private var titlesPanelWidthLimit: CGFloat {
+        max(Self.minTitlesPanelWidth, min(Self.maxTitlesPanelWidth, visibleScreenWidth * 0.82))
+    }
+
+    private func rowIconSlotWidth(for item: SwitcherItem, isSelected: Bool) -> CGFloat {
+        if item.isGroup {
+            let frontIndex = isSelected ? subSelectedWindowIndex : nil
+            let icons = item.iconsInMRUOrder(frontIndex: frontIndex, maxVisible: Self.maxGroupIcons)
+            return max(36, groupedIconRowWidth(forCount: icons.count))
+        }
+        return 36
+    }
+
+    private var maxRowIconSlotWidth: CGFloat {
+        items.enumerated().reduce(CGFloat(36)) { current, element in
+            let (index, item) = element
+            return max(current, rowIconSlotWidth(for: item, isSelected: index == selectedIndex))
+        }
+    }
+
+    private var maxPrimaryTextWidth: CGFloat {
+        // Reserve space for icon slot + paddings + right-side count badge.
+        max(220, titlesPanelWidthLimit - maxRowIconSlotWidth - 128)
+    }
+
+    private func groupedIconRowWidth(forCount count: Int) -> CGFloat {
+        let clampedCount = max(1, count)
+        let iconSize: CGFloat = 22
+        let overlap: CGFloat = 9
+        return iconSize + CGFloat(clampedCount - 1) * overlap
     }
 
     // MARK: - App Icons Style
@@ -226,7 +273,7 @@ struct SwitcherView: View {
                     .padding(.vertical, 2)
             }
         }
-        .frame(minWidth: 420)
+        .frame(minWidth: Self.minTitlesPanelWidth, maxWidth: titlesPanelWidthLimit)
         .padding(4)
     }
 
@@ -239,27 +286,29 @@ struct SwitcherView: View {
             : isHovered ? Color.primary.opacity(0.2)
             : Color.clear
 
-        return HStack(spacing: 10) {
+        return HStack(spacing: 14) {
             // Icon(s)
             if item.isGroup {
                 let frontIndex = isSelected ? subSelectedWindowIndex : nil
                 let icons = item.iconsInMRUOrder(frontIndex: frontIndex, maxVisible: Self.maxGroupIcons)
-                let stackWidth = CGFloat(22 + max(0, icons.count - 1) * 9)
                 groupedIconRowStack(icons: icons)
-                    .frame(width: max(36, stackWidth), height: 28)
+                    .frame(width: maxRowIconSlotWidth, height: 28, alignment: .leading)
             } else if let icon = item.icons.first ?? nil {
                 Image(nsImage: icon)
                     .resizable()
-                    .frame(width: 28, height: 28)
+                    .frame(width: 28, height: 28, alignment: .leading)
+                    .frame(width: maxRowIconSlotWidth, height: 28, alignment: .leading)
             } else {
                 Image(systemName: "macwindow")
-                    .frame(width: 28, height: 28)
+                    .frame(width: 28, height: 28, alignment: .leading)
+                    .frame(width: maxRowIconSlotWidth, height: 28, alignment: .leading)
             }
 
             primaryText
                 .font(.system(size: 14))
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .frame(maxWidth: maxPrimaryTextWidth, alignment: .leading)
 
             Spacer()
 
@@ -302,7 +351,7 @@ struct SwitcherView: View {
         } else {
             let title = displayTitle(for: item, isSelected: isSelected)
             let appName = displayAppName(for: item, isSelected: isSelected)
-            Text("\(appName) — \(title)")
+            Text(SwitcherTextFormatter.appAndWindowText(appName: appName, windowTitle: title))
         }
     }
 
@@ -311,8 +360,9 @@ struct SwitcherView: View {
         let count = icons.count
         let iconSize: CGFloat = 22
         let overlap: CGFloat = 9
+        let stackWidth = groupedIconRowWidth(forCount: count)
 
-        return ZStack {
+        return ZStack(alignment: .leading) {
             ForEach(Array(icons.enumerated()), id: \.offset) { index, icon in
                 Group {
                     if let icon {
@@ -326,9 +376,10 @@ struct SwitcherView: View {
                 .frame(width: iconSize, height: iconSize)
                 .clipShape(RoundedRectangle(cornerRadius: 4))
                 .shadow(color: .black.opacity(0.1), radius: 1, y: 0.5)
-                .offset(x: CGFloat(index) * overlap - CGFloat(count - 1) * overlap / 2)
+                .offset(x: CGFloat(index) * overlap)
             }
         }
+        .frame(width: stackWidth, height: iconSize, alignment: .leading)
     }
 }
 
