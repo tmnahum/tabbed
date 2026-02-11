@@ -86,19 +86,11 @@ final class AddWindowPaletteViewModel: ObservableObject {
         isExecuting = true
         statusMessage = nil
 
-        actionExecutor(candidate.action, context) { [weak self] result in
-            guard let self else { return }
-            self.isExecuting = false
-            switch result {
-            case .succeeded:
-                self.dismiss()
-            case .timedOut(let status), .failed(let status):
-                self.statusMessage = status
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    self.dismiss()
-                }
-            }
-        }
+        // Dismiss immediately — the action completes in the background.
+        let savedContext = context
+        dismiss()
+
+        actionExecutor(candidate.action, savedContext) { _ in }
     }
 
     func isSelected(_ candidate: LauncherCandidate) -> Bool {
@@ -318,6 +310,7 @@ struct AddWindowPaletteView: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
+            .opacity(candidate.hasNativeNewWindow ? 1.0 : 0.5)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(selected ? Color.accentColor.opacity(0.26) : hovered ? Color.white.opacity(0.07) : Color.clear)

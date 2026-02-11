@@ -28,6 +28,7 @@ struct LauncherCandidate: Identifiable {
     let icon: NSImage?
     let recency: Int
     let isRunningApp: Bool
+    let hasNativeNewWindow: Bool
 
     var sectionTitle: String {
         switch tier {
@@ -48,7 +49,8 @@ extension LauncherCandidate: Equatable {
         lhs.displayName == rhs.displayName &&
         lhs.subtitle == rhs.subtitle &&
         lhs.recency == rhs.recency &&
-        lhs.isRunningApp == rhs.isRunningApp
+        lhs.isRunningApp == rhs.isRunningApp &&
+        lhs.hasNativeNewWindow == rhs.hasNativeNewWindow
     }
 }
 
@@ -98,7 +100,8 @@ final class LauncherEngine {
                 subtitle: window.title,
                 icon: window.icon,
                 recency: context.windowRecency[window.id] ?? 0,
-                isRunningApp: false
+                isRunningApp: false,
+                hasNativeNewWindow: true
             ))
         }
 
@@ -118,7 +121,8 @@ final class LauncherEngine {
                     subtitle: "\(group.windows.count) tabs",
                     icon: group.activeWindow?.icon,
                     recency: context.groupRecency[group.id] ?? 0,
-                    isRunningApp: false
+                    isRunningApp: false,
+                    hasNativeNewWindow: true
                 ))
             }
         }
@@ -136,7 +140,8 @@ final class LauncherEngine {
                 subtitle: app.bundleID,
                 icon: app.icon,
                 recency: context.appRecency[app.bundleID] ?? app.recency,
-                isRunningApp: app.isRunning
+                isRunningApp: app.isRunning,
+                hasNativeNewWindow: app.isRunning ? LaunchOrchestrator.hasNativeNewWindowSupport(bundleID: app.bundleID) : true
             ))
         }
 
@@ -152,7 +157,8 @@ final class LauncherEngine {
                     subtitle: url.absoluteString,
                     icon: nil,
                     recency: 0,
-                    isRunningApp: false
+                    isRunningApp: false,
+                    hasNativeNewWindow: true
                 ))
             }
 
@@ -165,7 +171,8 @@ final class LauncherEngine {
                 subtitle: query,
                 icon: nil,
                 recency: 0,
-                isRunningApp: false
+                isRunningApp: false,
+                hasNativeNewWindow: true
             ))
         }
 
@@ -191,7 +198,8 @@ final class LauncherEngine {
                     subtitle: window.title,
                     icon: window.icon,
                     recency: context.windowRecency[window.id] ?? 0,
-                    isRunningApp: false
+                    isRunningApp: false,
+                    hasNativeNewWindow: true
                 )
             }
         let previewWindows = sortWindows(windows).prefix(Self.previewWindowCap)
@@ -208,7 +216,8 @@ final class LauncherEngine {
                     subtitle: "\(group.windows.count) tabs",
                     icon: group.activeWindow?.icon,
                     recency: context.groupRecency[group.id] ?? 0,
-                    isRunningApp: false
+                    isRunningApp: false,
+                    hasNativeNewWindow: true
                 )
             }).prefix(Self.previewGroupCap))
         } else {

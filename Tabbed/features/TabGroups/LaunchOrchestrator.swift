@@ -38,6 +38,12 @@ final class LaunchOrchestrator {
             NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == bundleID })?.processIdentifier
         }
         var reopenRunningApp: (String, URL?) -> Bool = { bundleID, _ in
+            // Speculatively try --new-window for all apps (most ignore unknown flags harmlessly).
+            // Fire-and-forget: don't short-circuit so Cmd+N still fires as a backup.
+            LaunchOrchestrator.runOpenCommand(bundleID: bundleID, args: ["--new-window"])
+            if LaunchOrchestrator.sendNewWindowKeystrokes(bundleID: bundleID) {
+                return true
+            }
             if LaunchOrchestrator.sendReopenAppleEvent(bundleID: bundleID) {
                 return true
             }
@@ -238,18 +244,14 @@ final class LaunchOrchestrator {
                     dependencies.log("[CAPTURE_RESULT] success provider=\(provider.selection.bundleID) window=\(capture.id)")
                     return Outcome(result: .succeeded, capturedWindow: capture)
                 }
-            } else {
-                dependencies.log("[URL_LAUNCH] provider dispatch failed, trying fallback")
-            }
-
-            let fallback = launchURLFallbackAndCapture(url: url, request: request)
-            if fallback.result == .succeeded {
-                return fallback
+                dependencies.activateApp(provider.selection.bundleID)
+                dependencies.log("[CAPTURE_RESULT] timeout provider=\(provider.selection.bundleID)")
+                return Outcome(result: .timedOut(status: "No new window detected"), capturedWindow: nil)
             }
 
             dependencies.activateApp(provider.selection.bundleID)
-            dependencies.log("[CAPTURE_RESULT] timeout provider=\(provider.selection.bundleID)")
-            return fallback
+            dependencies.log("[CAPTURE_RESULT] failed provider=\(provider.selection.bundleID)")
+            return Outcome(result: .failed(status: "Unable to open URL"), capturedWindow: nil)
         }
 
         dependencies.log("[LAUNCHER_ACTION] openURL provider=system-default url=\(url.absoluteString)")
@@ -282,18 +284,14 @@ final class LaunchOrchestrator {
                     dependencies.log("[CAPTURE_RESULT] success provider=\(provider.selection.bundleID) window=\(capture.id)")
                     return Outcome(result: .succeeded, capturedWindow: capture)
                 }
-            } else {
-                dependencies.log("[URL_LAUNCH] provider search dispatch failed, trying fallback")
-            }
-
-            let fallback = launchSearchFallbackAndCapture(query: query, searchEngine: searchEngine, request: request)
-            if fallback.result == .succeeded {
-                return fallback
+                dependencies.activateApp(provider.selection.bundleID)
+                dependencies.log("[CAPTURE_RESULT] timeout provider=\(provider.selection.bundleID)")
+                return Outcome(result: .timedOut(status: "No new window detected"), capturedWindow: nil)
             }
 
             dependencies.activateApp(provider.selection.bundleID)
-            dependencies.log("[CAPTURE_RESULT] timeout provider=\(provider.selection.bundleID)")
-            return fallback
+            dependencies.log("[CAPTURE_RESULT] failed provider=\(provider.selection.bundleID)")
+            return Outcome(result: .failed(status: "Unable to open search"), capturedWindow: nil)
         }
 
         dependencies.log("[LAUNCHER_ACTION] webSearch provider=system-default query=\(query)")
@@ -357,23 +355,210 @@ final class LaunchOrchestrator {
         }
     }
 
+    static let knownNewWindowArgs: [String: [String]] = [
+        // VSCode family and derivatives (Electron / Code OSS)
+        "com.microsoft.VSCode": ["--new-window"],
+        "com.microsoft.VSCodeInsiders": ["--new-window"],
+        "com.todesktop.230313mzl4w4u92": ["--new-window"], // Cursor (VSCode fork)
+        "com.exafunction.windsurf": ["--new-window"], // Windsurf (VSCode fork)
+        "com.vscodium": ["--new-window"],
+        "co.posit.positron": ["--new-window"], // Positron
+        "com.trae.app": ["--new-window"], // Trae (ByteDance, VSCode-based)
+        "com.visualstudio.code.oss": ["--new-window"], // Code OSS / forks
+        "com.voideditor.code": ["--new-window"], // Void
+        "ai.codestory.AideInsiders": ["--new-window"], // Aide
+        "sh.melty.code": ["--new-window"], // Melty
+        "com.google.antigravity": ["--new-window"], // Antigravity / Project IDX
+
+        // Other Electron-based editors with documented new-window flags
+        "dev.zed.Zed": ["--new"], // Zed: `zed --new`
+        "com.sublimetext.4": ["--new-window"],
+        "com.sublimetext.3": ["--new-window"],
+        "com.sublimetext.2": ["--new-window"], // Assuming Sublime Text 2 also uses this
+        "com.github.atom": ["--new-window"],
+        "com.barebones.bbedit": ["--new-window"], // BBEdit: `bbedit --new-window`
+
+        // Browsers - Chromium-based (use --new-window)
+        "com.google.Chrome": ["--new-window"],
+        "com.google.Chrome.canary": ["--new-window"],
+        "com.google.Chrome.dev": ["--new-window"],
+        "com.google.Chrome.beta": ["--new-window"],
+        "com.microsoft.edgemac": ["--new-window"],
+        "com.brave.Browser": ["--new-window"],
+        "com.operasoftware.Opera": ["--new-window"],
+        "com.vivaldi.Vivaldi": ["--new-window"],
+
+        // Browsers - Firefox-based (use -new-window)
+        "org.mozilla.firefox": ["-new-window"],
+        "org.mozilla.firefoxdeveloperedition": ["-new-window"],
+        "org.mozilla.nightly": ["-new-window"],
+        "org.mozilla.thunderbird": ["-new-window"], // Thunderbird also uses -new-window
+    ]
+
+
+
+    /// Apps known to reliably create new windows via Cmd+N (no special CLI arg needed).
+    /// Used only for UI display (full opacity) — the reopen chain handles the actual launch.
+    static let knownCmdNNewWindowApps: Set<String> = [
+        // Terminals
+        "com.googlecode.iterm2",
+        "com.apple.Terminal",
+        "dev.warp.Warp-Stable",
+        "com.github.wez.wezterm",
+        "com.mitchellh.ghostty",
+        "org.tabby",
+        "net.kovidgoyal.kitty",
+        "org.alacritty",
+        "co.zeit.hyper",
+
+        // Editors and IDEs with standard document-style Cmd+N behavior
+        "com.microsoft.VSCode",
+        "com.microsoft.VSCodeInsiders",
+        "com.vscodium",
+        "com.sublimetext.4",
+        "com.sublimetext.3",
+        "com.sublimetext.2",
+        "dev.zed.Zed",
+        "com.github.atom",
+        "com.barebones.bbedit",
+        "com.macromates.TextMate",
+        "com.panic.Nova",
+        "com.coteditor.CotEditor",
+
+        // JetBrains IDEs often support Cmd+N for new projects/files
+        "com.jetbrains.intellij",
+        "com.jetbrains.intellij.ce",
+        "com.jetbrains.WebStorm",
+        "com.jetbrains.pycharm",
+        "com.jetbrains.pycharm.ce",
+        "com.jetbrains.CLion",
+        "com.jetbrains.GoLand",
+        "com.jetbrains.RubyMine",
+        "com.jetbrains.PhpStorm",
+        "com.jetbrains.DataGrip",
+        "com.jetbrains.AppCode",
+        "com.jetbrains.Rider",
+        "com.jetbrains.Fleet",
+        "com.jetbrains.dataspell",
+        "com.google.android.studio",
+        "com.jetbrains.AppCode-EAP",
+        "com.jetbrains.intellij-EAP",
+        "com.jetbrains.WebStorm-EAP",
+        "com.jetbrains.pycharm-EAP",
+        "com.jetbrains.CLion-EAP",
+        "com.jetbrains.DataGrip-EAP",
+        "com.jetbrains.GoLand-EAP",
+        "com.jetbrains.PhpStorm-EAP",
+        "com.jetbrains.Rider-EAP",
+        "com.jetbrains.RubyMine-EAP",
+        "com.jetbrains.dataspell-EAP",
+
+        // Apple apps with document-based new windows
+        "com.apple.TextEdit",
+        "com.apple.Preview",
+        "com.apple.Notes",
+        "com.apple.iWork.Pages",
+        "com.apple.iWork.Numbers",
+        "com.apple.iWork.Keynote",
+        "com.apple.dt.Xcode",
+
+        // Browsers (Cmd+N typically opens a new window, not just a tab)
+        "com.google.Chrome",
+        "com.google.Chrome.canary",
+        "com.google.Chrome.dev",
+        "com.google.Chrome.beta",
+        "com.microsoft.edgemac",
+        "com.brave.Browser",
+        "com.operasoftware.Opera",
+        "com.vivaldi.Vivaldi",
+        "org.mozilla.firefox",
+        "org.mozilla.firefoxdeveloperedition",
+        "org.mozilla.nightly",
+        "com.apple.Safari",
+        "company.thebrowser.Browser",
+        "org.mozilla.thunderbird",
+
+        // Some productivity apps that have clear "new document/window" Cmd+N
+        "md.obsidian",
+        "com.tinyspeck.slackmacgap",
+        "com.hnc.Discord",
+        "com.microsoft.teams",
+        "us.zoom.xos",
+        "notion.id",
+
+        // Design Tools (often have Cmd+N for new document)
+        "com.figma.Desktop",
+        "com.sketchapp",
+        "com.pixelmator.pro",
+        "com.bohemiancoding.sketch3",
+        "com.adobe.illustrator",
+        "com.adobe.photoshop",
+        "com.adobe.xd",
+        "com.adobe.lightroom",
+        "com.adobe.PremierePro",
+        "com.adobe.AfterEffects",
+        "com.adobe.Audition",
+        "com.adobe.InDesign",
+        "com.adobe.dreamweaver",
+        "com.adobe.bridge",
+        "com.adobe.acrobat",
+        "com.adobe.Reader",
+        "com.pixelmatorteam.pixelmator",
+    ]
+
+    static func hasNativeNewWindowSupport(bundleID: String) -> Bool {
+        if knownNewWindowArgs[bundleID] != nil { return true }
+        if knownCmdNNewWindowApps.contains(bundleID) { return true }
+        if BrowserProviderResolver.knownChromiumBundleIDs.contains(bundleID) { return true }
+        if BrowserProviderResolver.knownFirefoxBundleIDs.contains(bundleID) { return true }
+        return false
+    }
+
     private func defaultAttemptProviderNewWindow(bundleID: String) -> Bool {
-        guard let engine = resolver.engine(for: bundleID),
-              let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
-            return false
+        if let engine = resolver.engine(for: bundleID),
+           let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            let provider = ResolvedBrowserProvider(
+                selection: BrowserProviderSelection(bundleID: bundleID, engine: engine),
+                appURL: appURL
+            )
+            switch engine {
+            case .chromium:
+                return chromiumLauncher.openNewWindow(provider: provider)
+            case .firefox:
+                return firefoxLauncher.openNewWindow(provider: provider)
+            }
         }
 
-        let provider = ResolvedBrowserProvider(
-            selection: BrowserProviderSelection(bundleID: bundleID, engine: engine),
-            appURL: appURL
-        )
-
-        switch engine {
-        case .chromium:
-            return chromiumLauncher.openNewWindow(provider: provider)
-        case .firefox:
-            return firefoxLauncher.openNewWindow(provider: provider)
+        if let args = Self.knownNewWindowArgs[bundleID] {
+            return Self.launchNewWindowWithArgs(bundleID: bundleID, args: args)
         }
+
+        return false
+    }
+
+    private static func launchNewWindowWithArgs(bundleID: String, args: [String]) -> Bool {
+        if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID),
+           let bundle = Bundle(url: appURL),
+           let executableURL = bundle.executableURL {
+            let process = Process()
+            process.executableURL = executableURL
+            process.arguments = args
+            do {
+                try process.run()
+                let deadline = Date().addingTimeInterval(0.8)
+                while process.isRunning, Date() < deadline {
+                    Thread.sleep(forTimeInterval: 0.02)
+                }
+                if process.isRunning || process.terminationStatus == 0 {
+                    Logger.log("[APP_LAUNCH] new-window via executable bundle=\(bundleID) args=\(args)")
+                    return true
+                }
+            } catch {
+                Logger.log("[APP_LAUNCH] executable launch failed bundle=\(bundleID): \(error.localizedDescription)")
+            }
+        }
+
+        return runOpenCommand(bundleID: bundleID, args: args)
     }
 
     private func defaultLaunchURL(url: URL, provider: ResolvedBrowserProvider) -> Bool {
@@ -456,6 +641,27 @@ final class LaunchOrchestrator {
             Logger.log("[APP_LAUNCH] open command failed bundle=\(bundleID): \(error.localizedDescription)")
             return false
         }
+    }
+
+    private static func sendNewWindowKeystrokes(bundleID: String) -> Bool {
+        let escapedID = bundleID.replacingOccurrences(of: "\"", with: "\\\"")
+        let source = """
+        tell application id "\(escapedID)"
+            activate
+        end tell
+        delay 0.3
+        tell application "System Events"
+            keystroke "n" using command down
+        end tell
+        """
+        var error: NSDictionary?
+        let script = NSAppleScript(source: source)
+        _ = script?.executeAndReturnError(&error)
+        if let error {
+            Logger.log("[APP_LAUNCH] new-window keystroke failed bundle=\(bundleID): \(error)")
+            return false
+        }
+        return true
     }
 
     private static func sendReopenAppleEvent(bundleID: String) -> Bool {
