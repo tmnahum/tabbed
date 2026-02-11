@@ -287,7 +287,7 @@ extension AppDelegate {
         guard let group = groupManager.group(for: windowID) else { return }
         if let index = group.windows.firstIndex(where: { $0.id == windowID }),
            let newTitle = AccessibilityHelper.getTitle(of: group.windows[index].element) {
-            group.windows[index].title = newTitle
+            groupManager.updateWindowTitle(withID: windowID, in: group, to: newTitle)
         }
     }
 

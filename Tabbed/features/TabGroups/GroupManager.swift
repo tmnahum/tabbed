@@ -54,6 +54,20 @@ class GroupManager: ObservableObject {
         }
     }
 
+    /// Updates a grouped window's title and publishes a change for views that
+    /// observe the manager (for example, the menu bar popover).
+    @discardableResult
+    func updateWindowTitle(withID windowID: CGWindowID, in group: TabGroup, to title: String) -> Bool {
+        guard groups.contains(where: { $0.id == group.id }),
+              let index = group.windows.firstIndex(where: { $0.id == windowID }) else {
+            return false
+        }
+        guard group.windows[index].title != title else { return false }
+        group.windows[index].title = title
+        objectWillChange.send()
+        return true
+    }
+
     /// Remove multiple windows from a group. Returns the removed windows.
     /// Auto-dissolves the group if it becomes empty.
     @discardableResult

@@ -36,6 +36,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var addWindowLauncherConfig = AddWindowLauncherConfig.load()
     let launcherEngine = LauncherEngine()
     let appCatalogService = AppCatalogService()
+    let launcherHistoryStore = LauncherHistoryStore()
     let browserProviderResolver = BrowserProviderResolver()
     lazy var launchOrchestrator: LaunchOrchestrator = {
         var dependencies = LaunchOrchestrator.Dependencies()

@@ -36,6 +36,7 @@
 - option to auto 1-tab-group all new windows if not matched to existing window
 
 - make new branch main branch and main branch "old" branch
+- simplify settings ux
 
 Future:
 - pinned tabs
@@ -43,10 +44,12 @@ Future:
 - maybe: virtual tabs in which they belong to multiple windows (for apps with one window max like codex)
     - limitation: pretty much unfeasable to be able to switch what space a window is in
 
-In the future (maybe present?) ai / ralph loop should be able to take a list like the above and do it correctly. already usually can from code perspective but not design perspective, but idk. Maybe need a prompt -> prompt step
-    - one real issue with this app is that it is too difficult / i haven't set up an ai visual viewer, so i need to be in the loop to test if result looks right, easier to do this for browser apps currently
 --------
 ## todo:
+
+In the future (maybe present?) ai / ralph loop should be able to take a list like the above and do it correctly. already usually can from code perspective but not design perspective, but idk. Maybe need a prompt -> prompt step
+    - one real issue with this app is that it is too difficult / i haven't set up an ai visual viewer, so i need to be in the loop to test if result looks right, easier to do this for browser apps currently
+
 
 - [x] fullscreen restoration
     - can maybe improve was tired when designed this

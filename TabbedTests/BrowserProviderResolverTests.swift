@@ -76,7 +76,9 @@ final class BrowserProviderResolverTests: XCTestCase {
             currentSpaceID: nil,
             windowRecency: [:],
             groupRecency: [:],
-            appRecency: [:]
+            appRecency: [:],
+            urlHistory: [],
+            appLaunchHistory: [:]
         )
 
         let ranked = engine.rank(query: "example.com", context: context)

@@ -34,7 +34,8 @@ struct LauncherCandidate: Identifiable {
         switch tier {
         case 0: return "Windows"
         case 1: return "Groups"
-        case 2: return "Apps"
+        case 2: return "Suggestions"
+        case 3: return "Web Search"
         default: return "Actions"
         }
     }
@@ -65,6 +66,8 @@ struct LauncherQueryContext {
     let windowRecency: [CGWindowID: Int]
     let groupRecency: [UUID: Int]
     let appRecency: [String: Int]
+    let urlHistory: [LauncherHistoryStore.URLEntry]
+    let appLaunchHistory: [String: LauncherHistoryStore.AppEntry]
 }
 
 enum LaunchAttemptResult: Equatable {
@@ -86,6 +89,9 @@ final class LauncherEngine {
             Logger.log("[LAUNCHER_RANK] empty-query candidates=\(preview.count)")
             return preview
         }
+
+        let now = Date()
+        let hasExplicitURLIntent = Self.hasExplicitURLIntent(query: query)
 
         var windows: [LauncherCandidate] = []
         for window in context.looseWindows {
@@ -127,63 +133,23 @@ final class LauncherEngine {
             }
         }
 
-        var apps: [LauncherCandidate] = []
-        for app in context.appCatalog {
-            let score = scoreApp(query: query, app: app)
-            guard score > 0 else { continue }
-            apps.append(LauncherCandidate(
-                id: "app-\(app.bundleID)",
-                action: .appLaunch(bundleID: app.bundleID, appURL: app.appURL, isRunning: app.isRunning),
-                tier: 2,
-                score: score,
-                displayName: app.displayName,
-                subtitle: app.bundleID,
-                icon: app.icon,
-                recency: context.appRecency[app.bundleID] ?? app.recency,
-                isRunningApp: app.isRunning,
-                hasNativeNewWindow: app.isRunning ? LaunchOrchestrator.hasNativeNewWindowSupport(bundleID: app.bundleID) : true
-            ))
-        }
-
-        var actions: [LauncherCandidate] = []
-        if context.launcherConfig.urlLaunchEnabled,
-           let url = Self.normalizeURL(from: query) {
-            actions.append(LauncherCandidate(
-                id: "url-\(url.absoluteString)",
-                action: .openURL(url: url),
-                tier: 3,
-                score: 1.0,
-                displayName: "Open URL",
-                subtitle: url.absoluteString,
-                icon: nil,
-                recency: 0,
-                isRunningApp: false,
-                hasNativeNewWindow: true
-            ))
-        }
-
-        if context.launcherConfig.searchLaunchEnabled {
-            actions.append(LauncherCandidate(
-                id: "search-\(query)",
-                action: .webSearch(query: query),
-                tier: 3,
-                score: 0.7,
-                displayName: "Web Search",
-                subtitle: query,
-                icon: nil,
-                recency: 0,
-                isRunningApp: false,
-                hasNativeNewWindow: true
-            ))
-        }
+        let suggestions = buildSuggestions(
+            query: query,
+            context: context,
+            now: now,
+            hasExplicitURLIntent: hasExplicitURLIntent
+        )
+        let search = buildSearchCandidates(query: query, context: context)
 
         let ranked =
             sortWindows(windows) +
             sortGroups(groups) +
-            sortApps(apps) +
-            sortActions(actions)
+            sortSuggestions(suggestions) +
+            sortSearches(search)
 
-        Logger.log("[LAUNCHER_RANK] ranked windows=\(windows.count) groups=\(groups.count) apps=\(apps.count) actions=\(actions.count)")
+        Logger.log(
+            "[LAUNCHER_RANK] ranked windows=\(windows.count) groups=\(groups.count) suggestions=\(suggestions.count) search=\(search.count)"
+        )
         return ranked
     }
 
@@ -317,12 +283,161 @@ final class LauncherEngine {
         }
     }
 
+    private static func hasExplicitURLIntent(query: String) -> Bool {
+        if query.contains(".") {
+            return true
+        }
+        guard let components = URLComponents(string: query),
+              let scheme = components.scheme?.lowercased() else {
+            return false
+        }
+        return scheme == "http" || scheme == "https"
+    }
+
+    private func buildSuggestions(
+        query: String,
+        context: LauncherQueryContext,
+        now: Date,
+        hasExplicitURLIntent: Bool
+    ) -> [LauncherCandidate] {
+        var suggestions: [LauncherCandidate] = []
+
+        for app in context.appCatalog {
+            let base = scoreApp(query: query, app: app)
+            guard base > 0 else { continue }
+
+            let historyEntry = context.appLaunchHistory[app.bundleID]
+            let usageBoost = appUsageBoost(entry: historyEntry, now: now)
+            let runningBoost = app.isRunning ? 0.05 : 0
+            let finalScore = base + usageBoost + runningBoost
+            let historyRecency = historyEntry.map { Int($0.lastLaunchedAt.timeIntervalSince1970) } ?? 0
+
+            suggestions.append(LauncherCandidate(
+                id: "app-\(app.bundleID)",
+                action: .appLaunch(bundleID: app.bundleID, appURL: app.appURL, isRunning: app.isRunning),
+                tier: 2,
+                score: finalScore,
+                displayName: app.displayName,
+                subtitle: app.bundleID,
+                icon: app.icon,
+                recency: max(context.appRecency[app.bundleID] ?? app.recency, historyRecency),
+                isRunningApp: app.isRunning,
+                hasNativeNewWindow: app.isRunning ? LaunchOrchestrator.hasNativeNewWindowSupport(bundleID: app.bundleID) : true
+            ))
+        }
+
+        if context.launcherConfig.urlLaunchEnabled {
+            let intentBoost = hasExplicitURLIntent ? 0.4 : 0
+            var historyByCanonical: [String: LauncherHistoryStore.URLEntry] = [:]
+            for entry in context.urlHistory {
+                guard let url = URL(string: entry.urlString) else { continue }
+                historyByCanonical[LauncherHistoryStore.canonicalURLString(url)] = entry
+            }
+
+            var urlSuggestionsByCanonical: [String: LauncherCandidate] = [:]
+
+            func upsertURLSuggestion(_ candidate: LauncherCandidate, canonical: String) {
+                if let existing = urlSuggestionsByCanonical[canonical] {
+                    if candidate.score > existing.score {
+                        urlSuggestionsByCanonical[canonical] = candidate
+                    } else if candidate.score == existing.score,
+                              candidate.recency > existing.recency {
+                        urlSuggestionsByCanonical[canonical] = candidate
+                    }
+                } else {
+                    urlSuggestionsByCanonical[canonical] = candidate
+                }
+            }
+
+            if let typedURL = Self.normalizeURL(from: query) {
+                let canonical = LauncherHistoryStore.canonicalURLString(typedURL)
+                let historyRecency = historyByCanonical[canonical].map { Int($0.lastLaunchedAt.timeIntervalSince1970) } ?? 0
+                let typedCandidate = LauncherCandidate(
+                    id: "url-typed-\(canonical)",
+                    action: .openURL(url: typedURL),
+                    tier: 2,
+                    score: 1.0 + intentBoost,
+                    displayName: "Open URL",
+                    subtitle: typedURL.absoluteString,
+                    icon: nil,
+                    recency: historyRecency,
+                    isRunningApp: false,
+                    hasNativeNewWindow: true
+                )
+                upsertURLSuggestion(typedCandidate, canonical: canonical)
+            }
+
+            for entry in context.urlHistory {
+                guard let url = URL(string: entry.urlString) else { continue }
+                let host = url.host ?? ""
+                let base = scoreMatch(query: query, fields: [host, url.absoluteString])
+                guard base > 0 else { continue }
+
+                let canonical = LauncherHistoryStore.canonicalURLString(url)
+                let finalScore = base + urlUsageBoost(entry: entry, now: now) + intentBoost
+                let hostDisplay = host.isEmpty ? "Open URL" : host
+
+                let historyCandidate = LauncherCandidate(
+                    id: "url-history-\(canonical)",
+                    action: .openURL(url: url),
+                    tier: 2,
+                    score: finalScore,
+                    displayName: hostDisplay,
+                    subtitle: url.absoluteString,
+                    icon: nil,
+                    recency: Int(entry.lastLaunchedAt.timeIntervalSince1970),
+                    isRunningApp: false,
+                    hasNativeNewWindow: true
+                )
+                upsertURLSuggestion(historyCandidate, canonical: canonical)
+            }
+
+            suggestions.append(contentsOf: urlSuggestionsByCanonical.values)
+        }
+
+        return suggestions
+    }
+
+    private func buildSearchCandidates(query: String, context: LauncherQueryContext) -> [LauncherCandidate] {
+        guard context.launcherConfig.searchLaunchEnabled else { return [] }
+
+        return [
+            LauncherCandidate(
+                id: "search-\(query)",
+                action: .webSearch(query: query),
+                tier: 3,
+                score: 0.1,
+                displayName: "Web Search",
+                subtitle: query,
+                icon: nil,
+                recency: 0,
+                isRunningApp: false,
+                hasNativeNewWindow: true
+            )
+        ]
+    }
+
     private func scoreApp(query: String, app: AppCatalogService.AppRecord) -> Double {
         let base = scoreMatch(query: query, fields: [app.displayName, app.bundleID])
         if app.bundleID.lowercased().hasSuffix(query) {
             return max(base, 0.85)
         }
         return base
+    }
+
+    private func appUsageBoost(entry: LauncherHistoryStore.AppEntry?, now: Date) -> Double {
+        guard let entry else { return 0 }
+        let hoursSinceLast = max(0, now.timeIntervalSince(entry.lastLaunchedAt) / 3600)
+        let frequencyBoost = 0.12 * log2(Double(entry.launchCount) + 1)
+        let recencyBoost = 0.25 * exp(-hoursSinceLast / 168.0)
+        return min(0.45, frequencyBoost + recencyBoost)
+    }
+
+    private func urlUsageBoost(entry: LauncherHistoryStore.URLEntry, now: Date) -> Double {
+        let hoursSinceLast = max(0, now.timeIntervalSince(entry.lastLaunchedAt) / 3600)
+        let frequencyBoost = 0.15 * log2(Double(entry.launchCount) + 1)
+        let recencyBoost = 0.35 * exp(-hoursSinceLast / 168.0)
+        return min(0.5, frequencyBoost + recencyBoost)
     }
 
     private func scoreMatch(query: String, fields: [String]) -> Double {
@@ -399,7 +514,7 @@ final class LauncherEngine {
         }
     }
 
-    private func sortApps(_ candidates: [LauncherCandidate]) -> [LauncherCandidate] {
+    private func sortSuggestions(_ candidates: [LauncherCandidate]) -> [LauncherCandidate] {
         candidates.sorted { lhs, rhs in
             if lhs.score != rhs.score { return lhs.score > rhs.score }
             if lhs.isRunningApp != rhs.isRunningApp { return lhs.isRunningApp }
@@ -408,13 +523,8 @@ final class LauncherEngine {
         }
     }
 
-    private func sortActions(_ candidates: [LauncherCandidate]) -> [LauncherCandidate] {
+    private func sortSearches(_ candidates: [LauncherCandidate]) -> [LauncherCandidate] {
         candidates.sorted { lhs, rhs in
-            let lhsIsURL: Bool
-            if case .openURL = lhs.action { lhsIsURL = true } else { lhsIsURL = false }
-            let rhsIsURL: Bool
-            if case .openURL = rhs.action { rhsIsURL = true } else { rhsIsURL = false }
-            if lhsIsURL != rhsIsURL { return lhsIsURL }
             if lhs.score != rhs.score { return lhs.score > rhs.score }
             return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
         }

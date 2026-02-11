@@ -1,6 +1,7 @@
 import XCTest
 @testable import Tabbed
 import ApplicationServices
+import Combine
 
 final class GroupManagerTests: XCTestCase {
     func makeWindow(id: CGWindowID) -> WindowInfo {
@@ -289,6 +290,46 @@ final class GroupManagerTests: XCTestCase {
         let windows = [makeWindow(id: 1), makeWindow(id: 2)]
         let group = gm.createGroup(with: windows, frame: .zero, name: "Work")
         XCTAssertEqual(group?.displayName, "Work")
+    }
+
+    // MARK: - Title Updates
+
+    func testUpdateWindowTitleUpdatesWindowAndPublishesChange() {
+        let gm = GroupManager()
+        let group = gm.createGroup(with: [makeWindow(id: 1)], frame: .zero)!
+        let changeExpectation = expectation(description: "GroupManager publishes title change")
+        var cancellables = Set<AnyCancellable>()
+
+        gm.objectWillChange
+            .sink { _ in
+                changeExpectation.fulfill()
+            }
+            .store(in: &cancellables)
+
+        let updated = gm.updateWindowTitle(withID: 1, in: group, to: "Renamed")
+
+        XCTAssertTrue(updated)
+        XCTAssertEqual(group.windows[0].title, "Renamed")
+        wait(for: [changeExpectation], timeout: 0.2)
+    }
+
+    func testUpdateWindowTitleNoOpsWhenTitleUnchanged() {
+        let gm = GroupManager()
+        let group = gm.createGroup(with: [makeWindow(id: 1)], frame: .zero)!
+        let changeExpectation = expectation(description: "No publish for unchanged title")
+        changeExpectation.isInverted = true
+        var cancellables = Set<AnyCancellable>()
+
+        gm.objectWillChange
+            .sink { _ in
+                changeExpectation.fulfill()
+            }
+            .store(in: &cancellables)
+
+        let updated = gm.updateWindowTitle(withID: 1, in: group, to: group.windows[0].title)
+
+        XCTAssertFalse(updated)
+        wait(for: [changeExpectation], timeout: 0.2)
     }
 
 }

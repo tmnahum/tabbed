@@ -77,7 +77,9 @@ extension AppDelegate {
                     currentSpaceID: nil,
                     windowRecency: [:],
                     groupRecency: [:],
-                    appRecency: [:]
+                    appRecency: [:],
+                    urlHistory: [],
+                    appLaunchHistory: [:]
                 )
             },
             actionExecutor: { [weak self] action, context, completion in
@@ -174,7 +176,9 @@ extension AppDelegate {
             currentSpaceID: currentSpaceID,
             windowRecency: windowRecency,
             groupRecency: groupRecency,
-            appRecency: appRecency
+            appRecency: appRecency,
+            urlHistory: launcherHistoryStore.urlEntries(),
+            appLaunchHistory: launcherHistoryStore.appEntriesByBundleID()
         )
     }
 
@@ -244,12 +248,16 @@ extension AppDelegate {
             }
             let request = LaunchOrchestrator.CaptureRequest(mode: context.mode, currentSpaceID: context.currentSpaceID)
             launchOrchestrator.launchAppAndCapture(app: app, request: request) { [weak self] outcome in
+                self?.launcherHistoryStore.recordAppLaunch(bundleID: bundleID, outcome: outcome.result)
                 self?.handleCaptureOutcome(outcome, context: context, completion: completion)
             }
 
         case .openURL(let url):
             let request = LaunchOrchestrator.CaptureRequest(mode: context.mode, currentSpaceID: context.currentSpaceID)
             launchOrchestrator.launchURLAndCapture(url: url, provider: context.resolvedBrowserProvider, request: request) { [weak self] outcome in
+                if !LauncherHistoryStore.isSearchURL(url) {
+                    self?.launcherHistoryStore.recordURLLaunch(url, outcome: outcome.result)
+                }
                 self?.handleCaptureOutcome(outcome, context: context, completion: completion)
             }
 
