@@ -41,7 +41,7 @@ extension AppDelegate {
             if let windowID = item.windowIDs.first,
                let index = group.windows.firstIndex(where: { $0.id == windowID }) {
                 self.switchTab(in: group, to: index, panel: panel)
-                group.endCycle()
+                group.endCycle(landedWindowID: windowID)
                 self.cyclingGroup = nil
                 self.cycleEndTime = Date()
             }

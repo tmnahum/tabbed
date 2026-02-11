@@ -5,4 +5,5 @@ set -e
 pkill -INT -x Tabbed 2>/dev/null && sleep 1 || true
 
 "$(dirname "$0")/build.sh"
+echo "Build completed"
 open build/Build/Products/Debug/Tabbed.app

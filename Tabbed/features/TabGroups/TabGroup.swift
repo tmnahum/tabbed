@@ -148,15 +148,21 @@ class TabGroup: Identifiable, ObservableObject {
     }
 
     /// End a cycling session: commit the landed-on window to MRU front and reset.
-    func endCycle() {
+    /// - Parameter landedWindowID: Optional explicit final selection from UI.
+    ///   If provided and still present in the group, it wins over snapshot state.
+    func endCycle(landedWindowID: CGWindowID? = nil) {
         isCycling = false
+        let explicitLandedID: CGWindowID? = {
+            guard let landedWindowID else { return nil }
+            return windows.contains(where: { $0.id == landedWindowID }) ? landedWindowID : nil
+        }()
         // Use the snapshot position — immune to focus-event races that change activeIndex
-        let landedID: CGWindowID? = {
+        let snapshotLandedID: CGWindowID? = {
             guard !cycleOrder.isEmpty, cyclePosition < cycleOrder.count else { return nil }
             let id = cycleOrder[cyclePosition]
             return windows.contains(where: { $0.id == id }) ? id : nil
         }()
-        if let id = landedID ?? activeWindow?.id {
+        if let id = explicitLandedID ?? snapshotLandedID ?? activeWindow?.id {
             recordFocus(windowID: id)
         }
         cycleOrder = []

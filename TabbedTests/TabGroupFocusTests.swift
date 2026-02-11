@@ -139,6 +139,24 @@ final class TabGroupFocusTests: XCTestCase {
         XCTAssertEqual(group.focusHistory[0], 2)
     }
 
+    func testEndCycleWithExplicitLandedWindowCommitsThatWindow() {
+        let w1 = makeWindow(id: 1)
+        let w2 = makeWindow(id: 2)
+        let w3 = makeWindow(id: 3)
+        let group = TabGroup(windows: [w1, w2, w3], frame: .zero)
+        // focusHistory: [1, 2, 3]
+
+        // Start cycle: snapshot [1, 2, 3], internal position advances to w2.
+        let first = group.nextInMRUCycle()
+        XCTAssertEqual(first, 1)
+
+        // Simulate UI navigating further without mutating TabGroup's cycle cursor.
+        // Commit explicit landed window (w3).
+        group.endCycle(landedWindowID: 3)
+
+        XCTAssertEqual(group.focusHistory.first, 3)
+    }
+
     func testCycleSnapshotIsFrozen() {
         let w1 = makeWindow(id: 1)
         let w2 = makeWindow(id: 2)
