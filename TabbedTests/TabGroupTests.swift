@@ -31,6 +31,33 @@ final class TabGroupTests: XCTestCase {
         XCTAssertNil(group.displayName)
     }
 
+    func testTabBarDisplayedGroupNameTrimsWhitespace() {
+        XCTAssertEqual(TabBarView.displayedGroupName(from: "  Work  "), "Work")
+    }
+
+    func testTabBarDisplayedGroupNameReturnsNilForWhitespaceOnly() {
+        XCTAssertNil(TabBarView.displayedGroupName(from: "  "))
+        XCTAssertNil(TabBarView.displayedGroupName(from: nil))
+    }
+
+    func testGroupNameReservedWidthIsMinimalWhenUnnamed() {
+        XCTAssertEqual(TabBarView.groupNameReservedWidth(for: nil), TabBarView.groupNameEmptyHitWidth)
+    }
+
+    func testGroupNameReservedWidthExpandsWhileEditingUnnamedGroup() {
+        let idleWidth = TabBarView.groupNameReservedWidth(for: nil)
+        let editingWidth = TabBarView.groupNameReservedWidth(for: nil, isEditing: true)
+        XCTAssertGreaterThan(editingWidth, idleWidth)
+    }
+
+    func testGroupNameReservedWidthWhileEditingUsesMinimumEditorWidth() {
+        let editingWidth = TabBarView.groupNameReservedWidth(for: "X", isEditing: true)
+        XCTAssertGreaterThanOrEqual(
+            editingWidth,
+            TabBarView.groupNameEditingMinWidth + 6
+        )
+    }
+
     func testActiveWindow() {
         let w1 = makeWindow(id: 1)
         let w2 = makeWindow(id: 2)

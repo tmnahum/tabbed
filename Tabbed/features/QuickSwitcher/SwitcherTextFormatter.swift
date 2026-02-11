@@ -1,7 +1,7 @@
 import Foundation
 
 enum SwitcherTextFormatter {
-    private static let longDash = " — "
+    private static let longDash = "  —  "
 
     static func appAndWindowText(appName: String, windowTitle: String) -> String {
         let app = appName.trimmingCharacters(in: .whitespacesAndNewlines)

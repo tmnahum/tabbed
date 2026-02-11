@@ -13,7 +13,8 @@ struct TabBarView: View {
     var onCloseTab: (Int) -> Void
     var onAddWindow: () -> Void
     var onAddWindowAfterTab: (Int) -> Void
-    var onRequestGroupName: () -> Void
+    var onBeginGroupNameEdit: () -> Void
+    var onCommitGroupName: (String?) -> Void
     var onReleaseTabs: (Set<CGWindowID>) -> Void
     var onMoveToNewGroup: (Set<CGWindowID>) -> Void
     var onCloseTabs: (Set<CGWindowID>) -> Void
@@ -29,6 +30,8 @@ struct TabBarView: View {
     static let groupNameMaxWidth: CGFloat = 180
     static let groupNameHorizontalPadding: CGFloat = 8
     static let groupNameFontSize: CGFloat = 11
+    static let groupNameEmptyHitWidth: CGFloat = 3
+    static let groupNameEditingMinWidth: CGFloat = 110
 
     static func displayedGroupName(from rawName: String?) -> String? {
         guard let rawName else { return nil }
@@ -36,13 +39,16 @@ struct TabBarView: View {
         return trimmed.isEmpty ? nil : trimmed
     }
 
-    static func groupNameReservedWidth(for rawName: String?) -> CGFloat {
-        guard let name = displayedGroupName(from: rawName) else { return 0 }
+    static func groupNameReservedWidth(for rawName: String?, isEditing: Bool = false) -> CGFloat {
+        guard let name = displayedGroupName(from: rawName) else {
+            return isEditing ? groupNameEditingMinWidth + 6 : groupNameEmptyHitWidth
+        }
         let textWidth = (name as NSString).size(
             withAttributes: [.font: NSFont.systemFont(ofSize: groupNameFontSize, weight: .semibold)]
         ).width
         let contentWidth = min(groupNameMaxWidth, textWidth + groupNameHorizontalPadding * 2)
-        return contentWidth + 6
+        let renderedWidth = contentWidth + 6
+        return isEditing ? max(renderedWidth, groupNameEditingMinWidth + 6) : renderedWidth
     }
 
     // Chrome/Firefox-style horizontal expand transition for new tabs
@@ -75,13 +81,16 @@ struct TabBarView: View {
     @State private var snapIDs: Set<CGWindowID> = []
     @State private var snapOffset: CGFloat = 0
     @State private var tabLeadingXs: [CGWindowID: CGFloat] = [:]
+    @State private var isEditingGroupName = false
+    @State private var groupNameDraft = ""
+    @FocusState private var isGroupNameFieldFocused: Bool
 
     var body: some View {
         GeometryReader { geo in
             let tabCount = group.windows.count
             let isCompact = tabBarConfig.style == .compact
             let handleWidth: CGFloat = tabBarConfig.showDragHandle ? Self.dragHandleWidth : 0
-            let groupNameWidth = Self.groupNameReservedWidth(for: group.name)
+            let groupNameWidth = Self.groupNameReservedWidth(for: group.name, isEditing: isEditingGroupName)
             let leadingPad: CGFloat = tabBarConfig.showDragHandle ? 4 : 2
             let trailingPad: CGFloat = 4
             let availableWidth = max(0, geo.size.width - leadingPad - trailingPad - Self.addButtonWidth - handleWidth - groupNameWidth)
@@ -101,9 +110,7 @@ struct TabBarView: View {
                     if tabBarConfig.showDragHandle {
                         dragHandle
                     }
-                    if let groupName = Self.displayedGroupName(from: group.name) {
-                        groupNameLabel(groupName)
-                    }
+                    groupNameControl(groupNameWidth: groupNameWidth)
                     ForEach(Array(group.windows.enumerated()), id: \.element.id) { index, window in
                         let isDragging = draggingIDs.contains(window.id)
 
@@ -189,7 +196,7 @@ struct TabBarView: View {
             .contentShape(Rectangle())
             .contextMenu {
                 Button(group.displayName == nil ? "Name Group…" : "Rename Group…") {
-                    onRequestGroupName()
+                    beginGroupNameEditing(fromContextMenu: true)
                 }
                 Divider()
                 Button("Ungroup") {
@@ -206,6 +213,18 @@ struct TabBarView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear {
+            groupNameDraft = group.displayName ?? ""
+        }
+        .onChange(of: group.name) { _ in
+            guard !isEditingGroupName else { return }
+            groupNameDraft = group.displayName ?? ""
+        }
+        .onChange(of: isGroupNameFieldFocused) { focused in
+            if !focused {
+                commitGroupNameEdit()
+            }
+        }
         .onChange(of: group.windows.count) { _ in
             // Clear stale selection when windows are externally added/removed
             let validIDs = Set(group.windows.map(\.id))
@@ -503,15 +522,69 @@ struct TabBarView: View {
         .frame(width: Self.dragHandleWidth)
     }
 
-    private func groupNameLabel(_ name: String) -> some View {
-        Text(name)
-            .font(.system(size: Self.groupNameFontSize, weight: .semibold))
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .truncationMode(.tail)
-            .padding(.horizontal, Self.groupNameHorizontalPadding)
-            .frame(width: Self.groupNameReservedWidth(for: name), alignment: .leading)
-            .allowsHitTesting(false)
+    @ViewBuilder
+    private func groupNameControl(groupNameWidth: CGFloat) -> some View {
+        if isEditingGroupName {
+            TextField("Group name", text: $groupNameDraft)
+                .textFieldStyle(.plain)
+                .font(.system(size: Self.groupNameFontSize, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, Self.groupNameHorizontalPadding)
+                .frame(width: groupNameWidth, alignment: .leading)
+                .focused($isGroupNameFieldFocused)
+                .onSubmit {
+                    commitGroupNameEdit()
+                }
+                .onExitCommand {
+                    cancelGroupNameEdit()
+                }
+        } else {
+            Group {
+                if let name = Self.displayedGroupName(from: group.name) {
+                    Text(name)
+                        .font(.system(size: Self.groupNameFontSize, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .padding(.horizontal, Self.groupNameHorizontalPadding)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    Color.clear
+                }
+            }
+            .frame(width: groupNameWidth, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                beginGroupNameEditing()
+            }
+        }
+    }
+
+    private func beginGroupNameEditing(fromContextMenu: Bool = false) {
+        onBeginGroupNameEdit()
+        groupNameDraft = group.displayName ?? ""
+        isEditingGroupName = true
+        let delay = fromContextMenu ? DispatchTimeInterval.milliseconds(100) : .milliseconds(0)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            isGroupNameFieldFocused = true
+        }
+    }
+
+    private func commitGroupNameEdit() {
+        guard isEditingGroupName else { return }
+        let trimmed = groupNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = trimmed.isEmpty ? nil : trimmed
+        groupNameDraft = normalized ?? ""
+        onCommitGroupName(normalized)
+        isEditingGroupName = false
+        isGroupNameFieldFocused = false
+    }
+
+    private func cancelGroupNameEdit() {
+        guard isEditingGroupName else { return }
+        groupNameDraft = group.displayName ?? ""
+        isEditingGroupName = false
+        isGroupNameFieldFocused = false
     }
 
     private var addButton: some View {

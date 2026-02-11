@@ -6,6 +6,9 @@ class TabBarPanel: NSPanel {
 
     private var visualEffectView: NSVisualEffectView!
 
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
+
     // MARK: - Bar drag & double-click callbacks
 
     var onBarDragged: ((_ dx: CGFloat, _ dy: CGFloat) -> Void)?
@@ -66,7 +69,8 @@ class TabBarPanel: NSPanel {
         onCloseTab: @escaping (Int) -> Void,
         onAddWindow: @escaping () -> Void,
         onAddWindowAfterTab: @escaping (Int) -> Void,
-        onRequestGroupName: @escaping () -> Void,
+        onBeginGroupNameEdit: @escaping () -> Void,
+        onCommitGroupName: @escaping (String?) -> Void,
         onReleaseTabs: @escaping (Set<CGWindowID>) -> Void,
         onMoveToNewGroup: @escaping (Set<CGWindowID>) -> Void,
         onCloseTabs: @escaping (Set<CGWindowID>) -> Void,
@@ -85,7 +89,8 @@ class TabBarPanel: NSPanel {
             onCloseTab: onCloseTab,
             onAddWindow: onAddWindow,
             onAddWindowAfterTab: onAddWindowAfterTab,
-            onRequestGroupName: onRequestGroupName,
+            onBeginGroupNameEdit: onBeginGroupNameEdit,
+            onCommitGroupName: onCommitGroupName,
             onReleaseTabs: onReleaseTabs,
             onMoveToNewGroup: onMoveToNewGroup,
             onCloseTabs: onCloseTabs,
@@ -293,7 +298,7 @@ class TabBarPanel: NSPanel {
         // Left padding + drag handle area
         let handleWidth: CGFloat = showHandle ? TabBarView.dragHandleWidth : 0
         let groupNameWidth = TabBarView.groupNameReservedWidth(for: group?.name)
-        let tabContentStartX = leadingPad + handleWidth + groupNameWidth
+        let tabContentStartX = leadingPad + handleWidth
         if point.x < tabContentStartX {
             return true
         }
@@ -321,7 +326,7 @@ class TabBarPanel: NSPanel {
             tabContentWidth = availableWidth
         }
 
-        let tabContentEndX = tabContentStartX + tabContentWidth
+        let tabContentEndX = tabContentStartX + groupNameWidth + tabContentWidth
 
         // After tab content = background (+ button still clickable via mouseDown passthrough)
         if point.x > tabContentEndX {

@@ -3,14 +3,17 @@
 
 - Feature: New Tab can also launch apps
 
-- auto detection reliability issues
-- quick switcher performance issues
 - platofrm structure me understanding issues and also refactor?
 - preemptive detailed logging
-- quick switcher when switching to window and back to old window it sometimes opens the app you were just in instead of the window you teid to tab back into
-- quick switcher style
-- quick switcher general reliablitiy
-- quick switcher sometimes does not get order right until like two focuses sometimes
+
+- quick switcher improvements
+    - quick switcher when switching to window and back to old window it sometimes opens the app you were just in instead of the window you teid to tab back into
+    - quick switcher design / style
+    - quick switcher general reliablitiy
+        - quick switcher sometimes does not get order right until like two focuses sometimes
+        - performance sometimes bad
+        - quick switcher forgets about individual apps to easily 
+            - might be issue with discovery across spaces which may be hacky. i believe alttab maintains internal list vs ours rechecks every time?
 
 - make settings window show up as window (it does show up in alttab, maybe reconsider what we're targetting)
 - autojoin: pretection against picking up ui elements as winodws to autojoin

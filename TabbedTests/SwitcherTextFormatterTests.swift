@@ -10,7 +10,7 @@ final class SwitcherTextFormatterTests: XCTestCase {
 
     func testAppAndWindowTextShowsBothWhenDifferent() {
         let text = SwitcherTextFormatter.appAndWindowText(appName: "Safari", windowTitle: "Docs")
-        XCTAssertEqual(text, "Safari — Docs")
+        XCTAssertEqual(text, "Safari  —  Docs")
     }
 
     func testNamedGroupLabelInIconsModeShowsGroupAndAppOnly() {
@@ -21,7 +21,7 @@ final class SwitcherTextFormatterTests: XCTestCase {
             mode: .groupAppWindow,
             style: .appIcons
         )
-        XCTAssertEqual(text, "Work — Safari")
+        XCTAssertEqual(text, "Work  —  Safari")
     }
 
     func testNamedGroupLabelInTitlesModeDropsDuplicateWindowTitle() {
@@ -32,7 +32,7 @@ final class SwitcherTextFormatterTests: XCTestCase {
             mode: .groupAppWindow,
             style: .titles
         )
-        XCTAssertEqual(text, "Work — Safari")
+        XCTAssertEqual(text, "Work  —  Safari")
     }
 
     func testNamedGroupLabelInTitlesModeIncludesWindowWhenDifferent() {
@@ -43,16 +43,16 @@ final class SwitcherTextFormatterTests: XCTestCase {
             mode: .groupAppWindow,
             style: .titles
         )
-        XCTAssertEqual(text, "Work — Safari — Docs")
+        XCTAssertEqual(text, "Work  —  Safari  —  Docs")
     }
 
     func testNamedGroupTitleSuffixDropsDuplicateWindowTitle() {
         let suffix = SwitcherTextFormatter.namedGroupTitleSuffix(appName: "Safari", windowTitle: "Safari")
-        XCTAssertEqual(suffix, " — Safari")
+        XCTAssertEqual(suffix, "  —  Safari")
     }
 
     func testNamedGroupTitleSuffixUsesWindowWhenAppMissing() {
         let suffix = SwitcherTextFormatter.namedGroupTitleSuffix(appName: "", windowTitle: "Docs")
-        XCTAssertEqual(suffix, " — Docs")
+        XCTAssertEqual(suffix, "  —  Docs")
     }
 }

@@ -123,8 +123,12 @@ extension AppDelegate {
             onAddWindowAfterTab: { [weak self] index in
                 self?.showWindowPicker(addingTo: group, insertAt: index + 1)
             },
-            onRequestGroupName: { [weak self] in
-                self?.promptForGroupName(group)
+            onBeginGroupNameEdit: { [weak self, weak panel] in
+                guard let self, let panel else { return }
+                self.preparePanelForInlineGroupNameEdit(panel, group: group)
+            },
+            onCommitGroupName: { [weak self] newName in
+                self?.applyGroupName(newName, to: group)
             },
             onReleaseTabs: { [weak self, weak panel] ids in
                 guard let panel else { return }
@@ -532,35 +536,26 @@ extension AppDelegate {
         switchTab(in: group, to: targetIndex, panel: panel)
     }
 
-    func promptForGroupName(_ group: TabGroup) {
-        let alert = NSAlert()
-        alert.messageText = group.displayName == nil ? "Name Group" : "Rename Group"
-        alert.informativeText = "This name appears on the tab bar and in the global quick switcher."
-
-        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
-        input.placeholderString = "Group name"
-        input.stringValue = group.displayName ?? ""
-        alert.accessoryView = input
-
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Cancel")
-        if group.displayName != nil {
-            alert.addButton(withTitle: "Clear Name")
-        }
-
+    func preparePanelForInlineGroupNameEdit(_ panel: TabBarPanel, group: TabGroup) {
         NSApp.activate(ignoringOtherApps: true)
-        let response = alert.runModal()
+        panel.makeKeyAndOrderFront(nil)
+        if let activeWindow = group.activeWindow {
+            panel.orderAbove(windowID: activeWindow.id)
+        }
+    }
 
-        switch response {
-        case .alertFirstButtonReturn:
-            let trimmed = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            group.name = trimmed.isEmpty ? nil : trimmed
-            Logger.log("[GroupName] Group \(group.id) renamed to '\(group.displayName ?? "<none>")'")
-        case .alertThirdButtonReturn:
-            group.name = nil
+    func applyGroupName(_ rawName: String?, to group: TabGroup) {
+        let trimmed = rawName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = (trimmed?.isEmpty ?? true) ? nil : trimmed
+        let previousName = group.displayName
+        group.name = normalized
+        let updatedName = group.displayName
+
+        guard previousName != updatedName else { return }
+        if let updatedName {
+            Logger.log("[GroupName] Group \(group.id) renamed to '\(updatedName)'")
+        } else {
             Logger.log("[GroupName] Group \(group.id) name cleared")
-        default:
-            break
         }
     }
 
