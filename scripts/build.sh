@@ -6,17 +6,17 @@ if [ -f .env ]; then
   export $(grep -v '^\s*#' .env | grep -v '^\s*$' | xargs)
 fi
 
+XCODEBUILD_SIGNING_ARGS=""
 if [ -z "$DEVELOPMENT_TEAM" ]; then
-  echo "Error: DEVELOPMENT_TEAM is not set."
-  echo "Copy .env.example to .env and set your Team ID."
-  echo "Find your Team ID with: security find-identity -v -p codesigning"
-  exit 1
+  echo "Warning: DEVELOPMENT_TEAM is not set. Building without code signing."
+  XCODEBUILD_SIGNING_ARGS="CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO"
+else
+  XCODEBUILD_SIGNING_ARGS="DEVELOPMENT_TEAM=$DEVELOPMENT_TEAM -allowProvisioningUpdates"
 fi
 
 OUTPUT=$(xcodegen generate 2>&1 && \
   xcodebuild -project Tabbed.xcodeproj -scheme Tabbed -derivedDataPath build \
-    DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
-    -allowProvisioningUpdates \
+    $XCODEBUILD_SIGNING_ARGS \
     build 2>&1) || {
   echo "$OUTPUT"
   exit 1
