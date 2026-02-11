@@ -30,6 +30,11 @@ final class BrowserProviderResolver {
         "net.waterfox.waterfox"
     ]
 
+    static let knownSafariBundleIDs: [String] = [
+        "com.apple.Safari",
+        "com.apple.SafariTechnologyPreview"
+    ]
+
     typealias AppURLLookup = (String) -> URL?
 
     private let appURLLookup: AppURLLookup
@@ -39,7 +44,7 @@ final class BrowserProviderResolver {
     }
 
     func resolve(config: AddWindowLauncherConfig) -> ResolvedBrowserProvider? {
-        guard config.urlLaunchEnabled else { return nil }
+        guard config.hasAnyLaunchActionEnabled else { return nil }
 
         switch config.providerMode {
         case .manual:
@@ -76,6 +81,15 @@ final class BrowserProviderResolver {
                 }
             }
 
+            for bundleID in Self.knownSafariBundleIDs {
+                if let appURL = appURLLookup(bundleID) {
+                    return ResolvedBrowserProvider(
+                        selection: BrowserProviderSelection(bundleID: bundleID, engine: .safari),
+                        appURL: appURL
+                    )
+                }
+            }
+
             return nil
         }
     }
@@ -86,6 +100,9 @@ final class BrowserProviderResolver {
         }
         if Self.knownFirefoxBundleIDs.contains(bundleID) {
             return .firefox
+        }
+        if Self.knownSafariBundleIDs.contains(bundleID) {
+            return .safari
         }
         return nil
     }
@@ -195,6 +212,58 @@ final class FirefoxBrowserLauncher: BrowserLauncher {
             return true
         }
         return runOpenWithArgs(bundleID: provider.selection.bundleID, args: args)
+    }
+}
+
+final class SafariBrowserLauncher: BrowserLauncher {
+    let engine: BrowserEngine = .safari
+
+    func openNewWindow(provider: ResolvedBrowserProvider) -> Bool {
+        let script = """
+        tell application id "\(provider.selection.bundleID)"
+            activate
+            try
+                make new document
+                return true
+            on error
+                return false
+            end try
+        end tell
+        """
+        if runAppleScript(script) { return true }
+        return runOpenWithArgs(bundleID: provider.selection.bundleID, args: [])
+    }
+
+    func openURL(_ url: URL, provider: ResolvedBrowserProvider) -> Bool {
+        let escapedURL = url.absoluteString.replacingOccurrences(of: "\"", with: "\\\"")
+        let script = """
+        tell application id "\(provider.selection.bundleID)"
+            activate
+            try
+                make new document with properties {URL:"\(escapedURL)"}
+                return true
+            on error
+                try
+                    open location "\(escapedURL)"
+                    return true
+                on error
+                    return false
+                end try
+            end try
+        end tell
+        """
+        if runAppleScript(script) { return true }
+        return runOpenURL(bundleID: provider.selection.bundleID, url: url)
+    }
+
+    func openSearch(query: String, provider: ResolvedBrowserProvider, searchEngine: SearchEngine) -> Bool {
+        // Safari does not expose a reliable "raw query" launch arg like Chromium/Firefox.
+        if searchEngine == .providerNative {
+            guard let fallback = SearchEngine.google.searchURL(for: query) else { return false }
+            return openURL(fallback, provider: provider)
+        }
+        guard let url = searchEngine.searchURL(for: query) else { return false }
+        return openURL(url, provider: provider)
     }
 }
 

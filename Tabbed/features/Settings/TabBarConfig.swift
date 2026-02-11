@@ -5,6 +5,12 @@ enum TabBarStyle: String, Codable, CaseIterable {
     case compact
 }
 
+enum TabCloseButtonMode: String, Codable, CaseIterable {
+    case xmarkOnAllTabs
+    case minusOnCurrentTab
+    case minusOnAllTabs
+}
+
 class TabBarConfig: ObservableObject, Codable {
     @Published var style: TabBarStyle {
         didSet {
@@ -21,13 +27,31 @@ class TabBarConfig: ObservableObject, Codable {
             if showTooltip != oldValue { save() }
         }
     }
+    @Published var closeButtonMode: TabCloseButtonMode {
+        didSet {
+            if closeButtonMode != oldValue { save() }
+        }
+    }
+    @Published var showCloseConfirmation: Bool {
+        didSet {
+            if showCloseConfirmation != oldValue { save() }
+        }
+    }
 
     static let `default` = TabBarConfig(style: .compact)
 
-    init(style: TabBarStyle = .compact, showDragHandle: Bool = true, showTooltip: Bool = true) {
+    init(
+        style: TabBarStyle = .compact,
+        showDragHandle: Bool = true,
+        showTooltip: Bool = true,
+        closeButtonMode: TabCloseButtonMode = .xmarkOnAllTabs,
+        showCloseConfirmation: Bool = true
+    ) {
         self.style = style
         self.showDragHandle = showDragHandle
         self.showTooltip = showTooltip
+        self.closeButtonMode = closeButtonMode
+        self.showCloseConfirmation = showCloseConfirmation
     }
 
     // MARK: - Codable
@@ -36,6 +60,8 @@ class TabBarConfig: ObservableObject, Codable {
         case style
         case showDragHandle
         case showTooltip
+        case closeButtonMode
+        case showCloseConfirmation
     }
 
     required init(from decoder: Decoder) throws {
@@ -43,6 +69,8 @@ class TabBarConfig: ObservableObject, Codable {
         style = try container.decodeIfPresent(TabBarStyle.self, forKey: .style) ?? .compact
         showDragHandle = try container.decodeIfPresent(Bool.self, forKey: .showDragHandle) ?? true
         showTooltip = try container.decodeIfPresent(Bool.self, forKey: .showTooltip) ?? true
+        closeButtonMode = try container.decodeIfPresent(TabCloseButtonMode.self, forKey: .closeButtonMode) ?? .xmarkOnAllTabs
+        showCloseConfirmation = try container.decodeIfPresent(Bool.self, forKey: .showCloseConfirmation) ?? true
     }
 
     func encode(to encoder: Encoder) throws {
@@ -50,6 +78,8 @@ class TabBarConfig: ObservableObject, Codable {
         try container.encode(style, forKey: .style)
         try container.encode(showDragHandle, forKey: .showDragHandle)
         try container.encode(showTooltip, forKey: .showTooltip)
+        try container.encode(closeButtonMode, forKey: .closeButtonMode)
+        try container.encode(showCloseConfirmation, forKey: .showCloseConfirmation)
     }
 
     // MARK: - Persistence

@@ -85,6 +85,7 @@ final class LaunchOrchestrator {
     private let resolver: BrowserProviderResolver
     private let chromiumLauncher: BrowserLauncher
     private let firefoxLauncher: BrowserLauncher
+    private let safariLauncher: BrowserLauncher
     private var dependencies: Dependencies
 
     init(
@@ -92,12 +93,14 @@ final class LaunchOrchestrator {
         resolver: BrowserProviderResolver = BrowserProviderResolver(),
         chromiumLauncher: BrowserLauncher = ChromiumBrowserLauncher(),
         firefoxLauncher: BrowserLauncher = FirefoxBrowserLauncher(),
+        safariLauncher: BrowserLauncher = SafariBrowserLauncher(),
         dependencies: Dependencies = Dependencies()
     ) {
         self.timing = timing
         self.resolver = resolver
         self.chromiumLauncher = chromiumLauncher
         self.firefoxLauncher = firefoxLauncher
+        self.safariLauncher = safariLauncher
         self.dependencies = dependencies
     }
 
@@ -514,6 +517,7 @@ final class LaunchOrchestrator {
         if knownCmdNNewWindowApps.contains(bundleID) { return true }
         if BrowserProviderResolver.knownChromiumBundleIDs.contains(bundleID) { return true }
         if BrowserProviderResolver.knownFirefoxBundleIDs.contains(bundleID) { return true }
+        if BrowserProviderResolver.knownSafariBundleIDs.contains(bundleID) { return true }
         return false
     }
 
@@ -529,6 +533,8 @@ final class LaunchOrchestrator {
                 return chromiumLauncher.openNewWindow(provider: provider)
             case .firefox:
                 return firefoxLauncher.openNewWindow(provider: provider)
+            case .safari:
+                return safariLauncher.openNewWindow(provider: provider)
             }
         }
 
@@ -570,6 +576,8 @@ final class LaunchOrchestrator {
             return chromiumLauncher.openURL(url, provider: provider)
         case .firefox:
             return firefoxLauncher.openURL(url, provider: provider)
+        case .safari:
+            return safariLauncher.openURL(url, provider: provider)
         }
     }
 
@@ -583,6 +591,8 @@ final class LaunchOrchestrator {
             return chromiumLauncher.openSearch(query: query, provider: provider, searchEngine: searchEngine)
         case .firefox:
             return firefoxLauncher.openSearch(query: query, provider: provider, searchEngine: searchEngine)
+        case .safari:
+            return safariLauncher.openSearch(query: query, provider: provider, searchEngine: searchEngine)
         }
     }
 

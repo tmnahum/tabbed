@@ -146,22 +146,23 @@ final class LauncherEngine {
         }
 
         var actions: [LauncherCandidate] = []
-        if context.launcherConfig.urlLaunchEnabled {
-            if let url = Self.normalizeURL(from: query) {
-                actions.append(LauncherCandidate(
-                    id: "url-\(url.absoluteString)",
-                    action: .openURL(url: url),
-                    tier: 3,
-                    score: 1.0,
-                    displayName: "Open URL",
-                    subtitle: url.absoluteString,
-                    icon: nil,
-                    recency: 0,
-                    isRunningApp: false,
-                    hasNativeNewWindow: true
-                ))
-            }
+        if context.launcherConfig.urlLaunchEnabled,
+           let url = Self.normalizeURL(from: query) {
+            actions.append(LauncherCandidate(
+                id: "url-\(url.absoluteString)",
+                action: .openURL(url: url),
+                tier: 3,
+                score: 1.0,
+                displayName: "Open URL",
+                subtitle: url.absoluteString,
+                icon: nil,
+                recency: 0,
+                isRunningApp: false,
+                hasNativeNewWindow: true
+            ))
+        }
 
+        if context.launcherConfig.searchLaunchEnabled {
             actions.append(LauncherCandidate(
                 id: "search-\(query)",
                 action: .webSearch(query: query),

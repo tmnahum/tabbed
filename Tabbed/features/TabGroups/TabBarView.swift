@@ -64,6 +64,39 @@ struct TabBarView: View {
         }
     }
 
+    enum TabHoverControl: Equatable {
+        case close
+        case release
+    }
+
+    static func tabHoverControl(
+        at index: Int,
+        activeIndex: Int,
+        mode: TabCloseButtonMode,
+        isShiftPressed: Bool
+    ) -> TabHoverControl {
+        let base: TabHoverControl
+        switch mode {
+        case .xmarkOnAllTabs:
+            base = .close
+        case .minusOnCurrentTab:
+            base = index == activeIndex ? .release : .close
+        case .minusOnAllTabs:
+            base = .release
+        }
+        guard isShiftPressed else { return base }
+        return base == .close ? .release : .close
+    }
+
+    static func tabHoverControlSymbol(control: TabHoverControl, isConfirmingClose: Bool) -> String {
+        switch control {
+        case .close:
+            return isConfirmingClose ? "questionmark" : "xmark"
+        case .release:
+            return "minus"
+        }
+    }
+
     private static let tabExpandTransition: AnyTransition =
         .modifier(
             active: HorizontalScale(fraction: 0.01),
@@ -88,6 +121,8 @@ struct TabBarView: View {
     @State private var tabLeadingXs: [CGWindowID: CGFloat] = [:]
     @State private var isEditingGroupName = false
     @State private var groupNameDraft = ""
+    @State private var isShiftPressed = false
+    @State private var localFlagsMonitor: Any?
     @FocusState private var isGroupNameFieldFocused: Bool
 
     var body: some View {
@@ -221,6 +256,10 @@ struct TabBarView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             groupNameDraft = group.displayName ?? ""
+            installModifierMonitors()
+        }
+        .onDisappear {
+            removeModifierMonitors()
         }
         .onChange(of: group.name) { _ in
             guard !isEditingGroupName else { return }
@@ -238,6 +277,15 @@ struct TabBarView: View {
             if let idx = lastClickedIndex, idx >= group.windows.count {
                 lastClickedIndex = nil
             }
+        }
+        .onChange(of: tabBarConfig.closeButtonMode) { _ in
+            confirmingCloseID = nil
+        }
+        .onChange(of: tabBarConfig.showCloseConfirmation) { _ in
+            confirmingCloseID = nil
+        }
+        .onChange(of: isShiftPressed) { _ in
+            confirmingCloseID = nil
         }
     }
 
@@ -394,6 +442,62 @@ struct TabBarView: View {
         onDragEnded()
     }
 
+    // MARK: - Modifiers
+
+    private func installModifierMonitors() {
+        guard localFlagsMonitor == nil else { return }
+        isShiftPressed = Self.isShiftPressed(in: NSEvent.modifierFlags)
+        localFlagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
+            isShiftPressed = Self.isShiftPressed(in: event.modifierFlags)
+            return event
+        }
+    }
+
+    private func removeModifierMonitors() {
+        if let localFlagsMonitor {
+            NSEvent.removeMonitor(localFlagsMonitor)
+            self.localFlagsMonitor = nil
+        }
+    }
+
+    private static func isShiftPressed(in flags: NSEvent.ModifierFlags) -> Bool {
+        flags.intersection(.deviceIndependentFlagsMask).contains(.shift)
+    }
+
+    private func currentShiftPressed() -> Bool {
+        let eventShift = NSApp.currentEvent.map { Self.isShiftPressed(in: $0.modifierFlags) } ?? false
+        return isShiftPressed || eventShift
+    }
+
+    private func hoverControl(forTabAt index: Int) -> TabHoverControl {
+        Self.tabHoverControl(
+            at: index,
+            activeIndex: group.activeIndex,
+            mode: tabBarConfig.closeButtonMode,
+            isShiftPressed: currentShiftPressed()
+        )
+    }
+
+    private func handleTabControlTap(at index: Int, windowID: CGWindowID, control: TabHoverControl) {
+        switch control {
+        case .release:
+            confirmingCloseID = nil
+            onReleaseTab(index)
+        case .close:
+            guard tabBarConfig.showCloseConfirmation else {
+                confirmingCloseID = nil
+                onCloseTab(index)
+                return
+            }
+            if confirmingCloseID == windowID {
+                confirmingCloseID = nil
+                onCloseTab(index)
+            } else {
+                confirmingCloseID = windowID
+            }
+        }
+    }
+
     // MARK: - Tab Item
 
     /// Whether a title would be truncated at the given tab width.
@@ -429,30 +533,22 @@ struct TabBarView: View {
             Spacer(minLength: 0)
 
             if isHovered && !isSelected {
-                if window.isFullscreened || isActive {
-                    Image(systemName: "minus")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 16, height: 16)
-                        .contentShape(Rectangle())
-                        .highPriorityGesture(TapGesture().onEnded {
-                            onReleaseTab(index)
-                        })
-                } else {
-                    Image(systemName: confirmingCloseID == window.id ? "questionmark" : "xmark")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(confirmingCloseID == window.id ? .primary : .secondary)
-                        .frame(width: 16, height: 16)
-                        .contentShape(Rectangle())
-                        .highPriorityGesture(TapGesture().onEnded {
-                            if confirmingCloseID == window.id {
-                                confirmingCloseID = nil
-                                onCloseTab(index)
-                            } else {
-                                confirmingCloseID = window.id
-                            }
-                        })
-                }
+                let control = hoverControl(forTabAt: index)
+                let isConfirmingClose = tabBarConfig.showCloseConfirmation
+                    && control == .close
+                    && confirmingCloseID == window.id
+                Image(systemName: Self.tabHoverControlSymbol(control: control, isConfirmingClose: isConfirmingClose))
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(isConfirmingClose ? .primary : .secondary)
+                    .frame(width: 16, height: 16)
+                    .contentShape(Rectangle())
+                    .highPriorityGesture(TapGesture().onEnded {
+                        handleTabControlTap(
+                            at: index,
+                            windowID: window.id,
+                            control: hoverControl(forTabAt: index)
+                        )
+                    })
             }
         }
         .padding(.horizontal, 8)

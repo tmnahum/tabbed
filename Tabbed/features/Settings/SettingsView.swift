@@ -8,7 +8,7 @@ enum SettingsTab: Int {
         switch self {
         case .general:   return 340
         case .launcher:  return 420
-        case .tabBar:    return 200
+        case .tabBar:    return 330
         case .shortcuts: return 520
         case .switcher:  return 430
         }
@@ -95,6 +95,9 @@ struct SettingsView: View {
         .onChange(of: launcherConfig.urlLaunchEnabled) { _ in
             onLauncherConfigChanged(launcherConfig)
         }
+        .onChange(of: launcherConfig.searchLaunchEnabled) { _ in
+            onLauncherConfigChanged(launcherConfig)
+        }
         .onChange(of: launcherConfig.providerMode) { _ in
             onLauncherConfigChanged(launcherConfig)
         }
@@ -107,7 +110,7 @@ struct SettingsView: View {
         .onChange(of: launcherConfig.manualSelection.engine) { _ in
             onLauncherConfigChanged(launcherConfig)
         }
-        // tabBarConfig auto-saves via didSet on its style property
+        // tabBarConfig auto-saves via didSet on its properties
         .background(ShortcutRecorderBridge(
             isRecording: recordingAction != nil,
             onKeyDown: { event in
@@ -208,8 +211,8 @@ struct SettingsView: View {
             VStack(spacing: 0) {
                 Toggle(isOn: $launcherConfig.urlLaunchEnabled) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Enable URL / Search Actions")
-                        Text("Show URL and web search candidates in Add Window when query is non-empty.")
+                        Text("Enable Open URL Action")
+                        Text("Show an \"Open URL\" candidate in Add Window when query looks like a URL.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -217,6 +220,19 @@ struct SettingsView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .padding(.top, 8)
+
+                Divider()
+
+                Toggle(isOn: $launcherConfig.searchLaunchEnabled) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Enable Web Search Action")
+                        Text("Show a \"Web Search\" candidate in Add Window when query is non-empty.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
 
                 Divider()
 
@@ -245,41 +261,75 @@ struct SettingsView: View {
                         Text("Manual Provider")
                             .font(.headline)
 
-                        HStack(spacing: 8) {
-                            Button("Choose Browser App…") {
-                                chooseManualBrowserApp()
-                            }
-                            .controlSize(.small)
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack(spacing: 10) {
+                                manualProviderIcon
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 30, height: 30)
+                                    .padding(6)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                            .fill(Color(nsColor: .windowBackgroundColor))
+                                    )
 
-                            if launcherConfig.hasManualSelection {
-                                Button("Clear") {
-                                    launcherConfig.manualSelection.bundleID = ""
-                                    manualProviderError = nil
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(manualProviderNameText)
+                                        .font(.subheadline.weight(.semibold))
+
+                                    if launcherConfig.hasManualSelection {
+                                        Text(manualProviderBundleIDText)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                            .textSelection(.enabled)
+                                            .lineLimit(1)
+                                    } else {
+                                        Text("Select a browser app to use for URL and web search actions.")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
                                 }
+
+                                Spacer()
+                            }
+
+                            HStack(spacing: 8) {
+                                Button(launcherConfig.hasManualSelection ? "Change Browser App…" : "Choose Browser App…") {
+                                    chooseManualBrowserApp()
+                                }
+                                .buttonStyle(.borderedProminent)
                                 .controlSize(.small)
+
+                                if launcherConfig.hasManualSelection {
+                                    Button("Clear") {
+                                        launcherConfig.manualSelection.bundleID = ""
+                                        manualProviderError = nil
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .controlSize(.small)
+                                }
+                            }
+
+                            if let manualProviderError {
+                                Text(manualProviderError)
+                                    .font(.caption)
+                                    .foregroundStyle(.red)
                             }
                         }
-
-                        Text(manualProviderNameText)
-                            .font(.subheadline)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-
-                        if launcherConfig.hasManualSelection {
-                            Text(manualProviderBundleIDText)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .textSelection(.enabled)
-                        }
-
-                        if let manualProviderError {
-                            Text(manualProviderError)
-                                .font(.caption)
-                                .foregroundStyle(.red)
-                        }
+                        .padding(12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(Color(nsColor: .controlBackgroundColor))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
+                        )
 
                         Picker("Engine", selection: $launcherConfig.manualSelection.engine) {
                             Text("Chromium").tag(BrowserEngine.chromium)
                             Text("Firefox").tag(BrowserEngine.firefox)
+                            Text("Safari").tag(BrowserEngine.safari)
                         }
                         .pickerStyle(.segmented)
                     }
@@ -300,6 +350,7 @@ struct SettingsView: View {
                         Text(SearchEngine.providerNative.displayName).tag(SearchEngine.providerNative)
                     }
                     .pickerStyle(.segmented)
+                    .disabled(!launcherConfig.searchLaunchEnabled)
                 }
                 .padding(.horizontal, 12)
                 .padding(.top, 12)
@@ -365,6 +416,44 @@ struct SettingsView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
 
+            Divider()
+
+            VStack(spacing: 0) {
+                Text("Tab Close Button")
+                    .font(.headline)
+                    .padding(.top, 12)
+                    .padding(.bottom, 4)
+
+                Picker("Close Button", selection: $tabBarConfig.closeButtonMode) {
+                    Text("X on All Tabs").tag(TabCloseButtonMode.xmarkOnAllTabs)
+                    Text("- on Current, X on Others").tag(TabCloseButtonMode.minusOnCurrentTab)
+                    Text("- on All Tabs").tag(TabCloseButtonMode.minusOnAllTabs)
+                }
+                .pickerStyle(.menu)
+                .padding(.horizontal, 12)
+
+                Text(closeButtonModeDescription)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 4)
+                    .padding(.bottom, 8)
+
+                Toggle(isOn: $tabBarConfig.showCloseConfirmation) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Show ? Confirmation on X")
+                        Text("When enabled, X requires a second click to close.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .toggleStyle(.checkbox)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 10)
+            }
+
             Spacer()
         }
     }
@@ -419,6 +508,17 @@ struct SettingsView: View {
             return "Tabs expand to fill the entire bar width equally."
         case .compact:
             return "Tabs are left-aligned with a maximum width, like browser tabs."
+        }
+    }
+
+    private var closeButtonModeDescription: String {
+        switch tabBarConfig.closeButtonMode {
+        case .xmarkOnAllTabs:
+            return "Default: all tabs show X on hover."
+        case .minusOnCurrentTab:
+            return "Current tab shows -, other tabs show X."
+        case .minusOnAllTabs:
+            return "All tabs show - on hover."
         }
     }
 
@@ -559,7 +659,7 @@ struct SettingsView: View {
     private var providerDescription: String {
         switch launcherConfig.providerMode {
         case .auto:
-            return "Auto prefers Helium, then known Chromium providers, then Firefox providers."
+            return "Auto prefers Helium, then known Chromium providers, then Firefox providers, then Safari."
         case .manual:
             return "Manual uses the browser app you select and a matching engine adapter."
         }
@@ -579,6 +679,25 @@ struct SettingsView: View {
             return appURL.deletingPathExtension().lastPathComponent
         }
         return bundleID
+    }
+
+    private var manualProviderIcon: Image {
+        guard launcherConfig.hasManualSelection else {
+            if let fallback = NSImage(systemSymbolName: "globe", accessibilityDescription: nil) {
+                return Image(nsImage: fallback)
+            }
+            return Image(systemName: "globe")
+        }
+
+        let bundleID = manualProviderBundleIDText
+        if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            return Image(nsImage: NSWorkspace.shared.icon(forFile: appURL.path))
+        }
+
+        if let fallback = NSImage(systemSymbolName: "app", accessibilityDescription: nil) {
+            return Image(nsImage: fallback)
+        }
+        return Image(systemName: "app")
     }
 
     private func shortcutRow(_ action: ShortcutAction) -> some View {

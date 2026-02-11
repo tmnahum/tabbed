@@ -23,6 +23,8 @@ final class TabBarConfigTests: XCTestCase {
         let config = TabBarConfig()
         XCTAssertEqual(config.style, .compact)
         XCTAssertTrue(config.showDragHandle)
+        XCTAssertEqual(config.closeButtonMode, .xmarkOnAllTabs)
+        XCTAssertTrue(config.showCloseConfirmation)
     }
 
     func testSaveAndLoad() {
@@ -50,10 +52,20 @@ final class TabBarConfigTests: XCTestCase {
     }
 
     func testRoundTripEncoding() throws {
-        let original = TabBarConfig(style: .compact)
+        let original = TabBarConfig(
+            style: .compact,
+            showDragHandle: false,
+            showTooltip: false,
+            closeButtonMode: .minusOnCurrentTab,
+            showCloseConfirmation: false
+        )
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(TabBarConfig.self, from: data)
         XCTAssertEqual(decoded.style, .compact)
+        XCTAssertFalse(decoded.showDragHandle)
+        XCTAssertFalse(decoded.showTooltip)
+        XCTAssertEqual(decoded.closeButtonMode, .minusOnCurrentTab)
+        XCTAssertFalse(decoded.showCloseConfirmation)
     }
 
     func testDecodesWithMissingStyleKey() throws {
@@ -62,6 +74,9 @@ final class TabBarConfigTests: XCTestCase {
         let decoded = try JSONDecoder().decode(TabBarConfig.self, from: json)
         XCTAssertEqual(decoded.style, .compact)
         XCTAssertTrue(decoded.showDragHandle)
+        XCTAssertTrue(decoded.showTooltip)
+        XCTAssertEqual(decoded.closeButtonMode, .xmarkOnAllTabs)
+        XCTAssertTrue(decoded.showCloseConfirmation)
     }
 
     func testSaveAndLoadDragHandle() {
@@ -70,5 +85,18 @@ final class TabBarConfigTests: XCTestCase {
 
         let loaded = TabBarConfig.load()
         XCTAssertFalse(loaded.showDragHandle)
+    }
+
+    func testSaveAndLoadCloseButtonModeAndConfirmation() {
+        let config = TabBarConfig(
+            style: .compact,
+            closeButtonMode: .minusOnAllTabs,
+            showCloseConfirmation: false
+        )
+        config.save()
+
+        let loaded = TabBarConfig.load()
+        XCTAssertEqual(loaded.closeButtonMode, .minusOnAllTabs)
+        XCTAssertFalse(loaded.showCloseConfirmation)
     }
 }

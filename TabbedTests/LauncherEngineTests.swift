@@ -148,4 +148,54 @@ final class LauncherEngineTests: XCTestCase {
         XCTAssertEqual(groupCount, 3)
         XCTAssertFalse(hasNonPreviewType)
     }
+
+    func testURLDisabledKeepsOnlyWebSearchAction() {
+        let config = AddWindowLauncherConfig(
+            urlLaunchEnabled: false,
+            searchLaunchEnabled: true,
+            providerMode: .auto,
+            searchEngine: .google,
+            manualSelection: BrowserProviderSelection()
+        )
+        let context = makeContext(looseWindows: [], launcherConfig: config)
+
+        let ranked = LauncherEngine().rank(query: "example.com", context: context)
+
+        let hasURL = ranked.contains {
+            if case .openURL = $0.action { return true }
+            return false
+        }
+        let hasSearch = ranked.contains {
+            if case .webSearch = $0.action { return true }
+            return false
+        }
+
+        XCTAssertFalse(hasURL)
+        XCTAssertTrue(hasSearch)
+    }
+
+    func testSearchDisabledKeepsOnlyURLAction() {
+        let config = AddWindowLauncherConfig(
+            urlLaunchEnabled: true,
+            searchLaunchEnabled: false,
+            providerMode: .auto,
+            searchEngine: .google,
+            manualSelection: BrowserProviderSelection()
+        )
+        let context = makeContext(looseWindows: [], launcherConfig: config)
+
+        let ranked = LauncherEngine().rank(query: "example.com", context: context)
+
+        let hasURL = ranked.contains {
+            if case .openURL = $0.action { return true }
+            return false
+        }
+        let hasSearch = ranked.contains {
+            if case .webSearch = $0.action { return true }
+            return false
+        }
+
+        XCTAssertTrue(hasURL)
+        XCTAssertFalse(hasSearch)
+    }
 }

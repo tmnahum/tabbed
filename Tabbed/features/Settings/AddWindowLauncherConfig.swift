@@ -3,6 +3,7 @@ import Foundation
 enum BrowserEngine: String, Codable, CaseIterable {
     case chromium
     case firefox
+    case safari
 }
 
 enum BrowserProviderMode: String, Codable, CaseIterable {
@@ -57,12 +58,14 @@ struct BrowserProviderSelection: Codable, Equatable {
 
 struct AddWindowLauncherConfig: Codable, Equatable {
     var urlLaunchEnabled: Bool
+    var searchLaunchEnabled: Bool
     var providerMode: BrowserProviderMode
     var searchEngine: SearchEngine
     var manualSelection: BrowserProviderSelection
 
     static let `default` = AddWindowLauncherConfig(
         urlLaunchEnabled: true,
+        searchLaunchEnabled: true,
         providerMode: .auto,
         searchEngine: .google,
         manualSelection: BrowserProviderSelection(bundleID: "", engine: .chromium)
@@ -70,11 +73,13 @@ struct AddWindowLauncherConfig: Codable, Equatable {
 
     init(
         urlLaunchEnabled: Bool = true,
+        searchLaunchEnabled: Bool = true,
         providerMode: BrowserProviderMode = .auto,
         searchEngine: SearchEngine = .google,
         manualSelection: BrowserProviderSelection = BrowserProviderSelection()
     ) {
         self.urlLaunchEnabled = urlLaunchEnabled
+        self.searchLaunchEnabled = searchLaunchEnabled
         self.providerMode = providerMode
         self.searchEngine = searchEngine
         self.manualSelection = manualSelection
@@ -84,8 +89,13 @@ struct AddWindowLauncherConfig: Codable, Equatable {
         !manualSelection.bundleID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    var hasAnyLaunchActionEnabled: Bool {
+        urlLaunchEnabled || searchLaunchEnabled
+    }
+
     private enum CodingKeys: String, CodingKey {
         case urlLaunchEnabled
+        case searchLaunchEnabled
         case providerMode
         case searchEngine
         case manualSelection
@@ -94,6 +104,8 @@ struct AddWindowLauncherConfig: Codable, Equatable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         urlLaunchEnabled = try container.decodeIfPresent(Bool.self, forKey: .urlLaunchEnabled) ?? true
+        // For configs saved before `searchLaunchEnabled` existed, mirror the legacy combined toggle value.
+        searchLaunchEnabled = try container.decodeIfPresent(Bool.self, forKey: .searchLaunchEnabled) ?? urlLaunchEnabled
         providerMode = try container.decodeIfPresent(BrowserProviderMode.self, forKey: .providerMode) ?? .auto
         searchEngine = try container.decodeIfPresent(SearchEngine.self, forKey: .searchEngine) ?? .google
         manualSelection = try container.decodeIfPresent(BrowserProviderSelection.self, forKey: .manualSelection) ?? BrowserProviderSelection()
@@ -102,6 +114,7 @@ struct AddWindowLauncherConfig: Codable, Equatable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(urlLaunchEnabled, forKey: .urlLaunchEnabled)
+        try container.encode(searchLaunchEnabled, forKey: .searchLaunchEnabled)
         try container.encode(providerMode, forKey: .providerMode)
         try container.encode(searchEngine, forKey: .searchEngine)
         try container.encode(manualSelection, forKey: .manualSelection)

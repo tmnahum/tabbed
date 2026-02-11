@@ -35,6 +35,7 @@ final class BrowserProviderResolverTests: XCTestCase {
 
         let config = AddWindowLauncherConfig(
             urlLaunchEnabled: true,
+            searchLaunchEnabled: true,
             providerMode: .manual,
             searchEngine: .google,
             manualSelection: BrowserProviderSelection(bundleID: "org.mozilla.firefox", engine: .firefox)
@@ -45,10 +46,11 @@ final class BrowserProviderResolverTests: XCTestCase {
         XCTAssertEqual(provider?.selection.engine, .firefox)
     }
 
-    func testDisabledURLActionsRemoveURLCandidates() {
+    func testDisablingBothActionsRemovesURLAndSearchCandidates() {
         let engine = LauncherEngine()
         let config = AddWindowLauncherConfig(
             urlLaunchEnabled: false,
+            searchLaunchEnabled: false,
             providerMode: .auto,
             searchEngine: .google,
             manualSelection: BrowserProviderSelection()
@@ -87,6 +89,29 @@ final class BrowserProviderResolverTests: XCTestCase {
         XCTAssertFalse(hasURLOrSearch)
     }
 
+    func testSearchOnlyStillResolvesProvider() {
+        let resolver = BrowserProviderResolver(appURLLookup: { bundleID in
+            switch bundleID {
+            case "com.google.Chrome":
+                return URL(fileURLWithPath: "/Applications/Google Chrome.app")
+            default:
+                return nil
+            }
+        })
+
+        let config = AddWindowLauncherConfig(
+            urlLaunchEnabled: false,
+            searchLaunchEnabled: true,
+            providerMode: .auto,
+            searchEngine: .google,
+            manualSelection: BrowserProviderSelection()
+        )
+
+        let provider = resolver.resolve(config: config)
+        XCTAssertEqual(provider?.selection.bundleID, "com.google.Chrome")
+        XCTAssertEqual(provider?.selection.engine, .chromium)
+    }
+
     func testManualSelectionDetectsKnownChromiumEngine() {
         let resolver = BrowserProviderResolver(appURLLookup: { _ in nil })
         let selection = resolver.manualSelection(forBundleID: " com.google.Chrome ", fallbackEngine: .firefox)
@@ -109,5 +134,45 @@ final class BrowserProviderResolverTests: XCTestCase {
 
         XCTAssertEqual(selection.bundleID, "com.example.CustomBrowser")
         XCTAssertEqual(selection.engine, .firefox)
+    }
+
+    func testAutoFallsBackToSafariWhenNoChromiumOrFirefoxInstalled() {
+        let resolver = BrowserProviderResolver(appURLLookup: { bundleID in
+            switch bundleID {
+            case "com.apple.Safari":
+                return URL(fileURLWithPath: "/Applications/Safari.app")
+            default:
+                return nil
+            }
+        })
+
+        let provider = resolver.resolve(config: .default)
+        XCTAssertEqual(provider?.selection.bundleID, "com.apple.Safari")
+        XCTAssertEqual(provider?.selection.engine, .safari)
+    }
+
+    func testAutoPrefersChromiumOverSafari() {
+        let resolver = BrowserProviderResolver(appURLLookup: { bundleID in
+            switch bundleID {
+            case "com.google.Chrome":
+                return URL(fileURLWithPath: "/Applications/Google Chrome.app")
+            case "com.apple.Safari":
+                return URL(fileURLWithPath: "/Applications/Safari.app")
+            default:
+                return nil
+            }
+        })
+
+        let provider = resolver.resolve(config: .default)
+        XCTAssertEqual(provider?.selection.bundleID, "com.google.Chrome")
+        XCTAssertEqual(provider?.selection.engine, .chromium)
+    }
+
+    func testManualSelectionDetectsSafariEngine() {
+        let resolver = BrowserProviderResolver(appURLLookup: { _ in nil })
+        let selection = resolver.manualSelection(forBundleID: "com.apple.Safari", fallbackEngine: .firefox)
+
+        XCTAssertEqual(selection.bundleID, "com.apple.Safari")
+        XCTAssertEqual(selection.engine, .safari)
     }
 }
