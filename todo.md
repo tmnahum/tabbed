@@ -40,13 +40,13 @@ Small
 - simplify settings ux
 
 - maybe: feture: in addition to web sites, lets add folders search which opens folders in a default terminal and/or code editor
-- feature: tab renaming, if tab has name set use that instead of window name
+- feature: tab renaming, if tab has name set use that instead of window name, can rename from right click menu
 
 Future:
-- pinned tabs
 - hide tab bar mode (just focused on alt tab navigation)
 - maybe: virtual tabs in which they belong to multiple windows (for apps with one window max like codex)
     - limitation: pretty much unfeasable to be able to switch what space a window is in
+- maybe: tab groups
 
 --------
 ## todo:

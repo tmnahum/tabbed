@@ -8,19 +8,22 @@ struct WindowSnapshot: Codable {
     let title: String
     let appName: String
     let isPinned: Bool
+    let customTabName: String?
 
     init(
         windowID: CGWindowID,
         bundleID: String,
         title: String,
         appName: String,
-        isPinned: Bool
+        isPinned: Bool,
+        customTabName: String? = nil
     ) {
         self.windowID = windowID
         self.bundleID = bundleID
         self.title = title
         self.appName = appName
         self.isPinned = isPinned
+        self.customTabName = customTabName
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -29,6 +32,7 @@ struct WindowSnapshot: Codable {
         case title
         case appName
         case isPinned
+        case customTabName
     }
 
     init(from decoder: Decoder) throws {
@@ -38,6 +42,7 @@ struct WindowSnapshot: Codable {
         title = try container.decode(String.self, forKey: .title)
         appName = try container.decode(String.self, forKey: .appName)
         isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
+        customTabName = try container.decodeIfPresent(String.self, forKey: .customTabName)
     }
 }
 

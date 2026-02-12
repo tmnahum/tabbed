@@ -60,7 +60,7 @@ struct SwitcherView: View {
     private func displayTitle(for item: SwitcherItem, isSelected: Bool) -> String {
         let raw: String
         if isSelected, let subIndex = subSelectedWindowIndex, let window = item.window(at: subIndex) {
-            raw = window.title.isEmpty ? window.appName : window.title
+            raw = window.displayTitle
         } else {
             raw = item.displayTitle
         }
@@ -81,7 +81,7 @@ struct SwitcherView: View {
            !(isSelected && subSelectedWindowIndex != nil),
            let groupName = group.displayName {
             let appName = group.activeWindow?.appName ?? ""
-            let windowTitle = group.activeWindow.map { $0.title.isEmpty ? $0.appName : $0.title } ?? ""
+            let windowTitle = group.activeWindow?.displayTitle ?? ""
             return truncatedTitle(
                 SwitcherTextFormatter.namedGroupLabel(
                     groupName: groupName,
@@ -102,7 +102,7 @@ struct SwitcherView: View {
             return Text(groupName).bold()
         case .groupAppWindow:
             let appName = group.activeWindow?.appName ?? ""
-            let windowTitle = group.activeWindow.map { $0.title.isEmpty ? $0.appName : $0.title } ?? ""
+            let windowTitle = group.activeWindow?.displayTitle ?? ""
             let suffix = SwitcherTextFormatter.namedGroupTitleSuffix(appName: appName, windowTitle: windowTitle)
             return Text(groupName).bold() + Text(suffix)
         }

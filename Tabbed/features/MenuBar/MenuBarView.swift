@@ -103,7 +103,7 @@ struct MenuBarView: View {
                 }
                 .buttonStyle(.plain)
                 .contentShape(Rectangle())
-                .help(window.title.isEmpty ? window.appName : window.title)
+                .help(window.displayTitle)
             }
 
             Spacer()

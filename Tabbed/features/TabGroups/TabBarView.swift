@@ -13,6 +13,7 @@ struct TabBarView: View {
     var onCloseTab: (Int) -> Void
     var onAddWindow: () -> Void
     var onAddWindowAfterTab: (Int) -> Void
+    var onRenameTab: (CGWindowID) -> Void
     var onBeginGroupNameEdit: () -> Void
     var onCommitGroupName: (String?) -> Void
     var onReleaseTabs: (Set<CGWindowID>) -> Void
@@ -39,6 +40,10 @@ struct TabBarView: View {
         guard let rawName else { return nil }
         let trimmed = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    static func displayedTabTitle(for window: WindowInfo) -> String {
+        window.displayTitle
     }
 
     private static func measuredGroupNameReservedWidth(for displayedName: String) -> CGFloat {
@@ -756,7 +761,7 @@ struct TabBarView: View {
                     .foregroundStyle(.secondary)
             }
             if !isPinned {
-                Text(window.title.isEmpty ? window.appName : window.title)
+                Text(Self.displayedTabTitle(for: window))
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .font(.system(size: 12))
@@ -813,7 +818,7 @@ struct TabBarView: View {
                 confirmingCloseID = nil
             }
             if tabBarConfig.showTooltip {
-                let title = window.title.isEmpty ? window.appName : window.title
+                let title = Self.displayedTabTitle(for: window)
                 if hovering && (isPinned || Self.isTitleTruncated(title: title, tabWidth: tabWidth)) {
                     onTooltipHover?(title, tabLeadingXs[window.id] ?? 0)
                 } else {
@@ -827,6 +832,10 @@ struct TabBarView: View {
             let allPinned = !targetWindows.isEmpty && targetWindows.allSatisfy(\.isPinned)
             Button("New Tab to the Right") {
                 onAddWindowAfterTab(index)
+            }
+            Button(window.displayedCustomTabName == nil ? "Name Tab…" : "Rename Tab…") {
+                selectedIDs = []
+                onRenameTab(window.id)
             }
             Divider()
             Button(allPinned ? (targets.count == 1 ? "Unpin Tab" : "Unpin Tabs") : (targets.count == 1 ? "Pin Tab" : "Pin Tabs")) {

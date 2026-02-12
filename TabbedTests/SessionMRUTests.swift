@@ -105,6 +105,17 @@ final class SessionMRUTests: XCTestCase {
         XCTAssertEqual(loaded.first?.windows.last?.isPinned, false)
     }
 
+    func testSaveSessionPersistsCustomTabName() {
+        var renamedWindow = makeWindow(id: 1, app: "Alpha")
+        renamedWindow.customTabName = "Daily Focus"
+        let group = TabGroup(windows: [renamedWindow], frame: .zero)
+
+        SessionManager.saveSession(groups: [group], mruGroupOrder: [])
+
+        let loaded = SessionManager.loadSession()!
+        XCTAssertEqual(loaded.first?.windows.first?.customTabName, "Daily Focus")
+    }
+
     func testMatchGroupAppliesPinnedStateFromSnapshot() {
         let live = [
             makeWindow(id: 10, app: "Alpha"),
@@ -131,5 +142,36 @@ final class SessionMRUTests: XCTestCase {
         XCTAssertEqual(matched?.count, 2)
         XCTAssertEqual(matched?.first?.isPinned, true)
         XCTAssertEqual(matched?.last?.isPinned, false)
+    }
+
+    func testMatchGroupAppliesCustomTabNameFromSnapshot() {
+        let live = [
+            makeWindow(id: 10, app: "Alpha")
+        ]
+        let snapshot = GroupSnapshot(
+            windows: [
+                WindowSnapshot(
+                    windowID: 10,
+                    bundleID: "com.Alpha",
+                    title: "Alpha Window",
+                    appName: "Alpha",
+                    isPinned: false,
+                    customTabName: "Focus"
+                )
+            ],
+            activeIndex: 0,
+            frame: CodableRect(.zero),
+            tabBarSqueezeDelta: 0,
+            name: nil
+        )
+
+        let matched = SessionManager.matchGroup(
+            snapshot: snapshot,
+            liveWindows: live,
+            alreadyClaimed: [],
+            mode: .always
+        )
+
+        XCTAssertEqual(matched?.first?.customTabName, "Focus")
     }
 }

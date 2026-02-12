@@ -15,7 +15,8 @@ enum SessionManager {
                         bundleID: window.bundleID,
                         title: window.title,
                         appName: window.appName,
-                        isPinned: window.isPinned
+                        isPinned: window.isPinned,
+                        customTabName: window.customTabName
                     )
                 },
                 activeIndex: group.activeIndex,
@@ -79,6 +80,7 @@ enum SessionManager {
                 Logger.log("[SessionMatch] ✓ wid match: \(snap.appName)(\(snap.windowID))")
                 var matchedWindow = byID
                 matchedWindow.isPinned = snap.isPinned
+                matchedWindow.customTabName = snap.customTabName
                 matched.append(matchedWindow)
                 claimed.insert(matchedWindow.id)
                 continue
@@ -91,6 +93,7 @@ enum SessionManager {
                 Logger.log("[SessionMatch] ✓ title match: \(snap.appName)(\(snap.windowID)) → live(\(byTitle.id))")
                 var matchedWindow = byTitle
                 matchedWindow.isPinned = snap.isPinned
+                matchedWindow.customTabName = snap.customTabName
                 matched.append(matchedWindow)
                 claimed.insert(matchedWindow.id)
                 continue

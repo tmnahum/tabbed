@@ -389,6 +389,10 @@ extension AppDelegate {
             onAddWindowAfterTab: { [weak self] index in
                 self?.showWindowPicker(addingTo: group, insertAt: index + 1)
             },
+            onRenameTab: { [weak self, weak panel] windowID in
+                guard let self, let panel else { return }
+                self.promptTabRename(withID: windowID, in: group, panel: panel)
+            },
             onBeginGroupNameEdit: { [weak self, weak panel] in
                 guard let self, let panel else { return }
                 self.preparePanelForInlineGroupNameEdit(panel, group: group)
@@ -856,6 +860,45 @@ extension AppDelegate {
             Logger.log("[GroupName] Group \(group.id) renamed to '\(updatedName)'")
         } else {
             Logger.log("[GroupName] Group \(group.id) name cleared")
+        }
+    }
+
+    func promptTabRename(withID windowID: CGWindowID, in group: TabGroup, panel: TabBarPanel) {
+        guard let window = group.windows.first(where: { $0.id == windowID }) else { return }
+
+        let alert = NSAlert()
+        alert.messageText = window.displayedCustomTabName == nil ? "Name Tab" : "Rename Tab"
+        alert.informativeText = "Leave empty to use the window title."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+
+        let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
+        textField.stringValue = window.displayedCustomTabName ?? ""
+        textField.placeholderString = window.title.isEmpty ? window.appName : window.title
+        alert.accessoryView = textField
+
+        NSApp.activate(ignoringOtherApps: true)
+        panel.makeKeyAndOrderFront(nil)
+        if let activeWindow = group.activeWindow {
+            panel.orderAbove(windowID: activeWindow.id)
+        }
+
+        let response = alert.runModal()
+        guard response == .alertFirstButtonReturn else { return }
+
+        let didUpdate = groupManager.updateWindowCustomTabName(
+            withID: windowID,
+            in: group,
+            to: textField.stringValue
+        )
+        guard didUpdate else { return }
+
+        if let updated = group.windows.first(where: { $0.id == windowID }),
+           let customName = updated.displayedCustomTabName {
+            Logger.log("[TabName] Window \(windowID) in group \(group.id) renamed to '\(customName)'")
+        } else {
+            Logger.log("[TabName] Window \(windowID) in group \(group.id) name cleared")
         }
     }
 

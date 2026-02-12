@@ -332,4 +332,45 @@ final class GroupManagerTests: XCTestCase {
         wait(for: [changeExpectation], timeout: 0.2)
     }
 
+    func testUpdateWindowCustomTabNameUpdatesAndPublishesChange() {
+        let gm = GroupManager()
+        let group = gm.createGroup(with: [makeWindow(id: 1)], frame: .zero)!
+        let changeExpectation = expectation(description: "GroupManager publishes custom tab name change")
+        var cancellables = Set<AnyCancellable>()
+
+        gm.objectWillChange
+            .sink { _ in
+                changeExpectation.fulfill()
+            }
+            .store(in: &cancellables)
+
+        let updated = gm.updateWindowCustomTabName(withID: 1, in: group, to: "  Focus  ")
+
+        XCTAssertTrue(updated)
+        XCTAssertEqual(group.windows[0].customTabName, "Focus")
+        wait(for: [changeExpectation], timeout: 0.2)
+    }
+
+    func testUpdateWindowCustomTabNameNoOpsWhenNormalizedNameUnchanged() {
+        let gm = GroupManager()
+        let group = gm.createGroup(with: [makeWindow(id: 1)], frame: .zero)!
+        group.windows[0].customTabName = "Focus"
+
+        let changeExpectation = expectation(description: "No publish for unchanged custom tab name")
+        changeExpectation.isInverted = true
+        var cancellables = Set<AnyCancellable>()
+
+        gm.objectWillChange
+            .sink { _ in
+                changeExpectation.fulfill()
+            }
+            .store(in: &cancellables)
+
+        let updated = gm.updateWindowCustomTabName(withID: 1, in: group, to: " Focus ")
+
+        XCTAssertFalse(updated)
+        XCTAssertEqual(group.windows[0].customTabName, "Focus")
+        wait(for: [changeExpectation], timeout: 0.2)
+    }
+
 }

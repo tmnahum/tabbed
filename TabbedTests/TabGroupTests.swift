@@ -62,6 +62,31 @@ final class TabGroupTests: XCTestCase {
         )
     }
 
+    func testDisplayedTabTitlePrefersCustomTabName() {
+        var window = makeWindow(id: 1)
+        window.customTabName = "  Focus  "
+        window.title = "Original"
+
+        XCTAssertEqual(TabBarView.displayedTabTitle(for: window), "Focus")
+    }
+
+    func testDisplayedTabTitleFallsBackToWindowTitleWhenCustomNameIsEmpty() {
+        var window = makeWindow(id: 1)
+        window.customTabName = "   "
+        window.title = "Original"
+
+        XCTAssertEqual(TabBarView.displayedTabTitle(for: window), "Original")
+    }
+
+    func testDisplayedTabTitleFallsBackToAppNameWhenWindowTitleIsEmpty() {
+        var window = makeWindow(id: 1)
+        window.customTabName = nil
+        window.title = ""
+        window.appName = "Finder"
+
+        XCTAssertEqual(TabBarView.displayedTabTitle(for: window), "Finder")
+    }
+
     func testActiveWindow() {
         let w1 = makeWindow(id: 1)
         let w2 = makeWindow(id: 2)

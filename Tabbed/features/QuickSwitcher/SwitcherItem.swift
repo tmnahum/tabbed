@@ -21,13 +21,13 @@ enum SwitcherItem: Identifiable {
     var displayTitle: String {
         switch self {
         case .singleWindow(let w):
-            return w.title.isEmpty ? w.appName : w.title
+            return w.displayTitle
         case .group(let g):
             if let name = g.displayName {
                 return name
             }
             guard let active = g.activeWindow else { return "" }
-            return active.title.isEmpty ? active.appName : active.title
+            return active.displayTitle
         }
     }
 

@@ -68,6 +68,22 @@ class GroupManager: ObservableObject {
         return true
     }
 
+    /// Updates a grouped window's user-defined tab name and publishes a change.
+    /// Pass nil/empty whitespace to clear the custom name.
+    @discardableResult
+    func updateWindowCustomTabName(withID windowID: CGWindowID, in group: TabGroup, to rawCustomTabName: String?) -> Bool {
+        guard groups.contains(where: { $0.id == group.id }),
+              let index = group.windows.firstIndex(where: { $0.id == windowID }) else {
+            return false
+        }
+        let normalized = normalizeCustomTabName(rawCustomTabName)
+        let existing = normalizeCustomTabName(group.windows[index].customTabName)
+        guard existing != normalized else { return false }
+        group.windows[index].customTabName = normalized
+        objectWillChange.send()
+        return true
+    }
+
     /// Remove multiple windows from a group. Returns the removed windows.
     /// Auto-dissolves the group if it becomes empty.
     @discardableResult
@@ -96,5 +112,11 @@ class GroupManager: ObservableObject {
 
     func dissolveAllGroups() {
         groups.removeAll()
+    }
+
+    private func normalizeCustomTabName(_ rawName: String?) -> String? {
+        guard let rawName else { return nil }
+        let trimmed = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
