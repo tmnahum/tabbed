@@ -53,6 +53,18 @@ final class URLNormalizationTests: XCTestCase {
             SearchEngine.googleWeb.searchURL(for: "alpha")?.absoluteString,
             "https://www.google.com/search?q=alpha&udm=14"
         )
+        XCTAssertEqual(
+            SearchEngine.perplexity.searchURL(for: "alpha")?.absoluteString,
+            "https://www.perplexity.ai/search/new?q=alpha"
+        )
+        XCTAssertEqual(
+            SearchEngine.chatGPT.searchURL(for: "alpha")?.absoluteString,
+            "https://chatgpt.com/?q=alpha"
+        )
+        XCTAssertEqual(
+            SearchEngine.claude.searchURL(for: "alpha")?.absoluteString,
+            "https://claude.ai/new?q=alpha"
+        )
     }
 
     func testCustomTemplateSearchURLGeneration() {

@@ -14,26 +14,32 @@ enum BrowserProviderMode: String, Codable, CaseIterable {
 enum SearchEngine: String, Codable, CaseIterable {
     case unduck
     case google
-    case googleAI
     case googleWeb
     case duckDuckGo
     case bing
     case brave
     case kagi
+    case googleAI
+    case perplexity
+    case chatGPT
+    case claude
     case custom
 
     static let commonProviders: [SearchEngine] = [
         .unduck,
         .google,
+        .googleWeb,
         .duckDuckGo,
         .bing,
         .brave,
         .kagi
     ]
 
-    static let additionalProviders: [SearchEngine] = [
+    static let aiProviders: [SearchEngine] = [
         .googleAI,
-        .googleWeb
+        .perplexity,
+        .chatGPT,
+        .claude
     ]
 
     static let defaultTemplate = "https://www.google.com/search?q=%s"
@@ -46,8 +52,6 @@ enum SearchEngine: String, Codable, CaseIterable {
             self = .unduck
         case Self.google.rawValue:
             self = .google
-        case Self.googleAI.rawValue:
-            self = .googleAI
         case Self.googleWeb.rawValue:
             self = .googleWeb
         case Self.duckDuckGo.rawValue:
@@ -58,6 +62,14 @@ enum SearchEngine: String, Codable, CaseIterable {
             self = .brave
         case Self.kagi.rawValue:
             self = .kagi
+        case Self.googleAI.rawValue:
+            self = .googleAI
+        case Self.perplexity.rawValue:
+            self = .perplexity
+        case Self.chatGPT.rawValue:
+            self = .chatGPT
+        case Self.claude.rawValue:
+            self = .claude
         case Self.custom.rawValue:
             self = .custom
         default:
@@ -76,8 +88,6 @@ enum SearchEngine: String, Codable, CaseIterable {
             return "https://unduck.link/?q=%s"
         case .google:
             return "https://www.google.com/search?q=%s"
-        case .googleAI:
-            return "https://www.google.com/search?q=%s&udm=50"
         case .googleWeb:
             return "https://www.google.com/search?q=%s&udm=14"
         case .duckDuckGo:
@@ -88,6 +98,14 @@ enum SearchEngine: String, Codable, CaseIterable {
             return "https://search.brave.com/search?q=%s"
         case .kagi:
             return "https://kagi.com/search?q=%s"
+        case .googleAI:
+            return "https://www.google.com/search?q=%s&udm=50"
+        case .perplexity:
+            return "https://www.perplexity.ai/search/new?q=%s"
+        case .chatGPT:
+            return "https://chatgpt.com/?q=%s"
+        case .claude:
+            return "https://claude.ai/new?q=%s"
         case .custom:
             return nil
         }
@@ -118,12 +136,15 @@ enum SearchEngine: String, Codable, CaseIterable {
         switch self {
         case .unduck: return "Unduck"
         case .google: return "Google"
-        case .googleAI: return "Google (AI)"
         case .googleWeb: return "Google (Web)"
         case .duckDuckGo: return "DuckDuckGo"
         case .bing: return "Bing"
         case .brave: return "Brave Search"
         case .kagi: return "Kagi"
+        case .googleAI: return "Google (AI)"
+        case .perplexity: return "Perplexity"
+        case .chatGPT: return "ChatGPT"
+        case .claude: return "Claude"
         case .custom: return "Custom"
         }
     }

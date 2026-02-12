@@ -369,7 +369,7 @@ struct SettingsView: View {
                             Text(provider.displayName).tag(provider)
                         }
                         Divider()
-                        ForEach(SearchEngine.additionalProviders, id: \.rawValue) { provider in
+                        ForEach(SearchEngine.aiProviders, id: \.rawValue) { provider in
                             Text(provider.displayName).tag(provider)
                         }
                         Divider()
