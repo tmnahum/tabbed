@@ -107,6 +107,9 @@ struct SettingsView: View {
         .onChange(of: launcherConfig.searchEngine) { _ in
             onLauncherConfigChanged(launcherConfig)
         }
+        .onChange(of: launcherConfig.customSearchTemplate) { _ in
+            onLauncherConfigChanged(launcherConfig)
+        }
         .onChange(of: launcherConfig.manualSelection.bundleID) { _ in
             onLauncherConfigChanged(launcherConfig)
         }
@@ -358,17 +361,36 @@ struct SettingsView: View {
                 Divider()
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Search Engine")
+                    Text("Search Provider")
                         .font(.headline)
 
-                    Picker("Engine", selection: $launcherConfig.searchEngine) {
-                        Text(SearchEngine.google.displayName).tag(SearchEngine.google)
-                        Text(SearchEngine.duckDuckGo.displayName).tag(SearchEngine.duckDuckGo)
-                        Text(SearchEngine.bing.displayName).tag(SearchEngine.bing)
-                        Text(SearchEngine.providerNative.displayName).tag(SearchEngine.providerNative)
+                    Picker("Provider", selection: $launcherConfig.searchEngine) {
+                        ForEach(SearchEngine.commonProviders, id: \.rawValue) { provider in
+                            Text(provider.displayName).tag(provider)
+                        }
+                        Text(SearchEngine.custom.displayName).tag(SearchEngine.custom)
                     }
-                    .pickerStyle(.segmented)
+                    .pickerStyle(.menu)
                     .disabled(!launcherConfig.searchLaunchEnabled)
+
+                    Text(searchProviderDescription)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    if launcherConfig.searchEngine == .custom {
+                        TextField(
+                            "https://example.com/search?q=%s",
+                            text: $launcherConfig.customSearchTemplate
+                        )
+                        .textFieldStyle(.roundedBorder)
+                        .disabled(!launcherConfig.searchLaunchEnabled)
+
+                        if let customSearchTemplateValidationMessage {
+                            Text(customSearchTemplateValidationMessage)
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                        }
+                    }
                 }
                 .padding(.horizontal, 12)
                 .padding(.top, 12)
@@ -683,6 +705,19 @@ struct SettingsView: View {
         case .manual:
             return "Manual uses the browser app you select and a matching engine adapter."
         }
+    }
+
+    private var searchProviderDescription: String {
+        if launcherConfig.searchEngine == .custom {
+            return "Use %s as a placeholder for the typed query."
+        }
+        return "Choose a default web search provider for Add Window search actions."
+    }
+
+    private var customSearchTemplateValidationMessage: String? {
+        guard launcherConfig.searchEngine == .custom else { return nil }
+        guard !launcherConfig.isCustomSearchTemplateValid else { return nil }
+        return "Custom template must include %s, for example: https://example.com/search?q=%s"
     }
 
     private var manualProviderBundleIDText: String {

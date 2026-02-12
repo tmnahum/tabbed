@@ -33,6 +33,25 @@ final class URLNormalizationTests: XCTestCase {
             SearchEngine.bing.searchURL(for: "alpha")?.absoluteString,
             "https://www.bing.com/search?q=alpha"
         )
-        XCTAssertNil(SearchEngine.providerNative.searchURL(for: "alpha"))
+        XCTAssertEqual(
+            SearchEngine.brave.searchURL(for: "alpha")?.absoluteString,
+            "https://search.brave.com/search?q=alpha"
+        )
+        XCTAssertEqual(
+            SearchEngine.kagi.searchURL(for: "alpha")?.absoluteString,
+            "https://kagi.com/search?q=alpha"
+        )
+        XCTAssertEqual(
+            SearchEngine.unduck.searchURL(for: "alpha")?.absoluteString,
+            "https://unduck.link/?q=alpha"
+        )
+    }
+
+    func testCustomTemplateSearchURLGeneration() {
+        XCTAssertEqual(
+            SearchEngine.custom.searchURL(for: "alpha beta", customTemplate: "https://example.com/find?term=%s")?.absoluteString,
+            "https://example.com/find?term=alpha%20beta"
+        )
+        XCTAssertNil(SearchEngine.custom.searchURL(for: "alpha", customTemplate: "https://example.com/find"))
     }
 }

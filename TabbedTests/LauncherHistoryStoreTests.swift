@@ -101,4 +101,23 @@ final class LauncherHistoryStoreTests: XCTestCase {
         XCTAssertEqual(urls[0].urlString, "https://example.com/path")
         XCTAssertEqual(urls[0].launchCount, 2)
     }
+
+    func testRecordingURLPostsUpdateNotification() {
+        let store = makeStore()
+        let expectation = expectation(description: "History update notification")
+
+        let observer = NotificationCenter.default.addObserver(
+            forName: LauncherHistoryStore.didUpdateNotification,
+            object: nil,
+            queue: nil
+        ) { notification in
+            guard let key = notification.userInfo?[LauncherHistoryStore.storageKeyUserInfoKey] as? String,
+                  key == self.storageKey else { return }
+            expectation.fulfill()
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        store.recordURLLaunch(URL(string: "https://example.com")!, outcome: .succeeded)
+        wait(for: [expectation], timeout: 1.0)
+    }
 }

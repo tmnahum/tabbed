@@ -193,7 +193,7 @@ final class LaunchOrchestratorTests: XCTestCase {
         var deps = LaunchOrchestrator.Dependencies()
         deps.listWindows = { [self.makeWindow(id: 1, pid: 42)] }
         deps.runningPIDForBundle = { _ in 42 }
-        deps.launchSearchFallback = { _, _ in
+        deps.launchSearchFallback = { _, _, _ in
             usedSystemFallback = true
             return true
         }
@@ -209,6 +209,7 @@ final class LaunchOrchestratorTests: XCTestCase {
             query: "test query",
             provider: makeProvider(),
             searchEngine: .google,
+            customSearchTemplate: SearchEngine.defaultTemplate,
             request: .init(mode: .newGroup, currentSpaceID: 1)
         )
 
@@ -222,7 +223,7 @@ final class LaunchOrchestratorTests: XCTestCase {
         var deps = LaunchOrchestrator.Dependencies()
         deps.listWindows = { [] }
         deps.runningPIDForBundle = { _ in nil }
-        deps.launchSearchFallback = { _, _ in
+        deps.launchSearchFallback = { _, _, _ in
             usedSystemFallback = true
             return true
         }
@@ -237,6 +238,7 @@ final class LaunchOrchestratorTests: XCTestCase {
             query: "test query",
             provider: nil,
             searchEngine: .google,
+            customSearchTemplate: SearchEngine.defaultTemplate,
             request: .init(mode: .newGroup, currentSpaceID: 1)
         )
 

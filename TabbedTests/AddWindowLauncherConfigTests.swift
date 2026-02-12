@@ -24,7 +24,8 @@ final class AddWindowLauncherConfigTests: XCTestCase {
         XCTAssertTrue(config.urlLaunchEnabled)
         XCTAssertTrue(config.searchLaunchEnabled)
         XCTAssertEqual(config.providerMode, .auto)
-        XCTAssertEqual(config.searchEngine, .google)
+        XCTAssertEqual(config.searchEngine, .unduck)
+        XCTAssertEqual(config.customSearchTemplate, SearchEngine.defaultTemplate)
         XCTAssertEqual(config.manualSelection.engine, .chromium)
         XCTAssertEqual(config.manualSelection.bundleID, "")
     }
@@ -34,7 +35,8 @@ final class AddWindowLauncherConfigTests: XCTestCase {
             urlLaunchEnabled: false,
             searchLaunchEnabled: true,
             providerMode: .manual,
-            searchEngine: .bing,
+            searchEngine: .custom,
+            customSearchTemplate: "https://example.com/search?q=%s",
             manualSelection: BrowserProviderSelection(bundleID: "org.mozilla.firefox", engine: .firefox)
         )
 
@@ -60,5 +62,16 @@ final class AddWindowLauncherConfigTests: XCTestCase {
 
         XCTAssertFalse(decoded.urlLaunchEnabled)
         XCTAssertFalse(decoded.searchLaunchEnabled)
+    }
+
+    func testUnknownLegacySearchEngineValueDecodesToUnduck() throws {
+        let json = """
+        {
+          "searchEngine": "legacyProvider"
+        }
+        """.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(AddWindowLauncherConfig.self, from: json)
+
+        XCTAssertEqual(decoded.searchEngine, .unduck)
     }
 }

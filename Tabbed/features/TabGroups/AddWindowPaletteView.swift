@@ -14,22 +14,39 @@ final class AddWindowPaletteViewModel: ObservableObject {
     private let contextProvider: ContextProvider
     private let actionExecutor: ActionExecutor
     private let dismiss: () -> Void
+    private let notificationCenter: NotificationCenter
 
     private var context: LauncherQueryContext
     private var debounceWorkItem: DispatchWorkItem?
+    private var historyObserver: NSObjectProtocol?
 
     init(
         launcherEngine: LauncherEngine,
         contextProvider: @escaping ContextProvider,
         actionExecutor: @escaping ActionExecutor,
-        dismiss: @escaping () -> Void
+        dismiss: @escaping () -> Void,
+        notificationCenter: NotificationCenter = .default
     ) {
         self.launcherEngine = launcherEngine
         self.contextProvider = contextProvider
         self.actionExecutor = actionExecutor
         self.dismiss = dismiss
+        self.notificationCenter = notificationCenter
         self.context = contextProvider()
+        historyObserver = notificationCenter.addObserver(
+            forName: LauncherHistoryStore.didUpdateNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.refreshSources()
+        }
         rerankNow()
+    }
+
+    deinit {
+        if let historyObserver {
+            notificationCenter.removeObserver(historyObserver)
+        }
     }
 
     var modeTitle: String {

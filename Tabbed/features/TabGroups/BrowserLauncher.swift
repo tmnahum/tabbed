@@ -120,7 +120,12 @@ protocol BrowserLauncher {
     var engine: BrowserEngine { get }
     func openNewWindow(provider: ResolvedBrowserProvider) -> Bool
     func openURL(_ url: URL, provider: ResolvedBrowserProvider) -> Bool
-    func openSearch(query: String, provider: ResolvedBrowserProvider, searchEngine: SearchEngine) -> Bool
+    func openSearch(
+        query: String,
+        provider: ResolvedBrowserProvider,
+        searchEngine: SearchEngine,
+        customSearchTemplate: String
+    ) -> Bool
 }
 
 final class ChromiumBrowserLauncher: BrowserLauncher {
@@ -169,41 +174,43 @@ final class ChromiumBrowserLauncher: BrowserLauncher {
         return runOpenURL(bundleID: provider.selection.bundleID, url: url)
     }
 
-    func openSearch(query: String, provider: ResolvedBrowserProvider, searchEngine: SearchEngine) -> Bool {
-        if searchEngine == .providerNative {
-            if runExecutable(appURL: provider.appURL, args: ["--new-window", query]) {
-                return true
-            }
-            if runOpenWithArgs(bundleID: provider.selection.bundleID, args: ["--new-window", query]) {
-                return true
-            }
-            if let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-               let fallback = URL(string: "https://www.google.com/search?q=\(encoded)") {
-                return openURL(fallback, provider: provider)
-            }
-            return false
-        }
-        guard let url = searchEngine.searchURL(for: query) else { return false }
+    func openSearch(
+        query: String,
+        provider: ResolvedBrowserProvider,
+        searchEngine: SearchEngine,
+        customSearchTemplate: String
+    ) -> Bool {
+        guard let url = searchEngine.searchURL(for: query, customTemplate: customSearchTemplate) else { return false }
         return openURL(url, provider: provider)
     }
 }
 
 final class FirefoxBrowserLauncher: BrowserLauncher {
     let engine: BrowserEngine = .firefox
+    static let newWindowFlag = "-new-window"
+
+    static func newWindowArgs(url: URL?) -> [String] {
+        if let url {
+            return [newWindowFlag, url.absoluteString]
+        }
+        return [newWindowFlag, "about:blank"]
+    }
 
     func openNewWindow(provider: ResolvedBrowserProvider) -> Bool {
-        runFirefox(provider: provider, args: ["--new-window", "about:blank"])
+        runFirefox(provider: provider, args: Self.newWindowArgs(url: nil))
     }
 
     func openURL(_ url: URL, provider: ResolvedBrowserProvider) -> Bool {
-        runFirefox(provider: provider, args: ["--new-window", url.absoluteString])
+        runFirefox(provider: provider, args: Self.newWindowArgs(url: url))
     }
 
-    func openSearch(query: String, provider: ResolvedBrowserProvider, searchEngine: SearchEngine) -> Bool {
-        if searchEngine == .providerNative {
-            return runFirefox(provider: provider, args: ["--search", query])
-        }
-        guard let url = searchEngine.searchURL(for: query) else { return false }
+    func openSearch(
+        query: String,
+        provider: ResolvedBrowserProvider,
+        searchEngine: SearchEngine,
+        customSearchTemplate: String
+    ) -> Bool {
+        guard let url = searchEngine.searchURL(for: query, customTemplate: customSearchTemplate) else { return false }
         return openURL(url, provider: provider)
     }
 
@@ -256,13 +263,13 @@ final class SafariBrowserLauncher: BrowserLauncher {
         return runOpenURL(bundleID: provider.selection.bundleID, url: url)
     }
 
-    func openSearch(query: String, provider: ResolvedBrowserProvider, searchEngine: SearchEngine) -> Bool {
-        // Safari does not expose a reliable "raw query" launch arg like Chromium/Firefox.
-        if searchEngine == .providerNative {
-            guard let fallback = SearchEngine.google.searchURL(for: query) else { return false }
-            return openURL(fallback, provider: provider)
-        }
-        guard let url = searchEngine.searchURL(for: query) else { return false }
+    func openSearch(
+        query: String,
+        provider: ResolvedBrowserProvider,
+        searchEngine: SearchEngine,
+        customSearchTemplate: String
+    ) -> Bool {
+        guard let url = searchEngine.searchURL(for: query, customTemplate: customSearchTemplate) else { return false }
         return openURL(url, provider: provider)
     }
 }

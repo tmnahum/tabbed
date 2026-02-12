@@ -62,12 +62,13 @@ final class LaunchOrchestrator {
         }
         var attemptProviderNewWindow: ((String) -> Bool)? = nil
         var launchURLAction: ((URL, ResolvedBrowserProvider) -> Bool)? = nil
-        var launchSearchAction: ((String, ResolvedBrowserProvider, SearchEngine) -> Bool)? = nil
+        var launchSearchAction: ((String, ResolvedBrowserProvider, SearchEngine, String) -> Bool)? = nil
         var launchURLFallback: (URL) -> Bool = { url in
             NSWorkspace.shared.open(url)
         }
-        var launchSearchFallback: (String, SearchEngine) -> Bool = { query, searchEngine in
-            let searchURL = searchEngine.searchURL(for: query) ?? SearchEngine.google.searchURL(for: query)
+        var launchSearchFallback: (String, SearchEngine, String) -> Bool = { query, searchEngine, customSearchTemplate in
+            let searchURL = searchEngine.searchURL(for: query, customTemplate: customSearchTemplate)
+                ?? SearchEngine.google.searchURL(for: query, customTemplate: nil)
             guard let searchURL else { return false }
             return NSWorkspace.shared.open(searchURL)
         }
@@ -135,6 +136,7 @@ final class LaunchOrchestrator {
         query: String,
         provider: ResolvedBrowserProvider?,
         searchEngine: SearchEngine,
+        customSearchTemplate: String,
         request: CaptureRequest,
         completion: @escaping (Outcome) -> Void
     ) {
@@ -143,6 +145,7 @@ final class LaunchOrchestrator {
                 query: query,
                 provider: provider,
                 searchEngine: searchEngine,
+                customSearchTemplate: customSearchTemplate,
                 request: request
             )
             dependencies.completeOnMain {
@@ -265,6 +268,7 @@ final class LaunchOrchestrator {
         query: String,
         provider: ResolvedBrowserProvider?,
         searchEngine: SearchEngine,
+        customSearchTemplate: String,
         request: CaptureRequest
     ) -> Outcome {
         if let provider {
@@ -274,8 +278,13 @@ final class LaunchOrchestrator {
             let baseline = baselineWindowIDs(forPID: initialPID)
             dependencies.log("[CAPTURE_WAIT] baseline search provider=\(provider.selection.bundleID) pid=\(String(describing: initialPID)) count=\(baseline.count)")
 
-            let launched = dependencies.launchSearchAction?(query, provider, searchEngine)
-                ?? defaultLaunchSearch(query: query, provider: provider, searchEngine: searchEngine)
+            let launched = dependencies.launchSearchAction?(query, provider, searchEngine, customSearchTemplate)
+                ?? defaultLaunchSearch(
+                    query: query,
+                    provider: provider,
+                    searchEngine: searchEngine,
+                    customSearchTemplate: customSearchTemplate
+                )
             dependencies.log("[URL_LAUNCH] search dispatch provider=\(provider.selection.bundleID) success=\(launched)")
             if launched {
                 let capture = waitForCapturedWindow(
@@ -298,7 +307,12 @@ final class LaunchOrchestrator {
         }
 
         dependencies.log("[LAUNCHER_ACTION] webSearch provider=system-default query=\(query)")
-        return launchSearchFallbackAndCapture(query: query, searchEngine: searchEngine, request: request)
+        return launchSearchFallbackAndCapture(
+            query: query,
+            searchEngine: searchEngine,
+            customSearchTemplate: customSearchTemplate,
+            request: request
+        )
     }
 
     // MARK: - Internals
@@ -584,15 +598,31 @@ final class LaunchOrchestrator {
     private func defaultLaunchSearch(
         query: String,
         provider: ResolvedBrowserProvider,
-        searchEngine: SearchEngine
+        searchEngine: SearchEngine,
+        customSearchTemplate: String
     ) -> Bool {
         switch provider.selection.engine {
         case .chromium:
-            return chromiumLauncher.openSearch(query: query, provider: provider, searchEngine: searchEngine)
+            return chromiumLauncher.openSearch(
+                query: query,
+                provider: provider,
+                searchEngine: searchEngine,
+                customSearchTemplate: customSearchTemplate
+            )
         case .firefox:
-            return firefoxLauncher.openSearch(query: query, provider: provider, searchEngine: searchEngine)
+            return firefoxLauncher.openSearch(
+                query: query,
+                provider: provider,
+                searchEngine: searchEngine,
+                customSearchTemplate: customSearchTemplate
+            )
         case .safari:
-            return safariLauncher.openSearch(query: query, provider: provider, searchEngine: searchEngine)
+            return safariLauncher.openSearch(
+                query: query,
+                provider: provider,
+                searchEngine: searchEngine,
+                customSearchTemplate: customSearchTemplate
+            )
         }
     }
 
@@ -618,10 +648,15 @@ final class LaunchOrchestrator {
         return Outcome(result: .timedOut(status: "No new window detected"), capturedWindow: nil)
     }
 
-    private func launchSearchFallbackAndCapture(query: String, searchEngine: SearchEngine, request: CaptureRequest) -> Outcome {
+    private func launchSearchFallbackAndCapture(
+        query: String,
+        searchEngine: SearchEngine,
+        customSearchTemplate: String,
+        request: CaptureRequest
+    ) -> Outcome {
         let baseline = baselineWindowIDs(forPID: nil)
         dependencies.log("[CAPTURE_WAIT] fallback search baseline count=\(baseline.count)")
-        let launched = dependencies.launchSearchFallback(query, searchEngine)
+        let launched = dependencies.launchSearchFallback(query, searchEngine, customSearchTemplate)
         dependencies.log("[URL_LAUNCH] fallback search dispatch success=\(launched)")
         guard launched else {
             return Outcome(result: .failed(status: "Unable to open search"), capturedWindow: nil)

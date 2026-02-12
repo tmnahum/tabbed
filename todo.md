@@ -1,6 +1,8 @@
 
 - MRU stuff fix, + performance
 
+- unclose window.... if even possible idk. if it was browser can use their native undelete keyboard shortcut and automte that?
+
 - quick switcher & MRU improvements
     - quick switcher when switching to window and back to old window it sometimes opens the app you were just in instead of the window you teid to tab back into
     - quick switcher design / style
@@ -12,6 +14,11 @@
     - mru maybe doesnt get updated on all window changes, just app changes and in-group window changes?, idk
 
 - make settings window show up as window (it does show up in alttab, maybe reconsider what we're targetting)
+    
+    
+- new window functionality
+    - iterm2 doesnt work
+    - need good model scan of everything
     
 
 - fullscreen improvements

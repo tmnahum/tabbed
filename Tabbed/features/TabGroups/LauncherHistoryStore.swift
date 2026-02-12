@@ -1,6 +1,9 @@
 import Foundation
 
 final class LauncherHistoryStore {
+    static let didUpdateNotification = Notification.Name("LauncherHistoryStore.didUpdate")
+    static let storageKeyUserInfoKey = "storageKey"
+
     struct URLEntry: Codable, Equatable {
         let urlString: String
         let launchCount: Int
@@ -196,5 +199,10 @@ final class LauncherHistoryStore {
     private func saveSnapshot(_ snapshot: Snapshot) {
         guard let data = try? JSONEncoder().encode(snapshot) else { return }
         userDefaults.set(data, forKey: storageKey)
+        NotificationCenter.default.post(
+            name: Self.didUpdateNotification,
+            object: self,
+            userInfo: [Self.storageKeyUserInfoKey: storageKey]
+        )
     }
 }

@@ -280,6 +280,7 @@ extension AppDelegate {
                 query: query,
                 provider: context.resolvedBrowserProvider,
                 searchEngine: context.launcherConfig.searchEngine,
+                customSearchTemplate: context.launcherConfig.customSearchTemplate,
                 request: request
             ) { [weak self] outcome in
                 self?.handleCaptureOutcome(outcome, context: context, completion: completion)

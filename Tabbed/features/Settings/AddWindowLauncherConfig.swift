@@ -15,25 +15,88 @@ enum SearchEngine: String, Codable, CaseIterable {
     case google
     case duckDuckGo
     case bing
-    case providerNative
+    case brave
+    case kagi
+    case unduck
+    case custom
 
-    func searchURL(for query: String) -> URL? {
+    static let commonProviders: [SearchEngine] = [
+        .google,
+        .duckDuckGo,
+        .bing,
+        .brave,
+        .kagi,
+        .unduck
+    ]
+
+    static let defaultTemplate = "https://www.google.com/search?q=%s"
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        switch rawValue {
+        case Self.google.rawValue:
+            self = .google
+        case Self.duckDuckGo.rawValue:
+            self = .duckDuckGo
+        case Self.bing.rawValue:
+            self = .bing
+        case Self.brave.rawValue:
+            self = .brave
+        case Self.kagi.rawValue:
+            self = .kagi
+        case Self.unduck.rawValue:
+            self = .unduck
+        case Self.custom.rawValue:
+            self = .custom
+        default:
+            self = .unduck
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+
+    var presetTemplate: String? {
+        switch self {
+        case .google:
+            return "https://www.google.com/search?q=%s"
+        case .duckDuckGo:
+            return "https://duckduckgo.com/?q=%s"
+        case .bing:
+            return "https://www.bing.com/search?q=%s"
+        case .brave:
+            return "https://search.brave.com/search?q=%s"
+        case .kagi:
+            return "https://kagi.com/search?q=%s"
+        case .unduck:
+            return "https://unduck.link/?q=%s"
+        case .custom:
+            return nil
+        }
+    }
+
+    func searchURL(for query: String, customTemplate: String? = nil) -> URL? {
+        let template = (self == .custom ? customTemplate : presetTemplate) ?? ""
+        return Self.searchURL(query: query, template: template)
+    }
+
+    static func isTemplateValid(_ template: String) -> Bool {
+        template.trimmingCharacters(in: .whitespacesAndNewlines).contains("%s")
+    }
+
+    static func searchURL(query: String, template: String) -> URL? {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
+        let normalizedTemplate = template.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard isTemplateValid(normalizedTemplate) else { return nil }
         guard let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
             return nil
         }
-
-        switch self {
-        case .google:
-            return URL(string: "https://www.google.com/search?q=\(encoded)")
-        case .duckDuckGo:
-            return URL(string: "https://duckduckgo.com/?q=\(encoded)")
-        case .bing:
-            return URL(string: "https://www.bing.com/search?q=\(encoded)")
-        case .providerNative:
-            return nil
-        }
+        let urlString = normalizedTemplate.replacingOccurrences(of: "%s", with: encoded)
+        return URL(string: urlString)
     }
 
     var displayName: String {
@@ -41,7 +104,10 @@ enum SearchEngine: String, Codable, CaseIterable {
         case .google: return "Google"
         case .duckDuckGo: return "DuckDuckGo"
         case .bing: return "Bing"
-        case .providerNative: return "Provider Native"
+        case .brave: return "Brave Search"
+        case .kagi: return "Kagi"
+        case .unduck: return "Unduck"
+        case .custom: return "Custom"
         }
     }
 }
@@ -61,13 +127,15 @@ struct AddWindowLauncherConfig: Codable, Equatable {
     var searchLaunchEnabled: Bool
     var providerMode: BrowserProviderMode
     var searchEngine: SearchEngine
+    var customSearchTemplate: String
     var manualSelection: BrowserProviderSelection
 
     static let `default` = AddWindowLauncherConfig(
         urlLaunchEnabled: true,
         searchLaunchEnabled: true,
         providerMode: .auto,
-        searchEngine: .google,
+        searchEngine: .unduck,
+        customSearchTemplate: SearchEngine.defaultTemplate,
         manualSelection: BrowserProviderSelection(bundleID: "", engine: .chromium)
     )
 
@@ -75,13 +143,15 @@ struct AddWindowLauncherConfig: Codable, Equatable {
         urlLaunchEnabled: Bool = true,
         searchLaunchEnabled: Bool = true,
         providerMode: BrowserProviderMode = .auto,
-        searchEngine: SearchEngine = .google,
+        searchEngine: SearchEngine = .unduck,
+        customSearchTemplate: String = SearchEngine.defaultTemplate,
         manualSelection: BrowserProviderSelection = BrowserProviderSelection()
     ) {
         self.urlLaunchEnabled = urlLaunchEnabled
         self.searchLaunchEnabled = searchLaunchEnabled
         self.providerMode = providerMode
         self.searchEngine = searchEngine
+        self.customSearchTemplate = customSearchTemplate
         self.manualSelection = manualSelection
     }
 
@@ -93,11 +163,27 @@ struct AddWindowLauncherConfig: Codable, Equatable {
         urlLaunchEnabled || searchLaunchEnabled
     }
 
+    var effectiveSearchTemplate: String {
+        if searchEngine == .custom {
+            return customSearchTemplate
+        }
+        return searchEngine.presetTemplate ?? SearchEngine.defaultTemplate
+    }
+
+    var isCustomSearchTemplateValid: Bool {
+        searchEngine != .custom || SearchEngine.isTemplateValid(customSearchTemplate)
+    }
+
+    func searchURL(for query: String) -> URL? {
+        searchEngine.searchURL(for: query, customTemplate: customSearchTemplate)
+    }
+
     private enum CodingKeys: String, CodingKey {
         case urlLaunchEnabled
         case searchLaunchEnabled
         case providerMode
         case searchEngine
+        case customSearchTemplate
         case manualSelection
     }
 
@@ -107,7 +193,11 @@ struct AddWindowLauncherConfig: Codable, Equatable {
         // For configs saved before `searchLaunchEnabled` existed, mirror the legacy combined toggle value.
         searchLaunchEnabled = try container.decodeIfPresent(Bool.self, forKey: .searchLaunchEnabled) ?? urlLaunchEnabled
         providerMode = try container.decodeIfPresent(BrowserProviderMode.self, forKey: .providerMode) ?? .auto
-        searchEngine = try container.decodeIfPresent(SearchEngine.self, forKey: .searchEngine) ?? .google
+        searchEngine = try container.decodeIfPresent(SearchEngine.self, forKey: .searchEngine) ?? .unduck
+        customSearchTemplate = try container.decodeIfPresent(String.self, forKey: .customSearchTemplate) ?? SearchEngine.defaultTemplate
+        if customSearchTemplate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            customSearchTemplate = SearchEngine.defaultTemplate
+        }
         manualSelection = try container.decodeIfPresent(BrowserProviderSelection.self, forKey: .manualSelection) ?? BrowserProviderSelection()
     }
 
@@ -117,6 +207,7 @@ struct AddWindowLauncherConfig: Codable, Equatable {
         try container.encode(searchLaunchEnabled, forKey: .searchLaunchEnabled)
         try container.encode(providerMode, forKey: .providerMode)
         try container.encode(searchEngine, forKey: .searchEngine)
+        try container.encode(customSearchTemplate, forKey: .customSearchTemplate)
         try container.encode(manualSelection, forKey: .manualSelection)
     }
 
