@@ -40,10 +40,10 @@ extension AppDelegate {
             guard let self, let (group, panel) = self.activeGroup() else { return }
             if let windowID = item.windowIDs.first,
                let index = group.windows.firstIndex(where: { $0.id == windowID }) {
+                self.beginCommitEchoSuppression(targetWindowID: windowID)
                 self.switchTab(in: group, to: index, panel: panel)
                 group.endCycle(landedWindowID: windowID)
                 self.cyclingGroup = nil
-                self.cycleEndTime = Date()
             }
         }
         switcherController.onDismiss = { [weak self] in

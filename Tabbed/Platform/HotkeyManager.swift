@@ -172,6 +172,7 @@ class HotkeyManager {
     }
 
     private var modifierPollTimer: Timer?
+    private var activeModifierWatchMask: UInt?
 
     func stop() {
         SystemShortcutOverride.restoreAll()
@@ -196,13 +197,15 @@ class HotkeyManager {
     /// (e.g. Karabiner Hyper key setups, certain event routing quirks).
     func startModifierWatch(modifiers: UInt) {
         modifierPollTimer?.invalidate()
-        let requiredMods = modifiers
+        activeModifierWatchMask = modifiers == 0 ? nil : modifiers
+        guard let requiredMods = activeModifierWatchMask else { return }
         modifierPollTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] timer in
             guard let self else {
                 timer.invalidate()
                 return
             }
             let currentMods = NSEvent.modifierFlags.intersection(.deviceIndependentFlagsMask).rawValue
+                & KeyBinding.shortcutModifiersMask
             if (currentMods & requiredMods) != requiredMods {
                 timer.invalidate()
                 self.modifierPollTimer = nil
@@ -214,6 +217,7 @@ class HotkeyManager {
     func stopModifierWatch() {
         modifierPollTimer?.invalidate()
         modifierPollTimer = nil
+        activeModifierWatchMask = nil
     }
 
     func updateConfig(_ newConfig: ShortcutConfig) {
@@ -222,13 +226,10 @@ class HotkeyManager {
     }
 
     func handleFlagsChanged(_ event: NSEvent) {
+        guard let requiredMods = activeModifierWatchMask else { return }
         let currentMods = event.modifierFlags.intersection(.deviceIndependentFlagsMask).rawValue
             & KeyBinding.shortcutModifiersMask
-        // Check if either switcher's required modifiers have been released.
-        let cycleMods = config.cycleTab.modifiers
-        let globalMods = config.globalSwitcher.modifiers
-        let anyRequired = cycleMods | globalMods
-        if (currentMods & anyRequired) != anyRequired {
+        if (currentMods & requiredMods) != requiredMods {
             stopModifierWatch() // Prevent double-fire from poll timer
             onModifierReleased?()
         }

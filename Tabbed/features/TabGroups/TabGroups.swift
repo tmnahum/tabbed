@@ -150,8 +150,8 @@ extension AppDelegate {
 
         var windowRecency: [CGWindowID: Int] = [:]
         var groupRecency: [UUID: Int] = [:]
-        for (index, entry) in globalMRU.enumerated() {
-            let score = globalMRU.count - index
+        for (index, entry) in mruTracker.entries.enumerated() {
+            let score = mruTracker.count - index
             switch entry {
             case .window(let windowID):
                 windowRecency[windowID] = score
@@ -606,7 +606,7 @@ extension AppDelegate {
             Logger.log("[SPACE] Rejected addWindow wid=\(window.id) (space \(windowSpace)) to group \(group.id) (space \(group.spaceID))")
             return
         }
-        globalMRU.removeAll { $0 == .window(window.id) }
+        mruTracker.removeWindow(window.id)
         setExpectedFrame(group.frame, for: [window.id])
         AccessibilityHelper.setFrame(of: window.element, to: group.frame)
         // Use explicit index if provided, otherwise insert after active for same-app or auto-capture
@@ -632,7 +632,7 @@ extension AppDelegate {
         if autoCaptureGroup === group { deactivateAutoCapture() }
         if lastActiveGroupID == group.id { lastActiveGroupID = nil }
         selectedTabIDsByGroupID.removeValue(forKey: group.id)
-        globalMRU.removeAll { $0 == .group(group.id) }
+        mruTracker.removeGroup(group.id)
 
         if cyclingGroup === group { cyclingGroup = nil }
         resyncWorkItems[group.id]?.cancel()
@@ -659,7 +659,7 @@ extension AppDelegate {
         if autoCaptureGroup === group { deactivateAutoCapture() }
         if lastActiveGroupID == group.id { lastActiveGroupID = nil }
         selectedTabIDsByGroupID.removeValue(forKey: group.id)
-        globalMRU.removeAll { $0 == .group(group.id) }
+        mruTracker.removeGroup(group.id)
 
         if cyclingGroup === group { cyclingGroup = nil }
         resyncWorkItems[group.id]?.cancel()
@@ -687,7 +687,7 @@ extension AppDelegate {
         if autoCaptureGroup === group { deactivateAutoCapture() }
         if lastActiveGroupID == group.id { lastActiveGroupID = nil }
         selectedTabIDsByGroupID.removeValue(forKey: group.id)
-        globalMRU.removeAll { $0 == .group(group.id) }
+        mruTracker.removeGroup(group.id)
 
         if cyclingGroup === group { cyclingGroup = nil }
         resyncWorkItems[group.id]?.cancel()
@@ -753,7 +753,7 @@ extension AppDelegate {
         if autoCaptureGroup === source { deactivateAutoCapture() }
         if lastActiveGroupID == source.id { lastActiveGroupID = nil }
         selectedTabIDsByGroupID.removeValue(forKey: source.id)
-        globalMRU.removeAll { $0 == .group(source.id) }
+        mruTracker.removeGroup(source.id)
         if cyclingGroup === source { cyclingGroup = nil }
         resyncWorkItems[source.id]?.cancel()
         resyncWorkItems.removeValue(forKey: source.id)
@@ -1169,7 +1169,7 @@ extension AppDelegate {
             let affectedWindows = group.windows.filter { $0.ownerPID == pid }
             guard !affectedWindows.isEmpty else { continue }
             for window in affectedWindows {
-                globalMRU.removeAll { $0 == .window(window.id) }
+                mruTracker.removeWindow(window.id)
                 expectedFrames.removeValue(forKey: window.id)
                 windowObserver.handleDestroyedWindow(pid: pid, elementHash: CFHash(window.element))
                 groupManager.releaseWindow(withID: window.id, from: group)
@@ -1185,7 +1185,7 @@ extension AppDelegate {
                     if autoCaptureGroup === group { deactivateAutoCapture() }
                     if lastActiveGroupID == group.id { lastActiveGroupID = nil }
                     selectedTabIDsByGroupID.removeValue(forKey: group.id)
-                    globalMRU.removeAll { $0 == .group(group.id) }
+                    mruTracker.removeGroup(group.id)
                     if cyclingGroup === group { cyclingGroup = nil }
                     resyncWorkItems[group.id]?.cancel()
                     resyncWorkItems.removeValue(forKey: group.id)

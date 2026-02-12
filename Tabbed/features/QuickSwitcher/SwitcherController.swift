@@ -10,15 +10,25 @@ class SwitcherController {
     }
 
     private var panel: SwitcherPanel?
-    private var items: [SwitcherItem] = []
-    private var selectedIndex: Int = 0
-    private var style: SwitcherStyle = .appIcons
-    private var namedGroupLabelMode: NamedGroupLabelMode = .groupAppWindow
-    private(set) var scope: Scope = .global
+    private var session = SwitcherSession()
+    var scope: Scope { session.scope }
 
-    /// When non-nil, the user is sub-selecting within a group item.
-    /// Value is an index into the group's `windows` array.
-    private(set) var subSelectedWindowIndex: Int?
+    /// Stable sub-selection identity for group entries.
+    private var subSelectedWindowID: CGWindowID? {
+        get { session.subSelectedWindowID }
+        set { session.subSelectedWindowID = newValue }
+    }
+    /// Current sub-selection index for the selected group item.
+    var subSelectedWindowIndex: Int? {
+        guard session.scope == .global,
+              session.hasItems,
+              session.selectedIndex < session.items.count,
+              case .group(let group) = session.items[session.selectedIndex],
+              let subSelectedWindowID else {
+            return nil
+        }
+        return group.windows.firstIndex { $0.id == subSelectedWindowID }
+    }
 
     /// Called when the user commits a selection. Passes the selected SwitcherItem and optional sub-selection index.
     var onCommit: ((SwitcherItem, Int?) -> Void)?
@@ -37,12 +47,7 @@ class SwitcherController {
     ) {
         guard !items.isEmpty else { return }
 
-        self.items = items
-        self.style = style
-        self.scope = scope
-        self.namedGroupLabelMode = namedGroupLabelMode
-        self.selectedIndex = 0
-        self.subSelectedWindowIndex = nil
+        session.start(items: items, style: style, scope: scope, namedGroupLabelMode: namedGroupLabelMode)
 
         updatePanel()
     }
@@ -50,31 +55,33 @@ class SwitcherController {
     // MARK: - Navigate
 
     func advance() {
-        guard !items.isEmpty else { return }
-        subSelectedWindowIndex = nil
-        selectedIndex = (selectedIndex + 1) % items.count
+        guard session.hasItems else { return }
+        session.advance()
         updatePanelContent()
     }
 
     func retreat() {
-        guard !items.isEmpty else { return }
-        subSelectedWindowIndex = nil
-        selectedIndex = (selectedIndex - 1 + items.count) % items.count
+        guard session.hasItems else { return }
+        session.retreat()
         updatePanelContent()
     }
 
     /// Cycle through windows within the currently selected group item (MRU order).
     /// No-op if the selected item is not a multi-window group.
     func cycleWithinGroup() {
-        guard scope == .global, !items.isEmpty, selectedIndex < items.count else { return }
-        guard case .group(let group) = items[selectedIndex], group.windows.count > 1 else { return }
+        guard session.scope == .global,
+              session.hasItems,
+              session.selectedIndex < session.items.count else { return }
+        guard case .group(let group) = session.items[session.selectedIndex], group.windows.count > 1 else { return }
 
         let indices = mruWindowIndices(for: group)
+        guard !indices.isEmpty else { return }
         // Start from the existing sub-selection, or MRU position 0 (the visual
         // head) if this is the first press — NOT group.activeIndex, which may
         // differ from what's displayed.
-        let currentPos = subSelectedWindowIndex.flatMap { indices.firstIndex(of: $0) } ?? 0
-        subSelectedWindowIndex = indices[(currentPos + 1) % indices.count]
+        let currentPos = subSelectedWindowPosition(in: group, mruIndices: indices) ?? 0
+        let nextIndex = indices[(currentPos + 1) % indices.count]
+        session.subSelectedWindowID = group.windows[nextIndex].id
         updatePanelContent()
     }
 
@@ -83,9 +90,9 @@ class SwitcherController {
     enum ArrowDirection { case left, right, up, down }
 
     func handleArrowKey(_ direction: ArrowDirection) {
-        guard !items.isEmpty else { return }
+        guard session.hasItems else { return }
         let isPrimaryAxis: Bool
-        switch style {
+        switch session.style {
         case .appIcons: isPrimaryAxis = (direction == .left || direction == .right)
         case .titles:   isPrimaryAxis = (direction == .up || direction == .down)
         }
@@ -100,12 +107,16 @@ class SwitcherController {
 
     /// Cycle backward through windows within the currently selected group item (MRU order).
     func cycleWithinGroupBackward() {
-        guard scope == .global, !items.isEmpty, selectedIndex < items.count else { return }
-        guard case .group(let group) = items[selectedIndex], group.windows.count > 1 else { return }
+        guard session.scope == .global,
+              session.hasItems,
+              session.selectedIndex < session.items.count else { return }
+        guard case .group(let group) = session.items[session.selectedIndex], group.windows.count > 1 else { return }
 
         let indices = mruWindowIndices(for: group)
-        let currentPos = subSelectedWindowIndex.flatMap { indices.firstIndex(of: $0) } ?? 0
-        subSelectedWindowIndex = indices[(currentPos - 1 + indices.count) % indices.count]
+        guard !indices.isEmpty else { return }
+        let currentPos = subSelectedWindowPosition(in: group, mruIndices: indices) ?? 0
+        let nextIndex = indices[(currentPos - 1 + indices.count) % indices.count]
+        session.subSelectedWindowID = group.windows[nextIndex].id
         updatePanelContent()
     }
 
@@ -113,19 +124,16 @@ class SwitcherController {
 
     /// Select an item by its index in the full items array and commit immediately.
     func selectAndCommit(at index: Int) {
-        guard !items.isEmpty, index >= 0, index < items.count else { return }
-        selectedIndex = index
-        subSelectedWindowIndex = nil
+        guard session.select(index: index) else { return }
         commit()
     }
 
     func commit() {
-        guard !items.isEmpty, selectedIndex < items.count else {
+        guard let selected = session.selectedItem else {
             dismiss()
             return
         }
-        let selected = items[selectedIndex]
-        let subIndex = subSelectedWindowIndex
+        let subIndex = subSelectedWindowIndex(for: selected)
         tearDown()
         onCommit?(selected, subIndex)
     }
@@ -150,15 +158,20 @@ class SwitcherController {
         guard let panel else { return }
 
         let visible = computeVisibleWindow()
-        let visibleStartOffset = selectedIndex - visible.adjustedIndex
+        let visibleStartOffset = session.selectedIndex - visible.adjustedIndex
+        let precomputedGroupIcons = precomputeGroupIcons(
+            for: visible.items,
+            selectedVisibleIndex: visible.adjustedIndex
+        )
         let view = SwitcherView(
             items: visible.items,
             selectedIndex: visible.adjustedIndex,
-            style: style,
-            namedGroupLabelMode: namedGroupLabelMode,
+            style: session.style,
+            namedGroupLabelMode: session.namedGroupLabelMode,
             showLeadingOverflow: visible.leadingOverflow,
             showTrailingOverflow: visible.trailingOverflow,
             subSelectedWindowIndex: subSelectedWindowIndex,
+            precomputedGroupIcons: precomputedGroupIcons,
             onItemClicked: { [weak self] visibleIndex in
                 self?.selectAndCommit(at: visibleStartOffset + visibleIndex)
             }
@@ -194,7 +207,7 @@ class SwitcherController {
         let screenSize = screen?.visibleFrame.size ?? CGSize(width: 1440, height: 900)
 
         let maxItems: Int
-        switch style {
+        switch session.style {
         case .appIcons:
             // Each icon cell is ~96px wide + 16px spacing
             let available = screenSize.width * 0.85
@@ -205,28 +218,28 @@ class SwitcherController {
             maxItems = max(3, Int((available - 32) / 42))
         }
 
-        guard items.count > maxItems else {
-            return (items, selectedIndex, false, false)
+        guard session.items.count > maxItems else {
+            return (session.items, session.selectedIndex, false, false)
         }
 
-        // Sliding window centered on selectedIndex
-        var start = selectedIndex - maxItems / 2
+        // Sliding window centered on selectedIndex.
+        var start = session.selectedIndex - maxItems / 2
         var end = start + maxItems
 
         if start < 0 {
             start = 0
-            end = min(maxItems, items.count)
+            end = min(maxItems, session.items.count)
         }
-        if end > items.count {
-            end = items.count
+        if end > session.items.count {
+            end = session.items.count
             start = max(0, end - maxItems)
         }
 
         return (
-            Array(items[start..<end]),
-            selectedIndex - start,
+            Array(session.items[start..<end]),
+            session.selectedIndex - start,
             start > 0,
-            end < items.count
+            end < session.items.count
         )
     }
 
@@ -240,11 +253,36 @@ class SwitcherController {
         }
     }
 
+    private func subSelectedWindowPosition(in group: TabGroup, mruIndices: [Int]) -> Int? {
+        guard let subSelectedWindowID,
+              let selectedWindowIndex = group.windows.firstIndex(where: { $0.id == subSelectedWindowID }) else {
+            return nil
+        }
+        return mruIndices.firstIndex(of: selectedWindowIndex)
+    }
+
+    private func subSelectedWindowIndex(for item: SwitcherItem) -> Int? {
+        guard case .group(let group) = item,
+              let subSelectedWindowID else { return nil }
+        return group.windows.firstIndex { $0.id == subSelectedWindowID }
+    }
+
+    private func precomputeGroupIcons(
+        for items: [SwitcherItem],
+        selectedVisibleIndex: Int
+    ) -> [String: [(icon: NSImage?, isFullscreened: Bool)]] {
+        let maxGroupIcons = 8
+        var cache: [String: [(icon: NSImage?, isFullscreened: Bool)]] = [:]
+        for (index, item) in items.enumerated() where item.isGroup {
+            let frontIndex = (index == selectedVisibleIndex) ? subSelectedWindowIndex : nil
+            cache[item.id] = item.iconsInMRUOrder(frontIndex: frontIndex, maxVisible: maxGroupIcons)
+        }
+        return cache
+    }
+
     private func tearDown() {
         panel?.dismiss()
         panel = nil
-        items = []
-        selectedIndex = 0
-        subSelectedWindowIndex = nil
+        session.clear()
     }
 }

@@ -9,6 +9,8 @@ struct SwitcherView: View {
     let showTrailingOverflow: Bool
     /// When non-nil, the selected group item has a sub-selected window at this index.
     var subSelectedWindowIndex: Int? = nil
+    /// Precomputed group icon stacks for this render pass, keyed by `SwitcherItem.id`.
+    var precomputedGroupIcons: [String: [(icon: NSImage?, isFullscreened: Bool)]] = [:]
     /// Called when the user clicks an item. Parameter is the index in the visible items array.
     var onItemClicked: ((Int) -> Void)? = nil
 
@@ -21,6 +23,14 @@ struct SwitcherView: View {
     /// Hard cap for titles-mode panel width to keep long names on-screen.
     private static let maxTitlesPanelWidth: CGFloat = 900
     private static let minTitlesPanelWidth: CGFloat = 420
+
+    private func groupIcons(for item: SwitcherItem, isSelected: Bool) -> [(icon: NSImage?, isFullscreened: Bool)] {
+        if let cached = precomputedGroupIcons[item.id] {
+            return cached
+        }
+        let frontIndex = isSelected ? subSelectedWindowIndex : nil
+        return item.iconsInMRUOrder(frontIndex: frontIndex, maxVisible: Self.maxGroupIcons)
+    }
 
     var body: some View {
         Group {
@@ -111,8 +121,7 @@ struct SwitcherView: View {
 
     private func rowIconSlotWidth(for item: SwitcherItem, isSelected: Bool) -> CGFloat {
         if item.isGroup {
-            let frontIndex = isSelected ? subSelectedWindowIndex : nil
-            let icons = item.iconsInMRUOrder(frontIndex: frontIndex, maxVisible: Self.maxGroupIcons)
+            let icons = groupIcons(for: item, isSelected: isSelected)
             return max(36, groupedIconRowWidth(forCount: icons.count))
         }
         return 36
@@ -174,8 +183,7 @@ struct SwitcherView: View {
         return VStack(spacing: 6) {
             ZStack {
                 if item.isGroup {
-                    let frontIndex = isSelected ? subSelectedWindowIndex : nil
-                    groupedIconStack(entries: item.iconsInMRUOrder(frontIndex: frontIndex, maxVisible: Self.maxGroupIcons))
+                    groupedIconStack(entries: groupIcons(for: item, isSelected: isSelected))
                 } else if let icon = item.icons.first ?? nil {
                     Image(nsImage: icon)
                         .resizable()
@@ -292,8 +300,7 @@ struct SwitcherView: View {
         return HStack(spacing: 14) {
             // Icon(s)
             if item.isGroup {
-                let frontIndex = isSelected ? subSelectedWindowIndex : nil
-                let entries = item.iconsInMRUOrder(frontIndex: frontIndex, maxVisible: Self.maxGroupIcons)
+                let entries = groupIcons(for: item, isSelected: isSelected)
                 groupedIconRowStack(entries: entries)
                     .frame(width: maxRowIconSlotWidth, height: 28, alignment: .leading)
             } else if let icon = item.icons.first ?? nil {

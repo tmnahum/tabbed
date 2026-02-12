@@ -221,11 +221,12 @@ extension AppDelegate {
         // it would confuse frame sync since it's on a different Space.
         if let w = group.windows.first(where: { $0.id == windowID }), w.isFullscreened { return }
 
-        // During an active switcher session or post-commit cooldown,
+        // During an active switcher session or commit-echo suppression,
         // don't let OS focus events mutate group state — the switcher
         // owns the selection, and post-commit events are echoes of our
         // own raiseWindow/activate calls.
-        if !switcherController.isActive, !isCycleCooldownActive {
+        let suppressGroupState = switcherController.isActive || shouldSuppressCommitEcho(for: windowID)
+        if !suppressGroupState {
             let previousID = group.activeWindow?.id
             if previousID != windowID {
                 Logger.log("[DEBUG] handleWindowFocused: switching \(previousID.map(String.init) ?? "nil") → \(windowID) (pid=\(pid))")
@@ -251,7 +252,7 @@ extension AppDelegate {
     }
 
     func handleWindowDestroyed(_ windowID: CGWindowID) {
-        globalMRU.removeAll { $0 == .window(windowID) }
+        mruTracker.removeWindow(windowID)
         guard let group = groupManager.group(for: windowID),
               let panel = tabBarPanels[group.id],
               let window = group.windows.first(where: { $0.id == windowID }) else { return }
@@ -312,10 +313,11 @@ extension AppDelegate {
               let focusedRef = focusedValue else { return }
         let windowElement = focusedRef as! AXUIElement // swiftlint:disable:this force_cast
         guard let windowID = AccessibilityHelper.windowID(for: windowElement) else { return }
+        windowInventory.refreshAsync()
 
-        let suppressGroupState = switcherController.isActive || isCycleCooldownActive
+        let suppressGroupState = switcherController.isActive || shouldSuppressCommitEcho(for: windowID)
 
-        // Record entity-level MRU (skip during active switcher sessions and cooldown)
+        // Record entity-level MRU (skip during active switcher sessions and commit echoes)
         if !suppressGroupState {
             if let group = groupManager.group(for: windowID) {
                 recordGlobalActivation(.group(group.id))

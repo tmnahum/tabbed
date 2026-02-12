@@ -270,6 +270,7 @@ final class HotkeyManagerTests: XCTestCase {
         let manager = HotkeyManager(config: config)
         var released = false
         manager.onModifierReleased = { released = true }
+        manager.startModifierWatch(modifiers: config.cycleTab.modifiers)
 
         let event = makeFlagsChanged(modifiers: 0)
         manager.handleFlagsChanged(event)
@@ -283,11 +284,42 @@ final class HotkeyManagerTests: XCTestCase {
         let manager = HotkeyManager(config: config)
         var released = false
         manager.onModifierReleased = { released = true }
+        manager.startModifierWatch(modifiers: config.cycleTab.modifiers)
 
         let event = makeFlagsChanged(modifiers: cmdMods)
         manager.handleFlagsChanged(event)
 
         XCTAssertFalse(released, "Should NOT fire onModifierReleased when Cmd is still held")
+    }
+
+    func testModifierReleasedIgnoresUnwatchedBindings() {
+        var config = unboundConfig()
+        config.cycleTab = KeyBinding(modifiers: cmdMods, keyCode: KeyBinding.keyCodeTab)
+        config.globalSwitcher = KeyBinding(modifiers: KeyBinding.hyperModifiers, keyCode: KeyBinding.keyCodeBacktick)
+        let manager = HotkeyManager(config: config)
+        var released = false
+        manager.onModifierReleased = { released = true }
+        manager.startModifierWatch(modifiers: config.cycleTab.modifiers)
+
+        // Hyper contains Cmd but also additional modifiers. Cmd is still held,
+        // so cycleTab's required modifiers are still satisfied.
+        let event = makeFlagsChanged(modifiers: KeyBinding.hyperModifiers)
+        manager.handleFlagsChanged(event)
+
+        XCTAssertFalse(released, "Should only evaluate release against the active watch binding")
+    }
+
+    func testModifierReleasedRequiresActiveWatch() {
+        var config = unboundConfig()
+        config.cycleTab = KeyBinding(modifiers: cmdMods, keyCode: KeyBinding.keyCodeTab)
+        let manager = HotkeyManager(config: config)
+        var released = false
+        manager.onModifierReleased = { released = true }
+
+        let event = makeFlagsChanged(modifiers: 0)
+        manager.handleFlagsChanged(event)
+
+        XCTAssertFalse(released, "Should ignore flagsChanged events when no modifier watch is active")
     }
 
     // MARK: - Escape Handling

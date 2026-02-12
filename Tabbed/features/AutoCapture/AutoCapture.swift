@@ -229,11 +229,11 @@ extension AppDelegate {
         }
     }
 
-    /// Find the most recently used group on the current space via globalMRU.
+    /// Find the most recently used group on the current space via MRU.
     /// Falls back to the first group on the current space if none appear in MRU.
     private func mostRecentGroupOnCurrentSpace() -> (TabGroup, NSScreen)? {
         // Walk MRU for most recent group on current space
-        for entry in globalMRU {
+        for entry in mruTracker.entries {
             guard case .group(let id) = entry,
                   let group = groupManager.groups.first(where: { $0.id == id }),
                   isGroupOnCurrentSpace(group),

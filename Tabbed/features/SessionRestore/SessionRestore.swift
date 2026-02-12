@@ -87,10 +87,10 @@ extension AppDelegate {
             )
         }
 
-        // Seed globalMRU from restore order (reflects previous session's MRU).
+        // Seed MRU from restore order (reflects previous session's MRU).
         // Groups restored earlier = higher MRU priority.
-        for group in groupManager.groups where !globalMRU.contains(.group(group.id)) {
-            globalMRU.append(.group(group.id))
+        for group in groupManager.groups {
+            mruTracker.appendIfMissing(.group(group.id))
         }
 
         // Sync active tab to the user's actual focused window.
