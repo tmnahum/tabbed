@@ -39,6 +39,10 @@ struct AutoCaptureRetryKey: Hashable {
 
 extension AppDelegate {
 
+    private var shouldCaptureUnmatchedToStandaloneGroup: Bool {
+        sessionConfig.autoCaptureMode != .never && sessionConfig.autoCaptureUnmatchedToNewGroup
+    }
+
     /// Check if a group has any windows visible on the current Space.
     /// Uses the on-screen CG window list which only includes current-space windows.
     func isGroupOnCurrentSpace(_ group: TabGroup) -> Bool {
@@ -47,6 +51,14 @@ extension AppDelegate {
                 .compactMap { $0[kCGWindowNumber as String] as? CGWindowID }
         )
         return group.windows.contains { onScreenIDs.contains($0.id) }
+    }
+
+    func isWindowOnCurrentSpace(_ windowID: CGWindowID) -> Bool {
+        let onScreenIDs = Set(
+            AccessibilityHelper.getWindowList()
+                .compactMap { $0[kCGWindowNumber as String] as? CGWindowID }
+        )
+        return onScreenIDs.contains(windowID)
     }
 
     func isGroupMaximized(_ group: TabGroup) -> (Bool, NSScreen?) {
@@ -70,6 +82,7 @@ extension AppDelegate {
         let mode = sessionConfig.autoCaptureMode
         guard mode != .never else {
             Logger.log("[AutoCapture] evaluate: disabled in config")
+            deactivateAutoCapture()
             return
         }
 
@@ -79,6 +92,9 @@ extension AppDelegate {
             if !isGroupOnCurrentSpace(activeGroup) {
                 Logger.log("[AutoCapture] evaluate: group not on current space, deactivating")
                 deactivateAutoCapture()
+                if shouldCaptureUnmatchedToStandaloneGroup {
+                    activateStandaloneAutoCapture()
+                }
                 return
             }
 
@@ -96,6 +112,9 @@ extension AppDelegate {
                 if !maximized {
                     Logger.log("[AutoCapture] evaluate: group no longer maximized, deactivating")
                     deactivateAutoCapture()
+                    if shouldCaptureUnmatchedToStandaloneGroup {
+                        activateStandaloneAutoCapture()
+                    }
                 } else if let newScreen, newScreen != activeScreen {
                     Logger.log("[AutoCapture] evaluate: group moved to \(newScreen.localizedName)")
                     autoCaptureScreen = newScreen
@@ -105,6 +124,9 @@ extension AppDelegate {
                 if groupsOnSpace.count != 1 || groupsOnSpace.first?.id != activeGroup.id {
                     Logger.log("[AutoCapture] evaluate: no longer only group on space, deactivating")
                     deactivateAutoCapture()
+                    if shouldCaptureUnmatchedToStandaloneGroup {
+                        activateStandaloneAutoCapture()
+                    }
                 } else if let newScreen = screenForGroup(activeGroup), newScreen != activeScreen {
                     Logger.log("[AutoCapture] evaluate: group moved to \(newScreen.localizedName)")
                     autoCaptureScreen = newScreen
@@ -115,6 +137,7 @@ extension AppDelegate {
 
         // Try to find a group to activate
         Logger.log("[AutoCapture] evaluate: checking \(groupManager.groups.count) groups for activation (mode=\(mode.rawValue))")
+        var activatedGroup = false
 
         switch mode {
         case .never:
@@ -122,6 +145,7 @@ extension AppDelegate {
         case .always:
             if let (group, screen) = mostRecentGroupOnCurrentSpace() {
                 activateAutoCapture(for: group, on: screen)
+                activatedGroup = true
             }
         case .whenMaximized:
             for group in groupManager.groups {
@@ -131,7 +155,8 @@ extension AppDelegate {
                 guard onSpace else { continue }
                 guard maximized, let screen else { continue }
                 activateAutoCapture(for: group, on: screen)
-                return
+                activatedGroup = true
+                break
             }
         case .whenOnly:
             let groupsOnSpace = groupManager.groups.filter { isGroupOnCurrentSpace($0) }
@@ -139,7 +164,15 @@ extension AppDelegate {
                let screen = screenForGroup(group) {
                 Logger.log("[AutoCapture] evaluate: only group on space — \(group.id)")
                 activateAutoCapture(for: group, on: screen)
+                activatedGroup = true
             }
+        }
+
+        guard !activatedGroup else { return }
+        if shouldCaptureUnmatchedToStandaloneGroup {
+            activateStandaloneAutoCapture()
+        } else {
+            deactivateAutoCapture()
         }
     }
 
@@ -170,7 +203,18 @@ extension AppDelegate {
     func activateAutoCapture(for group: TabGroup, on screen: NSScreen) {
         autoCaptureGroup = group
         autoCaptureScreen = screen
+        ensureAutoCaptureObservationActive()
+        Logger.log("[AutoCapture] Activated for group \(group.id) on \(screen.localizedName), observing \(autoCaptureObservers.count) PIDs")
+    }
 
+    func activateStandaloneAutoCapture() {
+        autoCaptureGroup = nil
+        autoCaptureScreen = nil
+        ensureAutoCaptureObservationActive()
+        Logger.log("[AutoCapture] Standalone capture active (unmatched windows form one-tab groups), observing \(autoCaptureObservers.count) PIDs")
+    }
+
+    private func ensureAutoCaptureObservationActive() {
         let ownPID = ProcessInfo.processInfo.processIdentifier
         for app in NSWorkspace.shared.runningApplications where app.activationPolicy == .regular {
             let pid = app.processIdentifier
@@ -178,52 +222,61 @@ extension AppDelegate {
             addAutoCaptureObserver(for: pid, seedKnownWindows: true)
         }
 
-        let launchToken = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didLaunchApplicationNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            guard let self,
-                  let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-                  app.activationPolicy == .regular else { return }
+        if autoCaptureNotificationTokens.isEmpty {
+            let launchToken = NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.didLaunchApplicationNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                guard let self,
+                      let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                      app.activationPolicy == .regular else { return }
 
-            let pid = app.processIdentifier
-            if pid == ProcessInfo.processInfo.processIdentifier { return }
+                let pid = app.processIdentifier
+                if pid == ProcessInfo.processInfo.processIdentifier { return }
 
-            self.addAutoCaptureObserver(for: pid, seedKnownWindows: false)
-            self.launchGraceUntilByPID[pid] = Date().addingTimeInterval(AutoCapturePolicy.launchGraceDuration)
-            if self.knownWindowIDsByPID[pid] == nil {
-                self.knownWindowIDsByPID[pid] = []
+                self.addAutoCaptureObserver(for: pid, seedKnownWindows: false)
+                self.launchGraceUntilByPID[pid] = Date().addingTimeInterval(AutoCapturePolicy.launchGraceDuration)
+                if self.knownWindowIDsByPID[pid] == nil {
+                    self.knownWindowIDsByPID[pid] = []
+                }
+                self.scheduleLaunchReconciliation(for: pid)
+                Logger.log("[AutoCapture] launch-grace started for pid \(pid) (\(AutoCapturePolicy.launchGraceDuration)s)")
             }
-            self.scheduleLaunchReconciliation(for: pid)
-            Logger.log("[AutoCapture] launch-grace started for pid \(pid) (\(AutoCapturePolicy.launchGraceDuration)s)")
+
+            let terminateToken = NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.didTerminateApplicationNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
+                self?.removeAutoCaptureObserver(for: app.processIdentifier)
+            }
+
+            autoCaptureNotificationTokens = [launchToken, terminateToken]
         }
 
-        let terminateToken = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didTerminateApplicationNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
-            self?.removeAutoCaptureObserver(for: app.processIdentifier)
+        if autoCaptureDefaultCenterTokens.isEmpty {
+            let screenToken = NotificationCenter.default.addObserver(
+                forName: NSApplication.didChangeScreenParametersNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                self?.evaluateAutoCapture()
+            }
+            autoCaptureDefaultCenterTokens = [screenToken]
         }
-
-        let screenToken = NotificationCenter.default.addObserver(
-            forName: NSApplication.didChangeScreenParametersNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.evaluateAutoCapture()
-        }
-
-        autoCaptureNotificationTokens = [launchToken, terminateToken]
-        autoCaptureDefaultCenterTokens = [screenToken]
-
-        Logger.log("[AutoCapture] Activated for group \(group.id) on \(screen.localizedName), observing \(autoCaptureObservers.count) PIDs")
     }
 
     func deactivateAutoCapture() {
-        guard autoCaptureGroup != nil else { return }
+        let hasActiveState = autoCaptureGroup != nil ||
+            autoCaptureScreen != nil ||
+            !autoCaptureObservers.isEmpty ||
+            !autoCaptureNotificationTokens.isEmpty ||
+            !autoCaptureDefaultCenterTokens.isEmpty ||
+            !pendingAutoCaptureWindows.isEmpty ||
+            !captureRetryWorkItems.isEmpty
+        guard hasActiveState else { return }
 
         // Clean up pending window watchers before removing observers
         for (element, pid) in pendingAutoCaptureWindows {
@@ -365,14 +418,14 @@ extension AppDelegate {
     }
 
     func handleWindowCreated(element: AXUIElement, pid: pid_t) {
-        guard autoCaptureGroup != nil else { return }
+        guard autoCaptureGroup != nil || shouldCaptureUnmatchedToStandaloneGroup else { return }
 
         if let windowID = AccessibilityHelper.windowID(for: element) {
             knownWindowIDsByPID[pid, default: []].insert(windowID)
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-            guard let self, self.autoCaptureGroup != nil else { return }
+            guard let self, self.autoCaptureGroup != nil || self.shouldCaptureUnmatchedToStandaloneGroup else { return }
             if self.captureWindowIfEligible(element: element, pid: pid, source: "created") {
                 return
             }
@@ -384,7 +437,7 @@ extension AppDelegate {
     }
 
     func handleAutoCaptureFocusChanged(element: AXUIElement, pid: pid_t) {
-        guard autoCaptureGroup != nil else { return }
+        guard autoCaptureGroup != nil || shouldCaptureUnmatchedToStandaloneGroup else { return }
 
         let windowElement: AXUIElement
         if AccessibilityHelper.windowID(for: element) != nil {
@@ -437,7 +490,7 @@ extension AppDelegate {
     }
 
     func handlePendingWindowChanged(element: AXUIElement, pid: pid_t) {
-        guard autoCaptureGroup != nil else { return }
+        guard autoCaptureGroup != nil || shouldCaptureUnmatchedToStandaloneGroup else { return }
         if captureWindowIfEligible(element: element, pid: pid, source: "pending") {
             removePendingWindowWatch(element: element, pid: pid)
         }
@@ -460,12 +513,6 @@ extension AppDelegate {
 
     @discardableResult
     func captureWindowIfEligible(element: AXUIElement, pid: pid_t, source: String) -> Bool {
-        guard let group = autoCaptureGroup,
-              let screen = autoCaptureScreen else {
-            Logger.log("[AutoCapture] captureIfEligible[\(source)]: no active group/screen")
-            return false
-        }
-
         pruneSuppressedAutoJoinWindowIDs()
 
         guard let candidateWindowID = AccessibilityHelper.windowID(for: element) else {
@@ -531,26 +578,52 @@ extension AppDelegate {
             Logger.log("[AutoCapture] captureIfEligible[\(source)]: no frame — \(window.appName): \(window.title)")
             return false
         }
-        let visibleFrame = CoordinateConverter.visibleFrameInAX(for: screen)
-        guard visibleFrame.intersects(frame) else {
-            Logger.log("[AutoCapture] captureIfEligible[\(source)]: not on screen — \(window.appName): \(window.title) frame=\(frame) visible=\(visibleFrame)")
-            return false
+        let shouldCreateUnmatchedGroup = sessionConfig.autoCaptureUnmatchedToNewGroup
+
+        if let group = autoCaptureGroup,
+           let screen = autoCaptureScreen {
+            let visibleFrame = CoordinateConverter.visibleFrameInAX(for: screen)
+            guard visibleFrame.intersects(frame) else {
+                Logger.log("[AutoCapture] captureIfEligible[\(source)]: not on screen — \(window.appName): \(window.title) frame=\(frame) visible=\(visibleFrame)")
+                return captureAsStandaloneGroupIfEnabled(
+                    window: window,
+                    pid: pid,
+                    source: source,
+                    reason: "outside-active-screen",
+                    shouldCreateUnmatchedGroup: shouldCreateUnmatchedGroup
+                )
+            }
+
+            // Reject windows on a different space than the capture group
+            if group.spaceID != 0,
+               let windowSpace = SpaceUtils.spaceID(for: window.id),
+               windowSpace != group.spaceID {
+                Logger.log("[AutoCapture] captureIfEligible[\(source)]: wrong space (\(windowSpace) != \(group.spaceID)) — \(window.appName): \(window.title)")
+                return captureAsStandaloneGroupIfEnabled(
+                    window: window,
+                    pid: pid,
+                    source: source,
+                    reason: "different-space",
+                    shouldCreateUnmatchedGroup: shouldCreateUnmatchedGroup
+                )
+            }
+
+            Logger.log("[AutoCapture] Capturing window \(window.id) (\(window.appName): \(window.title)) [\(source)]")
+            setExpectedFrame(group.frame, for: [window.id])
+            addWindow(window, to: group, afterActive: true)
+            cancelCaptureRetry(for: pid, windowID: window.id)
+            // Note: addWindow already calls evaluateAutoCapture()
+            return true
         }
 
-        // Reject windows on a different space than the capture group
-        if group.spaceID != 0,
-           let windowSpace = SpaceUtils.spaceID(for: window.id),
-           windowSpace != group.spaceID {
-            Logger.log("[AutoCapture] captureIfEligible[\(source)]: wrong space (\(windowSpace) != \(group.spaceID)) — \(window.appName): \(window.title)")
-            return false
-        }
-
-        Logger.log("[AutoCapture] Capturing window \(window.id) (\(window.appName): \(window.title)) [\(source)]")
-        setExpectedFrame(group.frame, for: [window.id])
-        addWindow(window, to: group, afterActive: true)
-        cancelCaptureRetry(for: pid, windowID: window.id)
-        // Note: addWindow already calls evaluateAutoCapture()
-        return true
+        Logger.log("[AutoCapture] captureIfEligible[\(source)]: no active group/screen")
+        return captureAsStandaloneGroupIfEnabled(
+            window: window,
+            pid: pid,
+            source: source,
+            reason: "no-active-group",
+            shouldCreateUnmatchedGroup: shouldCreateUnmatchedGroup
+        )
     }
 }
 
@@ -576,6 +649,31 @@ private extension AppDelegate {
         )
     }
 
+    @discardableResult
+    func captureAsStandaloneGroupIfEnabled(
+        window: WindowInfo,
+        pid: pid_t,
+        source: String,
+        reason: String,
+        shouldCreateUnmatchedGroup: Bool
+    ) -> Bool {
+        guard shouldCreateUnmatchedGroup else { return false }
+        guard !groupManager.isWindowGrouped(window.id) else { return false }
+        guard isWindowOnCurrentSpace(window.id) else {
+            Logger.log("[AutoCapture] standalone[\(source)]: rejected (not on current space) wid=\(window.id)")
+            return false
+        }
+        guard AccessibilityHelper.getFrame(of: window.element) != nil else {
+            Logger.log("[AutoCapture] standalone[\(source)]: rejected (no frame) wid=\(window.id)")
+            return false
+        }
+
+        Logger.log("[AutoCapture] standalone[\(source)]: creating one-tab group for wid=\(window.id) reason=\(reason)")
+        createGroup(with: [window])
+        cancelCaptureRetry(for: pid, windowID: window.id)
+        return true
+    }
+
     func scheduleLaunchReconciliation(for pid: pid_t) {
         for delay in AutoCapturePolicy.launchScanDelays {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
@@ -585,7 +683,7 @@ private extension AppDelegate {
     }
 
     func runLaunchReconciliationScan(for pid: pid_t) {
-        guard autoCaptureGroup != nil else { return }
+        guard autoCaptureGroup != nil || shouldCaptureUnmatchedToStandaloneGroup else { return }
         let now = Date()
         guard AutoCapturePolicy.isWithinLaunchGrace(deadline: launchGraceUntilByPID[pid], now: now) else {
             launchGraceUntilByPID.removeValue(forKey: pid)
@@ -617,7 +715,7 @@ private extension AppDelegate {
         let delay = AutoCapturePolicy.createdRetryDelays[attempt]
         let workItem = DispatchWorkItem { [weak self] in
             guard let self else { return }
-            guard self.autoCaptureGroup != nil else {
+            guard self.autoCaptureGroup != nil || self.shouldCaptureUnmatchedToStandaloneGroup else {
                 self.captureRetryWorkItems.removeValue(forKey: key)
                 return
             }

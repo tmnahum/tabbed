@@ -6,7 +6,7 @@ enum SettingsTab: Int {
 
     var contentHeight: CGFloat {
         switch self {
-        case .general:   return 340
+        case .general:   return 390
         case .launcher:  return 420
         case .tabBar:    return 330
         case .shortcuts: return 520
@@ -81,6 +81,9 @@ struct SettingsView: View {
             onSessionConfigChanged(sessionConfig)
         }
         .onChange(of: sessionConfig.autoCaptureMode) { _ in
+            onSessionConfigChanged(sessionConfig)
+        }
+        .onChange(of: sessionConfig.autoCaptureUnmatchedToNewGroup) { _ in
             onSessionConfigChanged(sessionConfig)
         }
         .onChange(of: switcherConfig.globalStyle) { _ in
@@ -199,6 +202,20 @@ struct SettingsView: View {
                 .padding(.horizontal, 12)
                 .padding(.top, 4)
                 .padding(.bottom, 12)
+
+            Toggle(isOn: $sessionConfig.autoCaptureUnmatchedToNewGroup) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Create One-Tab Group for Unmatched Windows")
+                    Text("If a new window can’t join an existing group, create a new group containing only that window.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .toggleStyle(.checkbox)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 12)
+            .disabled(sessionConfig.autoCaptureMode == .never)
 
             Spacer()
         }

@@ -16,14 +16,24 @@ enum AutoCaptureMode: String, Codable, CaseIterable {
 struct SessionConfig: Codable, Equatable {
     var restoreMode: RestoreMode
     var autoCaptureMode: AutoCaptureMode
+    var autoCaptureUnmatchedToNewGroup: Bool
 
     var autoCaptureEnabled: Bool { autoCaptureMode != .never }
 
-    static let `default` = SessionConfig(restoreMode: .smart, autoCaptureMode: .whenMaximized)
+    static let `default` = SessionConfig(
+        restoreMode: .smart,
+        autoCaptureMode: .whenMaximized,
+        autoCaptureUnmatchedToNewGroup: false
+    )
 
-    init(restoreMode: RestoreMode = .smart, autoCaptureMode: AutoCaptureMode = .whenMaximized) {
+    init(
+        restoreMode: RestoreMode = .smart,
+        autoCaptureMode: AutoCaptureMode = .whenMaximized,
+        autoCaptureUnmatchedToNewGroup: Bool = false
+    ) {
         self.restoreMode = restoreMode
         self.autoCaptureMode = autoCaptureMode
+        self.autoCaptureUnmatchedToNewGroup = autoCaptureUnmatchedToNewGroup
     }
 
     init(from decoder: Decoder) throws {
@@ -36,18 +46,24 @@ struct SessionConfig: Codable, Equatable {
             let enabled = try container.decodeIfPresent(Bool.self, forKey: .autoCaptureEnabled) ?? true
             autoCaptureMode = enabled ? .whenMaximized : .never
         }
+        autoCaptureUnmatchedToNewGroup = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .autoCaptureUnmatchedToNewGroup
+        ) ?? false
     }
 
     private enum CodingKeys: String, CodingKey {
         case restoreMode
         case autoCaptureMode
         case autoCaptureEnabled // legacy key for migration
+        case autoCaptureUnmatchedToNewGroup
     }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(restoreMode, forKey: .restoreMode)
         try container.encode(autoCaptureMode, forKey: .autoCaptureMode)
+        try container.encode(autoCaptureUnmatchedToNewGroup, forKey: .autoCaptureUnmatchedToNewGroup)
     }
 
     // MARK: - Persistence
