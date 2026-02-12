@@ -988,17 +988,25 @@ extension AppDelegate {
             let handleWidth: CGFloat = showHandle ? TabBarView.dragHandleWidth : 0
             let groupNameWidth = TabBarView.groupNameReservedWidth(for: group.name)
             let availableWidth = panelWidth - leadingPad - trailingPad - TabBarView.addButtonWidth - handleWidth - groupNameWidth
-            let tabStep = tabCount > 0 ? availableWidth / CGFloat(tabCount) : 0
+            let pinnedCount = group.pinnedCount
+            let widths = TabBarView.tabWidths(
+                availableWidth: availableWidth,
+                tabCount: tabCount,
+                pinnedCount: pinnedCount,
+                style: tabBarConfig.style
+            )
 
             // Convert mouse X to local panel coordinates
             let localX = mouseLocation.x - panel.frame.origin.x
-            let insertionIndex: Int
-            if tabStep > 0 {
-                let tabContentStartX = leadingPad + handleWidth + groupNameWidth
-                insertionIndex = max(0, min(tabCount, Int(round((localX - tabContentStartX) / tabStep))))
-            } else {
-                insertionIndex = 0
-            }
+            let tabContentStartX = leadingPad + handleWidth + groupNameWidth
+            let localTabX = localX - tabContentStartX
+            let insertionIndex = TabBarView.insertionIndexForPoint(
+                localTabX: localTabX,
+                tabCount: tabCount,
+                pinnedCount: pinnedCount,
+                pinnedWidth: widths.pinned,
+                unpinnedWidth: widths.unpinned
+            )
 
             return CrossPanelDropTarget(groupID: groupID, insertionIndex: insertionIndex)
         }
@@ -1058,11 +1066,16 @@ extension AppDelegate {
         }
 
         // Add each window to target at insertion index
+        let shouldPinOnInsert = targetGroup.pinnedCount > 0 && insertionIndex < targetGroup.pinnedCount
         for (offset, window) in windowsToMove.enumerated() {
+            var windowToInsert = window
+            if shouldPinOnInsert {
+                windowToInsert.isPinned = true
+            }
             setExpectedFrame(targetGroup.frame, for: [window.id])
             AccessibilityHelper.setFrame(of: window.element, to: targetGroup.frame)
-            groupManager.addWindow(window, to: targetGroup, at: insertionIndex + offset)
-            windowObserver.observe(window: window)
+            groupManager.addWindow(windowToInsert, to: targetGroup, at: insertionIndex + offset)
+            windowObserver.observe(window: windowToInsert)
         }
 
         // Switch target group to the first moved tab and raise it

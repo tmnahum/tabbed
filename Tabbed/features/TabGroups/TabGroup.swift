@@ -44,6 +44,10 @@ class TabGroup: Identifiable, ObservableObject {
         windows.filter { !$0.isFullscreened }
     }
 
+    var pinnedCount: Int {
+        windows.filter(\.isPinned).count
+    }
+
     init(windows: [WindowInfo], frame: CGRect, spaceID: UInt64 = 0, name: String? = nil) {
         self.windows = windows
         self.activeIndex = 0
@@ -60,13 +64,20 @@ class TabGroup: Identifiable, ObservableObject {
 
     func addWindow(_ window: WindowInfo, at index: Int? = nil) {
         guard !contains(windowID: window.id) else { return }
-        if let index, index >= 0, index <= windows.count {
-            windows.insert(window, at: index)
-            if index <= activeIndex {
+        let insertionIndex: Int
+        if window.isPinned {
+            let boundary = pinnedCount
+            insertionIndex = max(0, min(index ?? boundary, boundary))
+        } else {
+            let boundary = pinnedCount
+            insertionIndex = max(boundary, min(index ?? windows.count, windows.count))
+        }
+
+        if insertionIndex >= 0, insertionIndex <= windows.count {
+            windows.insert(window, at: insertionIndex)
+            if insertionIndex <= activeIndex {
                 activeIndex += 1
             }
-        } else {
-            windows.append(window)
         }
         focusHistory.append(window.id)
     }
@@ -228,6 +239,7 @@ class TabGroup: Identifiable, ObservableObject {
         } else if source > activeIndex, adjustedDestination <= activeIndex {
             activeIndex += 1
         }
+        normalizePinnedOrder()
     }
 
     /// Move multiple tabs so they form a contiguous block starting at `toIndex` in the final array.
@@ -243,6 +255,100 @@ class TabGroup: Identifiable, ObservableObject {
 
         if let activeID, let newIndex = windows.firstIndex(where: { $0.id == activeID }) {
             activeIndex = newIndex
+        }
+        normalizePinnedOrder()
+    }
+
+    // MARK: - Pinned Tabs
+
+    func pinWindow(withID windowID: CGWindowID, at pinnedIndex: Int? = nil) {
+        guard let sourceIndex = windows.firstIndex(where: { $0.id == windowID }) else { return }
+
+        if windows[sourceIndex].isPinned {
+            if let pinnedIndex {
+                movePinnedTab(withID: windowID, toPinnedIndex: pinnedIndex)
+            }
+            return
+        }
+
+        let pinnedBefore = pinnedCount
+        windows[sourceIndex].isPinned = true
+        let targetPinnedIndex = max(0, min(pinnedIndex ?? pinnedBefore, pinnedBefore))
+        moveWindowToFinalIndex(from: sourceIndex, to: targetPinnedIndex)
+    }
+
+    func unpinWindow(withID windowID: CGWindowID) {
+        guard let sourceIndex = windows.firstIndex(where: { $0.id == windowID }),
+              windows[sourceIndex].isPinned else { return }
+
+        windows[sourceIndex].isPinned = false
+        let firstUnpinnedIndex = pinnedCount
+        moveWindowToFinalIndex(from: sourceIndex, to: firstUnpinnedIndex)
+    }
+
+    func setPinned(_ pinned: Bool, forWindowIDs ids: Set<CGWindowID>) {
+        guard !ids.isEmpty else { return }
+        var changed = false
+        for index in windows.indices where ids.contains(windows[index].id) {
+            if windows[index].isPinned != pinned {
+                windows[index].isPinned = pinned
+                changed = true
+            }
+        }
+        guard changed else { return }
+        normalizePinnedOrder()
+    }
+
+    func movePinnedTab(withID windowID: CGWindowID, toPinnedIndex: Int) {
+        guard let sourceIndex = windows.firstIndex(where: { $0.id == windowID }),
+              windows[sourceIndex].isPinned else { return }
+        let maxIndex = max(0, pinnedCount - 1)
+        let destination = max(0, min(toPinnedIndex, maxIndex))
+        moveWindowToFinalIndex(from: sourceIndex, to: destination)
+    }
+
+    func moveUnpinnedTab(withID windowID: CGWindowID, toUnpinnedIndex: Int) {
+        guard let sourceIndex = windows.firstIndex(where: { $0.id == windowID }),
+              !windows[sourceIndex].isPinned else { return }
+        let boundary = pinnedCount
+        let unpinnedCount = windows.count - boundary
+        guard unpinnedCount > 0 else { return }
+        let clamped = max(0, min(toUnpinnedIndex, unpinnedCount - 1))
+        moveWindowToFinalIndex(from: sourceIndex, to: boundary + clamped)
+    }
+
+    private func moveWindowToFinalIndex(from source: Int, to destination: Int) {
+        guard source >= 0, source < windows.count,
+              destination >= 0, destination < windows.count,
+              source != destination else {
+            return
+        }
+
+        let wasActive = source == activeIndex
+        let window = windows.remove(at: source)
+        windows.insert(window, at: destination)
+
+        if wasActive {
+            activeIndex = destination
+        } else if source < activeIndex, destination >= activeIndex {
+            activeIndex -= 1
+        } else if source > activeIndex, destination <= activeIndex {
+            activeIndex += 1
+        }
+    }
+
+    private func normalizePinnedOrder() {
+        let activeID = activeWindow?.id
+        let pinned = windows.filter(\.isPinned)
+        let unpinned = windows.filter { !$0.isPinned }
+        windows = pinned + unpinned
+
+        if let activeID, let index = windows.firstIndex(where: { $0.id == activeID }) {
+            activeIndex = index
+        } else if windows.isEmpty {
+            activeIndex = 0
+        } else {
+            activeIndex = max(0, min(activeIndex, windows.count - 1))
         }
     }
 }
