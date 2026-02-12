@@ -92,4 +92,44 @@ final class SessionMRUTests: XCTestCase {
         let loaded = SessionManager.loadSession()!
         XCTAssertEqual(loaded.first?.name, "Team Alpha")
     }
+
+    func testSaveSessionPersistsPinnedWindowState() {
+        var pinnedWindow = makeWindow(id: 1, app: "Alpha")
+        pinnedWindow.isPinned = true
+        let group = TabGroup(windows: [pinnedWindow, makeWindow(id: 2, app: "Alpha")], frame: .zero)
+
+        SessionManager.saveSession(groups: [group], mruGroupOrder: [])
+
+        let loaded = SessionManager.loadSession()!
+        XCTAssertEqual(loaded.first?.windows.first?.isPinned, true)
+        XCTAssertEqual(loaded.first?.windows.last?.isPinned, false)
+    }
+
+    func testMatchGroupAppliesPinnedStateFromSnapshot() {
+        let live = [
+            makeWindow(id: 10, app: "Alpha"),
+            makeWindow(id: 11, app: "Alpha")
+        ]
+        let snapshot = GroupSnapshot(
+            windows: [
+                WindowSnapshot(windowID: 10, bundleID: "com.Alpha", title: "Alpha Window", appName: "Alpha", isPinned: true),
+                WindowSnapshot(windowID: 11, bundleID: "com.Alpha", title: "Alpha Window", appName: "Alpha", isPinned: false)
+            ],
+            activeIndex: 0,
+            frame: CodableRect(.zero),
+            tabBarSqueezeDelta: 0,
+            name: nil
+        )
+
+        let matched = SessionManager.matchGroup(
+            snapshot: snapshot,
+            liveWindows: live,
+            alreadyClaimed: [],
+            mode: .always
+        )
+
+        XCTAssertEqual(matched?.count, 2)
+        XCTAssertEqual(matched?.first?.isPinned, true)
+        XCTAssertEqual(matched?.last?.isPinned, false)
+    }
 }

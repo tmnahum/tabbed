@@ -13,8 +13,9 @@ struct WindowInfo: Identifiable, Equatable {
     /// where the AX element is a placeholder app element.
     var cgBounds: CGRect?
     var isFullscreened: Bool = false
+    var isPinned: Bool = false
 
     static func == (lhs: WindowInfo, rhs: WindowInfo) -> Bool {
-        lhs.id == rhs.id && lhs.isFullscreened == rhs.isFullscreened
+        lhs.id == rhs.id && lhs.isFullscreened == rhs.isFullscreened && lhs.isPinned == rhs.isPinned
     }
 }

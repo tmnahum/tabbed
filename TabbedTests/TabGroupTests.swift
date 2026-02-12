@@ -151,6 +151,79 @@ final class TabGroupTests: XCTestCase {
         XCTAssertEqual(group.activeWindow?.id, 1)
     }
 
+    func testPinWindowMovesTabToPinnedArea() {
+        let group = TabGroup(windows: [makeWindow(id: 1), makeWindow(id: 2), makeWindow(id: 3)], frame: .zero)
+        group.pinWindow(withID: 3)
+
+        XCTAssertEqual(group.windows.map(\.id), [3, 1, 2])
+        XCTAssertEqual(group.pinnedCount, 1)
+        XCTAssertTrue(group.windows[0].isPinned)
+    }
+
+    func testPinWindowAtSpecificPinnedIndex() {
+        let w1 = makeWindow(id: 1)
+        var w2 = makeWindow(id: 2)
+        w2.isPinned = true
+        let group = TabGroup(windows: [w2, w1, makeWindow(id: 3)], frame: .zero)
+
+        group.pinWindow(withID: 3, at: 0)
+
+        XCTAssertEqual(group.windows.map(\.id), [3, 2, 1])
+        XCTAssertEqual(group.pinnedCount, 2)
+        XCTAssertTrue(group.windows[0].isPinned)
+        XCTAssertTrue(group.windows[1].isPinned)
+    }
+
+    func testUnpinWindowMovesTabOutOfPinnedArea() {
+        var w1 = makeWindow(id: 1)
+        var w2 = makeWindow(id: 2)
+        w1.isPinned = true
+        w2.isPinned = true
+        let group = TabGroup(windows: [w1, w2, makeWindow(id: 3)], frame: .zero)
+
+        group.unpinWindow(withID: 1)
+
+        XCTAssertEqual(group.windows.map(\.id), [2, 1, 3])
+        XCTAssertEqual(group.pinnedCount, 1)
+        XCTAssertFalse(group.windows[1].isPinned)
+    }
+
+    func testMovePinnedTabReordersWithinPinnedAreaOnly() {
+        var w1 = makeWindow(id: 1)
+        var w2 = makeWindow(id: 2)
+        w1.isPinned = true
+        w2.isPinned = true
+        let group = TabGroup(windows: [w1, w2, makeWindow(id: 3), makeWindow(id: 4)], frame: .zero)
+
+        group.movePinnedTab(withID: 2, toPinnedIndex: 0)
+
+        XCTAssertEqual(group.windows.map(\.id), [2, 1, 3, 4])
+        XCTAssertEqual(group.pinnedCount, 2)
+    }
+
+    func testMoveUnpinnedTabKeepsPinnedBoundary() {
+        var w1 = makeWindow(id: 1)
+        w1.isPinned = true
+        let group = TabGroup(windows: [w1, makeWindow(id: 2), makeWindow(id: 3), makeWindow(id: 4)], frame: .zero)
+
+        group.moveUnpinnedTab(withID: 4, toUnpinnedIndex: 0)
+
+        XCTAssertEqual(group.windows.map(\.id), [1, 4, 2, 3])
+        XCTAssertEqual(group.pinnedCount, 1)
+        XCTAssertTrue(group.windows[0].isPinned)
+    }
+
+    func testSetPinnedNormalizesPinnedFirstAndKeepsActiveWindow() {
+        let group = TabGroup(windows: [makeWindow(id: 1), makeWindow(id: 2), makeWindow(id: 3)], frame: .zero)
+        group.switchTo(windowID: 2)
+
+        group.setPinned(true, forWindowIDs: [3, 1])
+
+        XCTAssertEqual(group.windows.map(\.id), [1, 3, 2])
+        XCTAssertEqual(group.activeWindow?.id, 2)
+        XCTAssertEqual(group.pinnedCount, 2)
+    }
+
     func testRemoveWindowsWithIDs() {
         let group = TabGroup(windows: [makeWindow(id: 1), makeWindow(id: 2), makeWindow(id: 3), makeWindow(id: 4)], frame: .zero)
         group.switchTo(index: 2) // Window 3 is active
@@ -313,6 +386,81 @@ final class TabGroupTests: XCTestCase {
         let ids: [CGWindowID] = [1, 2, 3, 4]
         let dragged: Set<CGWindowID> = [2, 3]
         XCTAssertEqual(TabBarView.multiDragPositionDelta(for: 1, windowIDs: ids, draggedIDs: dragged, targetIndex: 0), 0)  // index 1 is dragged → not in remaining → returns 0
+    }
+
+    func testShouldPinOnDropOnlyWhenDroppingUnpinnedIntoPinnedArea() {
+        XCTAssertTrue(TabBarView.shouldPinOnDrop(isPinned: false, pinnedCount: 2, targetIndex: 1))
+        XCTAssertFalse(TabBarView.shouldPinOnDrop(isPinned: false, pinnedCount: 2, targetIndex: 2))
+        XCTAssertFalse(TabBarView.shouldPinOnDrop(isPinned: true, pinnedCount: 2, targetIndex: 0))
+        XCTAssertFalse(TabBarView.shouldPinOnDrop(isPinned: false, pinnedCount: 0, targetIndex: 0))
+    }
+
+    func testShouldUnpinOnDropOnlyWhenDroppingPinnedOutsidePinnedArea() {
+        XCTAssertTrue(TabBarView.shouldUnpinOnDrop(isPinned: true, pinnedCount: 2, targetIndex: 2))
+        XCTAssertTrue(TabBarView.shouldUnpinOnDrop(isPinned: true, pinnedCount: 2, targetIndex: 4))
+        XCTAssertFalse(TabBarView.shouldUnpinOnDrop(isPinned: true, pinnedCount: 2, targetIndex: 1))
+        XCTAssertFalse(TabBarView.shouldUnpinOnDrop(isPinned: false, pinnedCount: 2, targetIndex: 2))
+        XCTAssertFalse(TabBarView.shouldUnpinOnDrop(isPinned: true, pinnedCount: 0, targetIndex: 0))
+    }
+
+    func testTabWidthsKeepPinnedTabsNarrower() {
+        let widths = TabBarView.tabWidths(
+            availableWidth: 600,
+            tabCount: 4,
+            pinnedCount: 1,
+            style: .compact
+        )
+
+        XCTAssertEqual(widths.pinned, TabBarView.pinnedTabIdealWidth, accuracy: 0.01)
+        XCTAssertGreaterThan(widths.unpinned, widths.pinned)
+    }
+
+    func testInsertionIndexForPointUsesPinnedGeometry() {
+        let tabCount = 3
+        let pinnedCount = 1
+        let pinnedWidth: CGFloat = 40
+        let unpinnedWidth: CGFloat = 120
+
+        XCTAssertEqual(
+            TabBarView.insertionIndexForPoint(
+                localTabX: 10,
+                tabCount: tabCount,
+                pinnedCount: pinnedCount,
+                pinnedWidth: pinnedWidth,
+                unpinnedWidth: unpinnedWidth
+            ),
+            0
+        )
+        XCTAssertEqual(
+            TabBarView.insertionIndexForPoint(
+                localTabX: 30,
+                tabCount: tabCount,
+                pinnedCount: pinnedCount,
+                pinnedWidth: pinnedWidth,
+                unpinnedWidth: unpinnedWidth
+            ),
+            1
+        )
+        XCTAssertEqual(
+            TabBarView.insertionIndexForPoint(
+                localTabX: 170,
+                tabCount: tabCount,
+                pinnedCount: pinnedCount,
+                pinnedWidth: pinnedWidth,
+                unpinnedWidth: unpinnedWidth
+            ),
+            2
+        )
+        XCTAssertEqual(
+            TabBarView.insertionIndexForPoint(
+                localTabX: 260,
+                tabCount: tabCount,
+                pinnedCount: pinnedCount,
+                pinnedWidth: pinnedWidth,
+                unpinnedWidth: unpinnedWidth
+            ),
+            3
+        )
     }
 
     func testWindowInfoIsFullscreenedDefaultsFalse() {

@@ -7,6 +7,38 @@ struct WindowSnapshot: Codable {
     let bundleID: String
     let title: String
     let appName: String
+    let isPinned: Bool
+
+    init(
+        windowID: CGWindowID,
+        bundleID: String,
+        title: String,
+        appName: String,
+        isPinned: Bool
+    ) {
+        self.windowID = windowID
+        self.bundleID = bundleID
+        self.title = title
+        self.appName = appName
+        self.isPinned = isPinned
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case windowID
+        case bundleID
+        case title
+        case appName
+        case isPinned
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        windowID = try container.decode(CGWindowID.self, forKey: .windowID)
+        bundleID = try container.decode(String.self, forKey: .bundleID)
+        title = try container.decode(String.self, forKey: .title)
+        appName = try container.decode(String.self, forKey: .appName)
+        isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
+    }
 }
 
 /// A serializable snapshot of a tab group.

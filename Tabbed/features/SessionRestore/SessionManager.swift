@@ -14,7 +14,8 @@ enum SessionManager {
                         windowID: window.id,
                         bundleID: window.bundleID,
                         title: window.title,
-                        appName: window.appName
+                        appName: window.appName,
+                        isPinned: window.isPinned
                     )
                 },
                 activeIndex: group.activeIndex,
@@ -76,8 +77,10 @@ enum SessionManager {
             // 1. Exact CGWindowID match — window still exists
             if let byID = liveWindows.first(where: { $0.id == snap.windowID && !claimed.contains($0.id) }) {
                 Logger.log("[SessionMatch] ✓ wid match: \(snap.appName)(\(snap.windowID))")
-                matched.append(byID)
-                claimed.insert(byID.id)
+                var matchedWindow = byID
+                matchedWindow.isPinned = snap.isPinned
+                matched.append(matchedWindow)
+                claimed.insert(matchedWindow.id)
                 continue
             }
 
@@ -86,8 +89,10 @@ enum SessionManager {
                 !claimed.contains($0.id) && $0.bundleID == snap.bundleID && $0.title == snap.title
             }) {
                 Logger.log("[SessionMatch] ✓ title match: \(snap.appName)(\(snap.windowID)) → live(\(byTitle.id))")
-                matched.append(byTitle)
-                claimed.insert(byTitle.id)
+                var matchedWindow = byTitle
+                matchedWindow.isPinned = snap.isPinned
+                matched.append(matchedWindow)
+                claimed.insert(matchedWindow.id)
                 continue
             }
 

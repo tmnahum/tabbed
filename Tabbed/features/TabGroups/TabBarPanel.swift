@@ -312,21 +312,22 @@ class TabBarPanel: NSPanel {
         // Calculate where tab content ends
         let tabCount = group?.windows.count ?? 0
         guard tabCount > 0 else { return true }
+        let pinnedCount = group?.pinnedCount ?? 0
 
         let availableWidth = panelWidth - leadingPad - trailingPad - TabBarView.addButtonWidth - handleWidth - groupNameWidth
-        let isCompact = tabBarConfig?.style == .compact
-
-        let tabContentWidth: CGFloat
-        if isCompact {
-            let spacing = CGFloat(max(0, tabCount - 1))
-            let compactWidth = min(
-                (availableWidth - spacing) / CGFloat(tabCount),
-                TabBarView.maxCompactTabWidth
-            )
-            tabContentWidth = CGFloat(tabCount) * compactWidth + spacing
-        } else {
-            tabContentWidth = availableWidth
-        }
+        let style = tabBarConfig?.style ?? .compact
+        let widths = TabBarView.tabWidths(
+            availableWidth: availableWidth,
+            tabCount: tabCount,
+            pinnedCount: pinnedCount,
+            style: style
+        )
+        let tabContentWidth = TabBarView.tabContentWidth(
+            tabCount: tabCount,
+            pinnedCount: pinnedCount,
+            pinnedWidth: widths.pinned,
+            unpinnedWidth: widths.unpinned
+        )
 
         let tabContentEndX = tabContentStartX + groupNameWidth + tabContentWidth
 
@@ -355,6 +356,7 @@ class TabBarPanel: NSPanel {
         }
 
         let tabCount = group.windows.count
+        let pinnedCount = group.pinnedCount
         let panelWidth = frame.width
         let panelHeight = frame.height
 
@@ -371,18 +373,12 @@ class TabBarPanel: NSPanel {
         }
 
         let availableWidth = panelWidth - leadingPad - trailingPad - TabBarView.addButtonWidth - handleWidth - groupNameWidth
-        let isCompact = tabBarConfig.style == .compact
-
-        let spacing: CGFloat = tabCount > 1 ? 1 : 0
-        let tabWidth: CGFloat
-        if isCompact {
-            tabWidth = min(
-                (availableWidth - spacing * CGFloat(max(0, tabCount - 1))) / CGFloat(tabCount),
-                TabBarView.maxCompactTabWidth
-            )
-        } else {
-            tabWidth = availableWidth / CGFloat(tabCount)
-        }
+        let widths = TabBarView.tabWidths(
+            availableWidth: availableWidth,
+            tabCount: tabCount,
+            pinnedCount: pinnedCount,
+            style: tabBarConfig.style
+        )
 
         let tabContentStartX = leadingPad + handleWidth + groupNameWidth
 
@@ -391,14 +387,26 @@ class TabBarPanel: NSPanel {
         // so 22pt is a safe, slightly generous bound.
         let controlInset: CGFloat = 22
 
+        var tabOriginX = tabContentStartX
         for index in 0..<tabCount {
-            let tabOriginX = tabContentStartX + CGFloat(index) * (tabWidth + spacing)
+            // Pinned tabs don't show trailing close/release controls.
+            if index < pinnedCount {
+                tabOriginX += widths.pinned + TabBarView.tabSpacing
+                continue
+            }
+            let tabWidth = TabBarView.tabWidth(
+                at: index,
+                pinnedCount: pinnedCount,
+                pinnedWidth: widths.pinned,
+                unpinnedWidth: widths.unpinned
+            )
             let tabEndX = tabOriginX + tabWidth
             let controlStartX = max(tabOriginX, tabEndX - controlInset)
 
             if point.x >= controlStartX && point.x <= tabEndX {
                 return true
             }
+            tabOriginX += tabWidth + TabBarView.tabSpacing
         }
 
         return false
