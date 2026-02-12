@@ -29,6 +29,19 @@ enum ScreenCompensation {
         return ClampResult(frame: adjusted, squeezeDelta: delta)
     }
 
+    /// Decide whether an existing squeeze delta is still valid for a re-clamp pass.
+    /// Returns 0 when height changed meaningfully so applyClamp performs a full squeeze.
+    static func existingSqueezeForReclamp(
+        previousFrame: CGRect,
+        incomingFrame: CGRect,
+        existingSqueezeDelta: CGFloat,
+        tolerance: CGFloat
+    ) -> CGFloat {
+        guard existingSqueezeDelta > 0 else { return 0 }
+        guard abs(incomingFrame.height - previousFrame.height) <= tolerance else { return 0 }
+        return existingSqueezeDelta
+    }
+
     private static let maximizeTolerance: CGFloat = 20
 
     /// Check if a group (accounting for its squeeze delta) fills the given visible frame.

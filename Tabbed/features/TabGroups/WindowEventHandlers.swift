@@ -70,11 +70,17 @@ extension AppDelegate {
         if barDraggingGroupID == group.id { return }
         if shouldSuppress(windowID: windowID, currentFrame: frame) { return }
 
+        let existingSqueeze = ScreenCompensation.existingSqueezeForReclamp(
+            previousFrame: group.frame,
+            incomingFrame: frame,
+            existingSqueezeDelta: group.tabBarSqueezeDelta,
+            tolerance: Self.frameTolerance
+        )
         let visibleFrame = CoordinateConverter.visibleFrameInAX(at: frame.origin)
         let (adjustedFrame, squeezeDelta) = applyClamp(
             element: activeWindow.element, windowID: windowID,
             frame: frame, visibleFrame: visibleFrame,
-            existingSqueezeDelta: group.tabBarSqueezeDelta
+            existingSqueezeDelta: existingSqueeze
         )
 
         group.frame = adjustedFrame
@@ -134,16 +140,12 @@ extension AppDelegate {
             return
         }
 
-        // If the height actually changed (e.g. macOS title bar zoom), reset
-        // squeeze delta so applyClamp performs a fresh full clamp rather than
-        // just re-pushing position (which would leave the window extending
-        // below the visible area).
-        let existingSqueeze: CGFloat
-        if abs(frame.height - group.frame.height) > Self.frameTolerance {
-            existingSqueeze = 0
-        } else {
-            existingSqueeze = group.tabBarSqueezeDelta
-        }
+        let existingSqueeze = ScreenCompensation.existingSqueezeForReclamp(
+            previousFrame: group.frame,
+            incomingFrame: frame,
+            existingSqueezeDelta: group.tabBarSqueezeDelta,
+            tolerance: Self.frameTolerance
+        )
 
         let visibleFrame = CoordinateConverter.visibleFrameInAX(at: frame.origin)
         let (adjustedFrame, squeezeDelta) = applyClamp(
@@ -175,11 +177,17 @@ extension AppDelegate {
                   let activeWindow = group.activeWindow,
                   let currentFrame = AccessibilityHelper.getFrame(of: activeWindow.element) else { return }
 
+            let existingSqueeze = ScreenCompensation.existingSqueezeForReclamp(
+                previousFrame: group.frame,
+                incomingFrame: currentFrame,
+                existingSqueezeDelta: group.tabBarSqueezeDelta,
+                tolerance: Self.frameTolerance
+            )
             let visibleFrame = CoordinateConverter.visibleFrameInAX(at: currentFrame.origin)
             let (clamped, squeezeDelta) = self.applyClamp(
                 element: activeWindow.element, windowID: activeWindow.id,
                 frame: currentFrame, visibleFrame: visibleFrame,
-                existingSqueezeDelta: group.tabBarSqueezeDelta
+                existingSqueezeDelta: existingSqueeze
             )
             guard clamped != group.frame else {
                 // Frame is already correct. Clear suppression so if the app
