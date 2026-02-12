@@ -3,18 +3,18 @@ import XCTest
 
 final class BrowserLauncherTests: XCTestCase {
 
-    func testFirefoxNewWindowArgsUsesSingleHyphenFlagForBlankWindow() {
+    func testFirefoxNewWindowArgsUsesDoubleHyphenFlagForBlankWindow() {
         XCTAssertEqual(
             FirefoxBrowserLauncher.newWindowArgs(url: nil),
-            ["-new-window", "about:blank"]
+            ["--new-window", "about:blank"]
         )
     }
 
-    func testFirefoxNewWindowArgsUsesSingleHyphenFlagForURL() {
+    func testFirefoxNewWindowArgsUsesDoubleHyphenFlagForURL() {
         let url = URL(string: "https://example.com")!
         XCTAssertEqual(
             FirefoxBrowserLauncher.newWindowArgs(url: url),
-            ["-new-window", "https://example.com"]
+            ["--new-window", "https://example.com"]
         )
     }
 

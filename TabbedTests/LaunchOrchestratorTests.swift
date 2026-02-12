@@ -251,24 +251,28 @@ final class LaunchOrchestratorTests: XCTestCase {
         let args = LaunchOrchestrator.knownNewWindowArgs
         XCTAssertEqual(args["com.microsoft.VSCode"], ["--new-window"])
         XCTAssertEqual(args["com.microsoft.VSCodeInsiders"], ["--new-window"])
-        XCTAssertEqual(args["com.todesktop.230313mzl4w4u92"], ["--new-window"]) // Cursor
-        XCTAssertEqual(args["com.exafunction.windsurf"], ["--new-window"]) // Windsurf
         XCTAssertEqual(args["com.vscodium"], ["--new-window"])
-        XCTAssertEqual(args["co.posit.positron"], ["--new-window"]) // Positron
-        XCTAssertEqual(args["com.trae.app"], ["--new-window"]) // Trae
         XCTAssertEqual(args["com.visualstudio.code.oss"], ["--new-window"]) // Code OSS
     }
 
-    func testKnownNewWindowArgsContainsEditors() {
+    func testKnownNewWindowArgsContainsBrowsersAndTerminals() {
         let args = LaunchOrchestrator.knownNewWindowArgs
-        XCTAssertEqual(args["dev.zed.Zed"], ["--new"])
-        XCTAssertEqual(args["com.sublimetext.4"], ["--new-window"])
-        XCTAssertEqual(args["com.sublimetext.3"], ["--new-window"])
+        XCTAssertEqual(args["org.chromium.Chromium"], ["--new-window"])
+        XCTAssertEqual(args["org.mozilla.firefox"], ["--new-window"])
+        XCTAssertEqual(args["org.mozilla.floorp"], ["--new-window"])
+        XCTAssertEqual(args["org.torproject.torbrowser"], ["--new-window"])
+        XCTAssertEqual(args["net.mullvad.mullvadbrowser"], ["--new-window"])
+        XCTAssertEqual(args["com.mitchellh.ghostty"], ["+new-window"])
+        XCTAssertEqual(args["net.kovidgoyal.kitty"], ["--single-instance"])
     }
 
-    func testKnownNewWindowArgsContainsTerminals() {
-        let args = LaunchOrchestrator.knownNewWindowArgs
-        XCTAssertEqual(args["net.kovidgoyal.kitty"], ["--single-instance"])
+    func testBestEffortNewWindowArgsContainLikelyButUnconfirmedApps() {
+        let args = LaunchOrchestrator.bestEffortNewWindowArgs
+        XCTAssertEqual(args["com.todesktop.230313mzl4w4u92"], ["--new-window"]) // Cursor
+        XCTAssertEqual(args["com.exafunction.windsurf"], ["--new-window"]) // Windsurf
+        XCTAssertEqual(args["co.posit.positron"], ["--new-window"]) // Positron
+        XCTAssertEqual(args["com.trae.app"], ["--new-window"]) // Trae
+        XCTAssertEqual(args["dev.zed.Zed"], ["-n"])
     }
 
     func testKnownNewWindowArgsDoesNotMatchUnknownApps() {
@@ -283,21 +287,37 @@ final class LaunchOrchestratorTests: XCTestCase {
         XCTAssertTrue(script?.contains("tell application id \"com.googlecode.iterm2\"") == true)
     }
 
+    func testAppSpecificNewWindowAppleScriptIncludesITermBetaCreateWindowCommand() {
+        let script = LaunchOrchestrator.appSpecificNewWindowAppleScript(bundleID: "com.googlecode.iterm2-beta")
+        XCTAssertNotNil(script)
+        XCTAssertTrue(script?.contains("create window with default profile") == true)
+        XCTAssertTrue(script?.contains("tell application id \"com.googlecode.iterm2-beta\"") == true)
+    }
+
     func testAppSpecificNewWindowAppleScriptIsNilForUnknownApp() {
         XCTAssertNil(LaunchOrchestrator.appSpecificNewWindowAppleScript(bundleID: "com.unknown.app"))
     }
 
     func testHasNativeNewWindowSupportForKnownApps() {
-        // VSCode fork
+        // VSCode
         XCTAssertTrue(LaunchOrchestrator.hasNativeNewWindowSupport(bundleID: "com.microsoft.VSCode"))
-        // iTerm2 (Cmd+N support)
+        // iTerm2 (app-specific AppleScript + shortcut fallback)
         XCTAssertTrue(LaunchOrchestrator.hasNativeNewWindowSupport(bundleID: "com.googlecode.iterm2"))
+        // Warp (confirmed Cmd+N)
+        XCTAssertTrue(LaunchOrchestrator.hasNativeNewWindowSupport(bundleID: "dev.warp.Warp-Stable"))
+        XCTAssertTrue(LaunchOrchestrator.hasNativeNewWindowSupport(bundleID: "dev.warp.Warp"))
+        XCTAssertTrue(LaunchOrchestrator.hasNativeNewWindowSupport(bundleID: "dev.warp.WarpPreview"))
         // Kitty
         XCTAssertTrue(LaunchOrchestrator.hasNativeNewWindowSupport(bundleID: "net.kovidgoyal.kitty"))
         // Chromium browser
         XCTAssertTrue(LaunchOrchestrator.hasNativeNewWindowSupport(bundleID: "com.google.Chrome"))
         // Firefox browser
         XCTAssertTrue(LaunchOrchestrator.hasNativeNewWindowSupport(bundleID: "org.mozilla.firefox"))
+        // CLI args are treated as confirmed.
+        XCTAssertTrue(LaunchOrchestrator.hasNativeNewWindowSupport(bundleID: "com.todesktop.230313mzl4w4u92"))
+        // Browser forks in known families are treated as confirmed.
+        XCTAssertTrue(LaunchOrchestrator.hasNativeNewWindowSupport(bundleID: "company.thebrowser.Browser"))
+        XCTAssertTrue(LaunchOrchestrator.hasNativeNewWindowSupport(bundleID: "org.mozilla.librewolf"))
         // Unknown app
         XCTAssertFalse(LaunchOrchestrator.hasNativeNewWindowSupport(bundleID: "com.unknown.app"))
     }

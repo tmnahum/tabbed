@@ -45,10 +45,15 @@ final class LaunchOrchestrator {
                LaunchOrchestrator.launchNewWindowWithArgs(bundleID: bundleID, args: args) {
                 return true
             }
-            // Speculatively try --new-window for all apps (most ignore unknown flags harmlessly).
-            // Fire-and-forget: don't short-circuit so Cmd+N still fires as a backup.
-            LaunchOrchestrator.runOpenCommand(bundleID: bundleID, args: ["--new-window"])
-            if LaunchOrchestrator.sendNewWindowKeystrokes(bundleID: bundleID) {
+            if let args = LaunchOrchestrator.bestEffortNewWindowArgs[bundleID],
+               LaunchOrchestrator.launchNewWindowWithArgs(bundleID: bundleID, args: args) {
+                return true
+            }
+            if LaunchOrchestrator.sendKnownNewWindowKeystrokes(bundleID: bundleID) {
+                return true
+            }
+            LaunchOrchestrator.attemptSpeculativeNewWindowArgs(bundleID: bundleID)
+            if LaunchOrchestrator.sendBestEffortNewWindowKeystrokes(bundleID: bundleID) {
                 return true
             }
             if LaunchOrchestrator.sendReopenAppleEvent(bundleID: bundleID) {
@@ -380,30 +385,32 @@ final class LaunchOrchestrator {
         }
     }
 
+    private enum NewWindowKeystroke {
+        case commandN
+        case commandShiftN
+
+        var key: String { "n" }
+
+        var modifiersClause: String {
+            switch self {
+            case .commandN:
+                return "command down"
+            case .commandShiftN:
+                return "{command down, shift down}"
+            }
+        }
+    }
+
+    /// Confirmed app-specific args that are expected to request a new window for an already-running app.
     static let knownNewWindowArgs: [String: [String]] = [
-        // VSCode family and derivatives (Electron / Code OSS)
+        // VSCode / Code OSS family
         "com.microsoft.VSCode": ["--new-window"],
         "com.microsoft.VSCodeInsiders": ["--new-window"],
-        "com.todesktop.230313mzl4w4u92": ["--new-window"], // Cursor (VSCode fork)
-        "com.exafunction.windsurf": ["--new-window"], // Windsurf (VSCode fork)
         "com.vscodium": ["--new-window"],
-        "co.posit.positron": ["--new-window"], // Positron
-        "com.trae.app": ["--new-window"], // Trae (ByteDance, VSCode-based)
-        "com.visualstudio.code.oss": ["--new-window"], // Code OSS / forks
-        "com.voideditor.code": ["--new-window"], // Void
-        "ai.codestory.AideInsiders": ["--new-window"], // Aide
-        "sh.melty.code": ["--new-window"], // Melty
-        "com.google.antigravity": ["--new-window"], // Antigravity / Project IDX
+        "com.visualstudio.code.oss": ["--new-window"],
 
-        // Other Electron-based editors with documented new-window flags
-        "dev.zed.Zed": ["--new"], // Zed: `zed --new`
-        "com.sublimetext.4": ["--new-window"],
-        "com.sublimetext.3": ["--new-window"],
-        "com.sublimetext.2": ["--new-window"], // Assuming Sublime Text 2 also uses this
-        "com.github.atom": ["--new-window"],
-        "com.barebones.bbedit": ["--new-window"], // BBEdit: `bbedit --new-window`
-
-        // Browsers - Chromium-based (use --new-window)
+        // Browsers - Chromium-based
+        "org.chromium.Chromium": ["--new-window"],
         "com.google.Chrome": ["--new-window"],
         "com.google.Chrome.canary": ["--new-window"],
         "com.google.Chrome.dev": ["--new-window"],
@@ -413,133 +420,127 @@ final class LaunchOrchestrator {
         "com.operasoftware.Opera": ["--new-window"],
         "com.vivaldi.Vivaldi": ["--new-window"],
 
-        // Browsers - Firefox-based (use -new-window)
-        "org.mozilla.firefox": ["-new-window"],
-        "org.mozilla.firefoxdeveloperedition": ["-new-window"],
-        "org.mozilla.nightly": ["-new-window"],
-        "org.mozilla.thunderbird": ["-new-window"], // Thunderbird also uses -new-window
+        // Browsers - Firefox-based
+        "org.mozilla.firefox": ["--new-window"],
+        "org.mozilla.firefoxdeveloperedition": ["--new-window"],
+        "org.mozilla.nightly": ["--new-window"],
+        "org.mozilla.floorp": ["--new-window"],
+        "org.torproject.torbrowser": ["--new-window"],
+        "net.mullvad.mullvadbrowser": ["--new-window"],
 
-        // Terminals with explicit new-window or single-instance flags
+        // Terminals
+        "com.mitchellh.ghostty": ["+new-window"],
         "net.kovidgoyal.kitty": ["--single-instance"],
     ]
 
+    /// Additional args that we still route through the fallback chain.
+    /// Per product policy, CLI/arg-based strategies are treated as confirmed support.
+    static let bestEffortNewWindowArgs: [String: [String]] = [
+        // VSCode-derived editors where `--new-window` is likely but not fully validated.
+        "com.todesktop.230313mzl4w4u92": ["--new-window"], // Cursor
+        "com.exafunction.windsurf": ["--new-window"], // Windsurf
+        "co.posit.positron": ["--new-window"],
+        "com.trae.app": ["--new-window"],
+        "com.voideditor.code": ["--new-window"],
+        "ai.codestory.AideInsiders": ["--new-window"],
+        "sh.melty.code": ["--new-window"],
+        "com.google.antigravity": ["--new-window"],
 
+        // Common desktop editors with probable support.
+        "com.sublimetext.4": ["--new-window"],
+        "com.sublimetext.3": ["--new-window"],
+        "com.sublimetext.2": ["--new-window"],
+        "com.github.atom": ["--new-window"],
+        "com.barebones.bbedit": ["--new-window"],
+        "dev.zed.Zed": ["-n"],
 
-    /// Apps known to reliably create new windows via Cmd+N (no special CLI arg needed).
-    /// Used only for UI display (full opacity) — the reopen chain handles the actual launch.
-    static let knownCmdNNewWindowApps: Set<String> = [
+        // Additional Chromium-family browsers.
+        "com.operasoftware.OperaGX": ["--new-window"],
+        "com.operasoftware.OperaAir": ["--new-window"],
+        "company.thebrowser.Browser": ["--new-window"], // Arc
+        "company.thebrowser.dia": ["--new-window"], // Dia
+        "com.pushplaylabs.sidekick": ["--new-window"],
+        "com.sigmaos.sigmaos.macos": ["--new-window"],
+
+        // Additional Firefox-family browsers.
+        "app.zen-browser.zen": ["--new-window"],
+        "org.mozilla.librewolf": ["--new-window"],
+        "net.waterfox.waterfox": ["--new-window"],
+    ]
+
+    /// Confirmed keyboard shortcuts for creating new windows in running apps.
+    /// Used for both behavior and UI confidence.
+    private static let knownNewWindowKeystrokes: [String: NewWindowKeystroke] = [
         // Terminals
-        "com.googlecode.iterm2",
-        "com.apple.Terminal",
-        "dev.warp.Warp-Stable",
-        "com.github.wez.wezterm",
-        "com.mitchellh.ghostty",
-        "org.tabby",
-        "net.kovidgoyal.kitty",
-        "org.alacritty",
-        "co.zeit.hyper",
+        "com.googlecode.iterm2": .commandN,
+        "com.apple.Terminal": .commandN,
+        "dev.warp.Warp-Stable": .commandN,
+        "dev.warp.Warp": .commandN,
+        "dev.warp.WarpPreview": .commandN,
 
-        // Editors and IDEs with standard document-style Cmd+N behavior
-        "com.microsoft.VSCode",
-        "com.microsoft.VSCodeInsiders",
-        "com.vscodium",
-        "com.sublimetext.4",
-        "com.sublimetext.3",
-        "com.sublimetext.2",
-        "dev.zed.Zed",
-        "com.github.atom",
-        "com.barebones.bbedit",
-        "com.macromates.TextMate",
-        "com.panic.Nova",
-        "com.coteditor.CotEditor",
+        // Browsers
+        "org.chromium.Chromium": .commandN,
+        "com.google.Chrome": .commandN,
+        "com.google.Chrome.canary": .commandN,
+        "com.google.Chrome.dev": .commandN,
+        "com.google.Chrome.beta": .commandN,
+        "com.microsoft.edgemac": .commandN,
+        "com.brave.Browser": .commandN,
+        "com.operasoftware.Opera": .commandN,
+        "com.vivaldi.Vivaldi": .commandN,
+        "org.mozilla.firefox": .commandN,
+        "org.mozilla.firefoxdeveloperedition": .commandN,
+        "org.mozilla.nightly": .commandN,
+        "org.mozilla.floorp": .commandN,
+        "org.torproject.torbrowser": .commandN,
+        "net.mullvad.mullvadbrowser": .commandN,
+        "com.apple.Safari": .commandN,
+        "com.apple.SafariTechnologyPreview": .commandN,
 
-        // JetBrains IDEs often support Cmd+N for new projects/files
-        "com.jetbrains.intellij",
-        "com.jetbrains.intellij.ce",
-        "com.jetbrains.WebStorm",
-        "com.jetbrains.pycharm",
-        "com.jetbrains.pycharm.ce",
-        "com.jetbrains.CLion",
-        "com.jetbrains.GoLand",
-        "com.jetbrains.RubyMine",
-        "com.jetbrains.PhpStorm",
-        "com.jetbrains.DataGrip",
-        "com.jetbrains.AppCode",
-        "com.jetbrains.Rider",
-        "com.jetbrains.Fleet",
-        "com.jetbrains.dataspell",
-        "com.google.android.studio",
-        "com.jetbrains.AppCode-EAP",
-        "com.jetbrains.intellij-EAP",
-        "com.jetbrains.WebStorm-EAP",
-        "com.jetbrains.pycharm-EAP",
-        "com.jetbrains.CLion-EAP",
-        "com.jetbrains.DataGrip-EAP",
-        "com.jetbrains.GoLand-EAP",
-        "com.jetbrains.PhpStorm-EAP",
-        "com.jetbrains.Rider-EAP",
-        "com.jetbrains.RubyMine-EAP",
-        "com.jetbrains.dataspell-EAP",
+        // VSCode family
+        "com.microsoft.VSCode": .commandShiftN,
+        "com.microsoft.VSCodeInsiders": .commandShiftN,
+        "com.vscodium": .commandShiftN,
+        "com.visualstudio.code.oss": .commandShiftN,
+    ]
 
-        // Apple apps with document-based new windows
-        "com.apple.TextEdit",
-        "com.apple.Preview",
-        "com.apple.Notes",
-        "com.apple.iWork.Pages",
-        "com.apple.iWork.Numbers",
-        "com.apple.iWork.Keynote",
-        "com.apple.dt.Xcode",
+    /// Best-effort shortcuts scoped to specific apps. Not counted as guaranteed support.
+    private static let bestEffortNewWindowKeystrokes: [String: NewWindowKeystroke] = [
+        // Terminals
+        "com.github.wez.wezterm": .commandN,
+        "com.github.wez.wezterm-nightly": .commandN,
+        "org.wezfurlong.wezterm": .commandN,
+        "org.tabby": .commandN,
+        "org.alacritty": .commandN,
+        "org.alacritty.Alacritty": .commandN,
+        "com.raphaelamorim.rio": .commandN,
+        "org.contourterminal.contour": .commandN,
+        "dev.waveterm.waveterm": .commandN,
+        "com.termius.mac": .commandN,
+        "co.zeit.hyper": .commandN,
 
-        // Browsers (Cmd+N typically opens a new window, not just a tab)
-        "com.google.Chrome",
-        "com.google.Chrome.canary",
-        "com.google.Chrome.dev",
-        "com.google.Chrome.beta",
-        "com.microsoft.edgemac",
-        "com.brave.Browser",
-        "com.operasoftware.Opera",
-        "com.vivaldi.Vivaldi",
-        "org.mozilla.firefox",
-        "org.mozilla.firefoxdeveloperedition",
-        "org.mozilla.nightly",
-        "com.apple.Safari",
-        "company.thebrowser.Browser",
-        "org.mozilla.thunderbird",
+        // Browsers
+        "com.operasoftware.OperaGX": .commandN,
+        "com.operasoftware.OperaAir": .commandN,
+        "company.thebrowser.Browser": .commandN, // Arc
+        "app.zen-browser.zen": .commandN,
+        "org.mozilla.librewolf": .commandN,
+        "net.waterfox.waterfox": .commandN,
 
-        // Some productivity apps that have clear "new document/window" Cmd+N
-        "md.obsidian",
-        "com.tinyspeck.slackmacgap",
-        "com.hnc.Discord",
-        "com.microsoft.teams",
-        "us.zoom.xos",
-        "notion.id",
-
-        // Design Tools (often have Cmd+N for new document)
-        "com.figma.Desktop",
-        "com.sketchapp",
-        "com.pixelmator.pro",
-        "com.bohemiancoding.sketch3",
-        "com.adobe.illustrator",
-        "com.adobe.photoshop",
-        "com.adobe.xd",
-        "com.adobe.lightroom",
-        "com.adobe.PremierePro",
-        "com.adobe.AfterEffects",
-        "com.adobe.Audition",
-        "com.adobe.InDesign",
-        "com.adobe.dreamweaver",
-        "com.adobe.bridge",
-        "com.adobe.acrobat",
-        "com.adobe.Reader",
-        "com.pixelmatorteam.pixelmator",
+        // VSCode family
+        "com.todesktop.230313mzl4w4u92": .commandShiftN, // Cursor
+        "com.exafunction.windsurf": .commandShiftN, // Windsurf
+        "co.posit.positron": .commandShiftN,
+        "com.trae.app": .commandShiftN,
     ]
 
     static func hasNativeNewWindowSupport(bundleID: String) -> Bool {
         if knownNewWindowArgs[bundleID] != nil { return true }
-        if knownCmdNNewWindowApps.contains(bundleID) { return true }
+        if bestEffortNewWindowArgs[bundleID] != nil { return true }
+        if appSpecificNewWindowAppleScript(bundleID: bundleID) != nil { return true }
+        if knownNewWindowKeystrokes[bundleID] != nil { return true }
         if BrowserProviderResolver.knownChromiumBundleIDs.contains(bundleID) { return true }
         if BrowserProviderResolver.knownFirefoxBundleIDs.contains(bundleID) { return true }
-        if BrowserProviderResolver.knownSafariBundleIDs.contains(bundleID) { return true }
         return false
     }
 
@@ -595,7 +596,7 @@ final class LaunchOrchestrator {
     static func appSpecificNewWindowAppleScript(bundleID: String) -> String? {
         let escapedID = bundleID.replacingOccurrences(of: "\"", with: "\\\"")
         switch bundleID {
-        case "com.googlecode.iterm2":
+        case "com.googlecode.iterm2", "com.googlecode.iterm2-beta":
             return """
             tell application id "\(escapedID)"
                 create window with default profile
@@ -728,7 +729,24 @@ final class LaunchOrchestrator {
         }
     }
 
-    private static func sendNewWindowKeystrokes(bundleID: String) -> Bool {
+    private static func sendKnownNewWindowKeystrokes(bundleID: String) -> Bool {
+        guard let keystroke = knownNewWindowKeystrokes[bundleID] else { return false }
+        return sendNewWindowKeystrokes(bundleID: bundleID, strategy: keystroke)
+    }
+
+    private static func sendBestEffortNewWindowKeystrokes(bundleID: String) -> Bool {
+        guard let keystroke = bestEffortNewWindowKeystrokes[bundleID] else { return false }
+        return sendNewWindowKeystrokes(bundleID: bundleID, strategy: keystroke)
+    }
+
+    private static func attemptSpeculativeNewWindowArgs(bundleID: String) {
+        // Non-destructive best-effort args for apps without confirmed support.
+        runOpenCommand(bundleID: bundleID, args: ["--new-window"])
+        runOpenCommand(bundleID: bundleID, args: ["--new"])
+        runOpenCommand(bundleID: bundleID, args: ["-n"])
+    }
+
+    private static func sendNewWindowKeystrokes(bundleID: String, strategy: NewWindowKeystroke) -> Bool {
         let escapedID = bundleID.replacingOccurrences(of: "\"", with: "\\\"")
         let source = """
         tell application id "\(escapedID)"
@@ -736,7 +754,7 @@ final class LaunchOrchestrator {
         end tell
         delay 0.3
         tell application "System Events"
-            keystroke "n" using command down
+            keystroke "\(strategy.key)" using \(strategy.modifiersClause)
         end tell
         """
         var error: NSDictionary?

@@ -12,13 +12,17 @@ final class BrowserProviderResolver {
     static let knownChromiumBundleIDs: [String] = [
         heliumBundleID,
         "company.thebrowser.Browser", // Arc
+        "company.thebrowser.dia", // Dia
         "org.chromium.Chromium",
         "com.google.Chrome",
         "com.google.Chrome.canary",
         "com.microsoft.edgemac",
         "com.brave.Browser",
         "com.operasoftware.Opera",
-        "com.vivaldi.Vivaldi"
+        "com.operasoftware.OperaGX",
+        "com.operasoftware.OperaAir",
+        "com.vivaldi.Vivaldi",
+        "com.pushplaylabs.sidekick"
     ]
 
     static let knownFirefoxBundleIDs: [String] = [
@@ -27,7 +31,10 @@ final class BrowserProviderResolver {
         "org.mozilla.nightly",
         "app.zen-browser.zen",
         "org.mozilla.floorp",
-        "net.waterfox.waterfox"
+        "net.waterfox.waterfox",
+        "org.mozilla.librewolf",
+        "org.torproject.torbrowser",
+        "net.mullvad.mullvadbrowser"
     ]
 
     static let knownSafariBundleIDs: [String] = [
@@ -187,7 +194,7 @@ final class ChromiumBrowserLauncher: BrowserLauncher {
 
 final class FirefoxBrowserLauncher: BrowserLauncher {
     let engine: BrowserEngine = .firefox
-    static let newWindowFlag = "-new-window"
+    static let newWindowFlag = "--new-window"
 
     static func newWindowArgs(url: URL?) -> [String] {
         if let url {
