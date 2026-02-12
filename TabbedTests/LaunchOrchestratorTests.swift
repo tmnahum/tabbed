@@ -276,9 +276,22 @@ final class LaunchOrchestratorTests: XCTestCase {
         XCTAssertNil(LaunchOrchestrator.knownNewWindowArgs["com.unknown.app"])
     }
 
+    func testAppSpecificNewWindowAppleScriptIncludesITermCreateWindowCommand() {
+        let script = LaunchOrchestrator.appSpecificNewWindowAppleScript(bundleID: "com.googlecode.iterm2")
+        XCTAssertNotNil(script)
+        XCTAssertTrue(script?.contains("create window with default profile") == true)
+        XCTAssertTrue(script?.contains("tell application id \"com.googlecode.iterm2\"") == true)
+    }
+
+    func testAppSpecificNewWindowAppleScriptIsNilForUnknownApp() {
+        XCTAssertNil(LaunchOrchestrator.appSpecificNewWindowAppleScript(bundleID: "com.unknown.app"))
+    }
+
     func testHasNativeNewWindowSupportForKnownApps() {
         // VSCode fork
         XCTAssertTrue(LaunchOrchestrator.hasNativeNewWindowSupport(bundleID: "com.microsoft.VSCode"))
+        // iTerm2 (Cmd+N support)
+        XCTAssertTrue(LaunchOrchestrator.hasNativeNewWindowSupport(bundleID: "com.googlecode.iterm2"))
         // Kitty
         XCTAssertTrue(LaunchOrchestrator.hasNativeNewWindowSupport(bundleID: "net.kovidgoyal.kitty"))
         // Chromium browser

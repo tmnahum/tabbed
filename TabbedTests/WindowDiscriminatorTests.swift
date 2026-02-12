@@ -114,4 +114,83 @@ final class WindowDiscriminatorTests: XCTestCase {
         )
         XCTAssertTrue(accepted)
     }
+
+    func testAutoJoinAcceptsITermUnknownSubroleMainWindow() {
+        let accepted = WindowDiscriminator.isActualWindow(
+            cgWindowID: 6,
+            subrole: "AXUnknown",
+            role: "AXWindow",
+            title: "zsh",
+            size: CGSize(width: 1100, height: 700),
+            level: 0,
+            bundleIdentifier: "com.googlecode.iterm2",
+            localizedName: "iTerm2",
+            executableURL: nil,
+            qualification: .autoJoin
+        )
+        XCTAssertTrue(accepted)
+    }
+
+    func testAutoJoinRejectsITermDialogWindow() {
+        let accepted = WindowDiscriminator.isActualWindow(
+            cgWindowID: 7,
+            subrole: "AXDialog",
+            role: "AXWindow",
+            title: "Preferences",
+            size: CGSize(width: 900, height: 620),
+            level: 0,
+            bundleIdentifier: "com.googlecode.iterm2",
+            localizedName: "iTerm2",
+            executableURL: nil,
+            qualification: .autoJoin
+        )
+        XCTAssertFalse(accepted)
+    }
+
+    func testWindowDiscoveryAcceptsITermUnknownSubroleMainWindow() {
+        let accepted = WindowDiscriminator.isActualWindow(
+            cgWindowID: 8,
+            subrole: "AXUnknown",
+            role: "AXWindow",
+            title: "zsh",
+            size: CGSize(width: 1000, height: 650),
+            level: 0,
+            bundleIdentifier: "com.googlecode.iterm2",
+            localizedName: "iTerm2",
+            executableURL: nil
+        )
+        XCTAssertTrue(accepted)
+    }
+
+    func testAutoJoinRejectsITermUnknownSubroleWithEmptyTitle() {
+        let accepted = WindowDiscriminator.isActualWindow(
+            cgWindowID: 9,
+            subrole: "AXUnknown",
+            role: "AXWindow",
+            title: "",
+            size: CGSize(width: 1100, height: 700),
+            level: 0,
+            bundleIdentifier: "com.googlecode.iterm2",
+            localizedName: "iTerm2",
+            executableURL: nil,
+            qualification: .autoJoin
+        )
+        XCTAssertFalse(accepted)
+    }
+
+    func testAutoJoinRejectsITermUnknownSubroleWhenTooSmall() {
+        let accepted = WindowDiscriminator.isActualWindow(
+            cgWindowID: 10,
+            subrole: "AXUnknown",
+            role: "AXWindow",
+            title: "tiny",
+            size: CGSize(width: 420, height: 280),
+            level: 0,
+            bundleIdentifier: "com.googlecode.iterm2",
+            localizedName: "iTerm2",
+            executableURL: nil,
+            qualification: .autoJoin
+        )
+        XCTAssertFalse(accepted)
+    }
 }

@@ -89,6 +89,27 @@ enum WindowDiscriminator {
         size: CGSize?,
         qualification: QualificationProfile
     ) -> Bool {
+        // iTerm2 can report non-standard/unknown subroles for normal terminal
+        // windows right after creation. Keep utility/dialog windows excluded.
+        if bundleID == "com.googlecode.iterm2" {
+            if qualification == .autoJoin {
+                return isStrictPrimaryWindow(subrole: subrole, role: role) ||
+                    isLikelyPrimaryWindowForNonstandardApp(
+                        subrole: subrole,
+                        role: role,
+                        title: title,
+                        size: size
+                    )
+            }
+            return subrole == "AXStandardWindow" ||
+                isLikelyPrimaryWindowForNonstandardApp(
+                    subrole: subrole,
+                    role: role,
+                    title: title,
+                    size: size
+                )
+        }
+
         // Accept-all apps (subrole glitches, non-standard windowing, etc.)
         if acceptAllBundleIDs.contains(bundleID) {
             if qualification == .windowDiscovery { return true }
@@ -222,6 +243,20 @@ enum WindowDiscriminator {
             return false
         }
         return size.width >= 500 && size.height >= 300
+    }
+
+    private static func isLikelyPrimaryWindowForNonstandardApp(
+        subrole: String?,
+        role: String?,
+        title: String?,
+        size: CGSize?
+    ) -> Bool {
+        guard role == "AXWindow", !isUtilitySubroleForAutoJoin(subrole) else { return false }
+        if let title, title.isEmpty { return false }
+        if let size {
+            return size.width >= 500 && size.height >= 300
+        }
+        return true
     }
 
     private static func defaultDecision(

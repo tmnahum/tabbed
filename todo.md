@@ -16,9 +16,10 @@
 - make settings window show up as window (it does show up in alttab, maybe reconsider what we're targetting)
     
     
-- new window functionality
+- new window during app already active functionality
     - iterm2 doesnt work
-    - need good model scan of everything
+    - need good scan of everything to make sure its correct
+    - also include whatever else we can
     
 
 - fullscreen improvements
@@ -37,6 +38,9 @@ Small
 
 - make new branch main branch and main branch "old" branch
 - simplify settings ux
+
+- maybe: feture: in addition to web sites, lets add folders search which opens folders in a default terminal and/or code editor
+- feature: tab renaming, if tab has name set use that instead of window name
 
 Future:
 - pinned tabs

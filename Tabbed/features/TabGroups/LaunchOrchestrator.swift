@@ -38,6 +38,13 @@ final class LaunchOrchestrator {
             NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == bundleID })?.processIdentifier
         }
         var reopenRunningApp: (String, URL?) -> Bool = { bundleID, _ in
+            if LaunchOrchestrator.sendAppSpecificNewWindowAppleEvent(bundleID: bundleID) {
+                return true
+            }
+            if let args = LaunchOrchestrator.knownNewWindowArgs[bundleID],
+               LaunchOrchestrator.launchNewWindowWithArgs(bundleID: bundleID, args: args) {
+                return true
+            }
             // Speculatively try --new-window for all apps (most ignore unknown flags harmlessly).
             // Fire-and-forget: don't short-circuit so Cmd+N still fires as a backup.
             LaunchOrchestrator.runOpenCommand(bundleID: bundleID, args: ["--new-window"])
@@ -163,7 +170,8 @@ final class LaunchOrchestrator {
             let providerBaseline = baselineWindowIDs(forPID: dependencies.runningPIDForBundle(app.bundleID))
             dependencies.log("[CAPTURE_WAIT] provider baseline bundle=\(app.bundleID) count=\(providerBaseline.count)")
 
-            let providerDispatched = dependencies.attemptProviderNewWindow?(app.bundleID) ?? defaultAttemptProviderNewWindow(bundleID: app.bundleID)
+            let providerDispatched = dependencies.attemptProviderNewWindow?(app.bundleID)
+                ?? defaultAttemptProviderNewWindow(bundleID: app.bundleID, appURL: app.appURL)
             dependencies.log("[APP_LAUNCH] running new-window attempt bundle=\(app.bundleID) success=\(providerDispatched)")
 
             if providerDispatched {
@@ -535,9 +543,9 @@ final class LaunchOrchestrator {
         return false
     }
 
-    private func defaultAttemptProviderNewWindow(bundleID: String) -> Bool {
+    private func defaultAttemptProviderNewWindow(bundleID: String, appURL: URL? = nil) -> Bool {
         if let engine = resolver.engine(for: bundleID),
-           let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+           let appURL = appURL ?? NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
             let provider = ResolvedBrowserProvider(
                 selection: BrowserProviderSelection(bundleID: bundleID, engine: engine),
                 appURL: appURL
@@ -582,6 +590,35 @@ final class LaunchOrchestrator {
         }
 
         return runOpenCommand(bundleID: bundleID, args: args)
+    }
+
+    static func appSpecificNewWindowAppleScript(bundleID: String) -> String? {
+        let escapedID = bundleID.replacingOccurrences(of: "\"", with: "\\\"")
+        switch bundleID {
+        case "com.googlecode.iterm2":
+            return """
+            tell application id "\(escapedID)"
+                create window with default profile
+            end tell
+            """
+        default:
+            return nil
+        }
+    }
+
+    private static func sendAppSpecificNewWindowAppleEvent(bundleID: String) -> Bool {
+        guard let source = appSpecificNewWindowAppleScript(bundleID: bundleID) else {
+            return false
+        }
+        var error: NSDictionary?
+        let script = NSAppleScript(source: source)
+        _ = script?.executeAndReturnError(&error)
+        if let error {
+            Logger.log("[APP_LAUNCH] app-specific new-window script failed bundle=\(bundleID): \(error)")
+            return false
+        }
+        Logger.log("[APP_LAUNCH] app-specific new-window script succeeded bundle=\(bundleID)")
+        return true
     }
 
     private func defaultLaunchURL(url: URL, provider: ResolvedBrowserProvider) -> Bool {
