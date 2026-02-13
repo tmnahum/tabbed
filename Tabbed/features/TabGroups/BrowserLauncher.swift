@@ -50,55 +50,48 @@ final class BrowserProviderResolver {
         self.appURLLookup = appURLLookup
     }
 
-    func resolve(config: AddWindowLauncherConfig) -> ResolvedBrowserProvider? {
-        guard config.hasAnyLaunchActionEnabled else { return nil }
+    func resolve(selection: BrowserProviderSelection) -> ResolvedBrowserProvider? {
+        let bundleID = selection.bundleID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !bundleID.isEmpty,
+              let appURL = appURLLookup(bundleID) else { return nil }
+        return ResolvedBrowserProvider(
+            selection: BrowserProviderSelection(bundleID: bundleID, engine: selection.engine),
+            appURL: appURL
+        )
+    }
 
-        switch config.providerMode {
-        case .manual:
-            let bundleID = config.manualSelection.bundleID.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !bundleID.isEmpty,
-                  let appURL = appURLLookup(bundleID) else { return nil }
-            return ResolvedBrowserProvider(
-                selection: BrowserProviderSelection(bundleID: bundleID, engine: config.manualSelection.engine),
-                appURL: appURL
-            )
-        case .auto:
-            if let appURL = appURLLookup(Self.heliumBundleID) {
-                return ResolvedBrowserProvider(
-                    selection: BrowserProviderSelection(bundleID: Self.heliumBundleID, engine: .chromium),
-                    appURL: appURL
-                )
-            }
-
-            for bundleID in Self.knownChromiumBundleIDs where bundleID != Self.heliumBundleID {
-                if let appURL = appURLLookup(bundleID) {
-                    return ResolvedBrowserProvider(
-                        selection: BrowserProviderSelection(bundleID: bundleID, engine: .chromium),
-                        appURL: appURL
-                    )
-                }
-            }
-
-            for bundleID in Self.knownFirefoxBundleIDs {
-                if let appURL = appURLLookup(bundleID) {
-                    return ResolvedBrowserProvider(
-                        selection: BrowserProviderSelection(bundleID: bundleID, engine: .firefox),
-                        appURL: appURL
-                    )
-                }
-            }
-
-            for bundleID in Self.knownSafariBundleIDs {
-                if let appURL = appURLLookup(bundleID) {
-                    return ResolvedBrowserProvider(
-                        selection: BrowserProviderSelection(bundleID: bundleID, engine: .safari),
-                        appURL: appURL
-                    )
-                }
-            }
-
-            return nil
+    func preferredSelection() -> BrowserProviderSelection? {
+        if let selection = preferredSelection(
+            bundleIDs: Self.knownChromiumBundleIDs,
+            engine: .chromium
+        ) {
+            return selection
         }
+
+        if let selection = preferredSelection(
+            bundleIDs: Self.knownFirefoxBundleIDs,
+            engine: .firefox
+        ) {
+            return selection
+        }
+
+        if let selection = preferredSelection(
+            bundleIDs: Self.knownSafariBundleIDs,
+            engine: .safari
+        ) {
+            return selection
+        }
+
+        return nil
+    }
+
+    private func preferredSelection(bundleIDs: [String], engine: BrowserEngine) -> BrowserProviderSelection? {
+        for bundleID in bundleIDs {
+            if appURLLookup(bundleID) != nil {
+                return BrowserProviderSelection(bundleID: bundleID, engine: engine)
+            }
+        }
+        return nil
     }
 
     func engine(for bundleID: String) -> BrowserEngine? {

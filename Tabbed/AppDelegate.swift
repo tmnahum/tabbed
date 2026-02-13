@@ -71,12 +71,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     var isExplicitQuit = false
 
+    override init() {
+        super.init()
+        applyPreferredLauncherProvidersIfNeeded()
+    }
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         isExplicitQuit ? .terminateNow : .terminateCancel
+    }
+
+    private func applyPreferredLauncherProvidersIfNeeded() {
+        var config = addWindowLauncherConfig
+        guard config.applyPreferredProviderSelectionsIfNeeded(resolver: browserProviderResolver) else { return }
+        config.save()
+        addWindowLauncherConfig = config
     }
 
     private func installSignalHandler() {

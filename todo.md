@@ -1,4 +1,10 @@
 
+
+
+- settings should show up in control tab (investigate?)
+
+
+
 - fullscreen
 
 - tests

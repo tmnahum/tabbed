@@ -77,7 +77,8 @@ extension AppDelegate {
                     targetActiveTabTitle: nil,
                     appCatalog: [],
                     launcherConfig: .default,
-                    resolvedBrowserProvider: nil,
+                    resolvedURLBrowserProvider: nil,
+                    resolvedSearchBrowserProvider: nil,
                     currentSpaceID: nil,
                     windowRecency: [:],
                     groupRecency: [:],
@@ -130,7 +131,8 @@ extension AppDelegate {
         let spaceWindows = WindowDiscovery.currentSpace()
         let looseWindows = spaceWindows.filter { !groupManager.isWindowGrouped($0.id) }
         let appCatalog = appCatalogService.loadCatalog()
-        let resolvedProvider = browserProviderResolver.resolve(config: addWindowLauncherConfig)
+        let resolvedURLProvider = browserProviderResolver.resolve(selection: addWindowLauncherConfig.urlProviderSelection)
+        let resolvedSearchProvider = browserProviderResolver.resolve(selection: addWindowLauncherConfig.searchProviderSelection)
         let currentSpaceID = resolveCurrentSpaceID(windowsOnCurrentSpace: spaceWindows)
 
         let mergeGroups: [TabGroup]
@@ -181,7 +183,8 @@ extension AppDelegate {
             targetActiveTabTitle: group?.activeWindow?.displayTitle,
             appCatalog: appCatalog,
             launcherConfig: addWindowLauncherConfig,
-            resolvedBrowserProvider: resolvedProvider,
+            resolvedURLBrowserProvider: resolvedURLProvider,
+            resolvedSearchBrowserProvider: resolvedSearchProvider,
             currentSpaceID: currentSpaceID,
             windowRecency: windowRecency,
             groupRecency: groupRecency,
@@ -371,7 +374,7 @@ extension AppDelegate {
 
         case .openURL(let url):
             let request = LaunchOrchestrator.CaptureRequest(mode: context.mode, currentSpaceID: context.currentSpaceID)
-            launchOrchestrator.launchURLAndCapture(url: url, provider: context.resolvedBrowserProvider, request: request) { [weak self] outcome in
+            launchOrchestrator.launchURLAndCapture(url: url, provider: context.resolvedURLBrowserProvider, request: request) { [weak self] outcome in
                 if !LauncherHistoryStore.isSearchURL(url) {
                     self?.launcherHistoryStore.recordURLLaunch(url, outcome: outcome.result)
                 }
@@ -382,7 +385,7 @@ extension AppDelegate {
             let request = LaunchOrchestrator.CaptureRequest(mode: context.mode, currentSpaceID: context.currentSpaceID)
             launchOrchestrator.launchSearchAndCapture(
                 query: query,
-                provider: context.resolvedBrowserProvider,
+                provider: context.resolvedSearchBrowserProvider,
                 searchEngine: context.launcherConfig.searchEngine,
                 customSearchTemplate: context.launcherConfig.customSearchTemplate,
                 request: request

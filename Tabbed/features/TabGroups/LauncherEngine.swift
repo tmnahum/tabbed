@@ -93,7 +93,8 @@ struct LauncherQueryContext {
     let targetActiveTabTitle: String?
     let appCatalog: [AppCatalogService.AppRecord]
     let launcherConfig: AddWindowLauncherConfig
-    let resolvedBrowserProvider: ResolvedBrowserProvider?
+    let resolvedURLBrowserProvider: ResolvedBrowserProvider?
+    let resolvedSearchBrowserProvider: ResolvedBrowserProvider?
     let currentSpaceID: UInt64?
     let windowRecency: [CGWindowID: Int]
     let groupRecency: [UUID: Int]

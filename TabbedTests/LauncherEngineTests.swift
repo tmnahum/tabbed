@@ -57,7 +57,11 @@ final class LauncherEngineTests: XCTestCase {
             targetActiveTabTitle: targetActiveTabTitle,
             appCatalog: appCatalog,
             launcherConfig: launcherConfig,
-            resolvedBrowserProvider: ResolvedBrowserProvider(
+            resolvedURLBrowserProvider: ResolvedBrowserProvider(
+                selection: BrowserProviderSelection(bundleID: "com.google.Chrome", engine: .chromium),
+                appURL: URL(fileURLWithPath: "/Applications/Google Chrome.app")
+            ),
+            resolvedSearchBrowserProvider: ResolvedBrowserProvider(
                 selection: BrowserProviderSelection(bundleID: "com.google.Chrome", engine: .chromium),
                 appURL: URL(fileURLWithPath: "/Applications/Google Chrome.app")
             ),
@@ -377,9 +381,7 @@ final class LauncherEngineTests: XCTestCase {
         let config = AddWindowLauncherConfig(
             urlLaunchEnabled: false,
             searchLaunchEnabled: true,
-            providerMode: .auto,
-            searchEngine: .google,
-            manualSelection: BrowserProviderSelection()
+            searchEngine: .google
         )
         let context = makeContext(looseWindows: [], launcherConfig: config)
 
@@ -402,9 +404,7 @@ final class LauncherEngineTests: XCTestCase {
         let config = AddWindowLauncherConfig(
             urlLaunchEnabled: true,
             searchLaunchEnabled: false,
-            providerMode: .auto,
-            searchEngine: .google,
-            manualSelection: BrowserProviderSelection()
+            searchEngine: .google
         )
         let context = makeContext(looseWindows: [], launcherConfig: config)
 

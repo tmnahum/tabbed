@@ -6,11 +6,6 @@ enum BrowserEngine: String, Codable, CaseIterable {
     case safari
 }
 
-enum BrowserProviderMode: String, Codable, CaseIterable {
-    case auto
-    case manual
-}
-
 enum SearchEngine: String, Codable, CaseIterable {
     case unduck
     case google
@@ -163,38 +158,42 @@ struct BrowserProviderSelection: Codable, Equatable {
 struct AddWindowLauncherConfig: Codable, Equatable {
     var urlLaunchEnabled: Bool
     var searchLaunchEnabled: Bool
-    var providerMode: BrowserProviderMode
+    var urlProviderSelection: BrowserProviderSelection
+    var searchProviderSelection: BrowserProviderSelection
     var searchEngine: SearchEngine
     var customSearchTemplate: String
-    var manualSelection: BrowserProviderSelection
 
     static let `default` = AddWindowLauncherConfig(
         urlLaunchEnabled: true,
         searchLaunchEnabled: true,
-        providerMode: .auto,
+        urlProviderSelection: BrowserProviderSelection(bundleID: "", engine: .chromium),
+        searchProviderSelection: BrowserProviderSelection(bundleID: "", engine: .chromium),
         searchEngine: .unduck,
-        customSearchTemplate: SearchEngine.defaultTemplate,
-        manualSelection: BrowserProviderSelection(bundleID: "", engine: .chromium)
+        customSearchTemplate: SearchEngine.defaultTemplate
     )
 
     init(
         urlLaunchEnabled: Bool = true,
         searchLaunchEnabled: Bool = true,
-        providerMode: BrowserProviderMode = .auto,
+        urlProviderSelection: BrowserProviderSelection = BrowserProviderSelection(),
+        searchProviderSelection: BrowserProviderSelection = BrowserProviderSelection(),
         searchEngine: SearchEngine = .unduck,
-        customSearchTemplate: String = SearchEngine.defaultTemplate,
-        manualSelection: BrowserProviderSelection = BrowserProviderSelection()
+        customSearchTemplate: String = SearchEngine.defaultTemplate
     ) {
         self.urlLaunchEnabled = urlLaunchEnabled
         self.searchLaunchEnabled = searchLaunchEnabled
-        self.providerMode = providerMode
+        self.urlProviderSelection = urlProviderSelection
+        self.searchProviderSelection = searchProviderSelection
         self.searchEngine = searchEngine
         self.customSearchTemplate = customSearchTemplate
-        self.manualSelection = manualSelection
     }
 
-    var hasManualSelection: Bool {
-        !manualSelection.bundleID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    var hasURLProviderSelection: Bool {
+        !urlProviderSelection.bundleID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var hasSearchProviderSelection: Bool {
+        !searchProviderSelection.bundleID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var hasAnyLaunchActionEnabled: Bool {
@@ -219,9 +218,11 @@ struct AddWindowLauncherConfig: Codable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case urlLaunchEnabled
         case searchLaunchEnabled
-        case providerMode
+        case urlProviderSelection
+        case searchProviderSelection
         case searchEngine
         case customSearchTemplate
+        // Legacy key used before separate URL/search providers existed.
         case manualSelection
     }
 
@@ -230,23 +231,48 @@ struct AddWindowLauncherConfig: Codable, Equatable {
         urlLaunchEnabled = try container.decodeIfPresent(Bool.self, forKey: .urlLaunchEnabled) ?? true
         // For configs saved before `searchLaunchEnabled` existed, mirror the legacy combined toggle value.
         searchLaunchEnabled = try container.decodeIfPresent(Bool.self, forKey: .searchLaunchEnabled) ?? urlLaunchEnabled
-        providerMode = try container.decodeIfPresent(BrowserProviderMode.self, forKey: .providerMode) ?? .auto
+        let legacyManualSelection = try container.decodeIfPresent(BrowserProviderSelection.self, forKey: .manualSelection) ?? BrowserProviderSelection()
+        urlProviderSelection = try container.decodeIfPresent(BrowserProviderSelection.self, forKey: .urlProviderSelection) ?? legacyManualSelection
+        searchProviderSelection = try container.decodeIfPresent(BrowserProviderSelection.self, forKey: .searchProviderSelection) ?? legacyManualSelection
         searchEngine = try container.decodeIfPresent(SearchEngine.self, forKey: .searchEngine) ?? .unduck
         customSearchTemplate = try container.decodeIfPresent(String.self, forKey: .customSearchTemplate) ?? SearchEngine.defaultTemplate
         if customSearchTemplate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             customSearchTemplate = SearchEngine.defaultTemplate
         }
-        manualSelection = try container.decodeIfPresent(BrowserProviderSelection.self, forKey: .manualSelection) ?? BrowserProviderSelection()
     }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(urlLaunchEnabled, forKey: .urlLaunchEnabled)
         try container.encode(searchLaunchEnabled, forKey: .searchLaunchEnabled)
-        try container.encode(providerMode, forKey: .providerMode)
+        try container.encode(urlProviderSelection, forKey: .urlProviderSelection)
+        try container.encode(searchProviderSelection, forKey: .searchProviderSelection)
         try container.encode(searchEngine, forKey: .searchEngine)
         try container.encode(customSearchTemplate, forKey: .customSearchTemplate)
-        try container.encode(manualSelection, forKey: .manualSelection)
+    }
+
+    mutating func applyPreferredProviderSelectionsIfNeeded(
+        resolver: BrowserProviderResolver = BrowserProviderResolver()
+    ) -> Bool {
+        var didChange = false
+        let preferredSelection = resolver.preferredSelection()
+
+        if !hasURLProviderSelection, let preferredSelection {
+            urlProviderSelection = preferredSelection
+            didChange = true
+        }
+
+        if !hasSearchProviderSelection {
+            if hasURLProviderSelection {
+                searchProviderSelection = urlProviderSelection
+                didChange = true
+            } else if let preferredSelection {
+                searchProviderSelection = preferredSelection
+                didChange = true
+            }
+        }
+
+        return didChange
     }
 
     private static let userDefaultsKey = "addWindowLauncherConfig"

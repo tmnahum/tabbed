@@ -46,6 +46,10 @@ struct TabBarView: View {
     static let groupNamePlaceholder = "Group name"
     static let inlineGroupNameEditGroupIDKey = "groupID"
     static let inlineTabNameEditWindowIDKey = "windowID"
+    static let tabHorizontalPadding: CGFloat = 8
+    static let tabIconSize: CGFloat = 16
+    static let tabIconSpacing: CGFloat = 6
+    static let tabTrailingControlReserve: CGFloat = 16
 
     static func displayedGroupName(from rawName: String?) -> String? {
         guard let rawName else { return nil }
@@ -55,6 +59,29 @@ struct TabBarView: View {
 
     static func displayedTabTitle(for window: WindowInfo) -> String {
         window.displayTitle
+    }
+
+    /// Horizontal hit range (local to a tab item) for the visible title text.
+    /// Used by the panel-level mouse handler to distinguish title drag vs tab drag.
+    static func tabTitleHitRangeX(for window: WindowInfo, tabWidth: CGFloat) -> ClosedRange<CGFloat>? {
+        guard !window.isPinned, !window.isSeparator else { return nil }
+        let title = displayedTabTitle(for: window)
+        guard !title.isEmpty else { return nil }
+
+        let leadingIconWidth = window.icon == nil ? 0 : (tabIconSize + tabIconSpacing)
+        let availableTextWidth = tabWidth
+            - tabHorizontalPadding
+            - leadingIconWidth
+            - tabHorizontalPadding
+            - tabTrailingControlReserve
+        guard availableTextWidth > 1 else { return nil }
+
+        let measuredTextWidth = (title as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 12)]).width
+        let visibleTextWidth = min(measuredTextWidth, availableTextWidth)
+        guard visibleTextWidth > 1 else { return nil }
+
+        let textStartX = tabHorizontalPadding + leadingIconWidth
+        return textStartX...(textStartX + visibleTextWidth)
     }
 
     private static func measuredGroupNameReservedWidth(for displayedName: String) -> CGFloat {
@@ -1016,7 +1043,7 @@ struct TabBarView: View {
                     })
             }
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, Self.tabHorizontalPadding)
         .padding(.vertical, 4)
         .frame(width: tabWidth, alignment: isPinned ? .center : .leading)
         .background(

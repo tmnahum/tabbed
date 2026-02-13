@@ -91,6 +91,39 @@ final class TabGroupTests: XCTestCase {
         XCTAssertEqual(TabBarView.displayedTabTitle(for: window), "Finder")
     }
 
+    func testTabTitleHitRangeStartsAfterLeadingPaddingWhenNoIcon() {
+        let window = makeWindow(id: 1)
+        guard let range = TabBarView.tabTitleHitRangeX(for: window, tabWidth: 180) else {
+            return XCTFail("Expected title hit range for regular tab")
+        }
+
+        XCTAssertEqual(range.lowerBound, TabBarView.tabHorizontalPadding, accuracy: 0.01)
+    }
+
+    func testTabTitleHitRangeClampsToVisibleWidthWhenTitleIsLong() {
+        var window = makeWindow(id: 2)
+        window.title = String(repeating: "Long title ", count: 12)
+        let tabWidth: CGFloat = 120
+        let range = TabBarView.tabTitleHitRangeX(for: window, tabWidth: tabWidth)
+
+        XCTAssertNotNil(range)
+        let expectedVisibleWidth = tabWidth
+            - TabBarView.tabHorizontalPadding
+            - TabBarView.tabHorizontalPadding
+            - TabBarView.tabTrailingControlReserve
+        let measuredWidth = (range?.upperBound ?? 0) - (range?.lowerBound ?? 0)
+        XCTAssertEqual(measuredWidth, expectedVisibleWidth, accuracy: 0.01)
+    }
+
+    func testTabTitleHitRangeIsNilForPinnedOrSeparatorTabs() {
+        var pinned = makeWindow(id: 3)
+        pinned.isPinned = true
+        let separator = makeSeparator(id: 4)
+
+        XCTAssertNil(TabBarView.tabTitleHitRangeX(for: pinned, tabWidth: 180))
+        XCTAssertNil(TabBarView.tabTitleHitRangeX(for: separator, tabWidth: 180))
+    }
+
     func testActiveWindow() {
         let w1 = makeWindow(id: 1)
         let w2 = makeWindow(id: 2)

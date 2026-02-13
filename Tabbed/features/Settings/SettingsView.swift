@@ -26,7 +26,8 @@ struct SettingsView: View {
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var recordingAction: ShortcutAction?
     @State private var selectedTab: SettingsTab = .general
-    @State private var manualProviderError: String?
+    @State private var urlProviderError: String?
+    @State private var searchProviderError: String?
     private let browserProviderResolver = BrowserProviderResolver()
     var onConfigChanged: (ShortcutConfig) -> Void
     var onSessionConfigChanged: (SessionConfig) -> Void
@@ -101,19 +102,22 @@ struct SettingsView: View {
         .onChange(of: launcherConfig.searchLaunchEnabled) { _ in
             onLauncherConfigChanged(launcherConfig)
         }
-        .onChange(of: launcherConfig.providerMode) { _ in
-            onLauncherConfigChanged(launcherConfig)
-        }
         .onChange(of: launcherConfig.searchEngine) { _ in
             onLauncherConfigChanged(launcherConfig)
         }
         .onChange(of: launcherConfig.customSearchTemplate) { _ in
             onLauncherConfigChanged(launcherConfig)
         }
-        .onChange(of: launcherConfig.manualSelection.bundleID) { _ in
+        .onChange(of: launcherConfig.urlProviderSelection.bundleID) { _ in
             onLauncherConfigChanged(launcherConfig)
         }
-        .onChange(of: launcherConfig.manualSelection.engine) { _ in
+        .onChange(of: launcherConfig.urlProviderSelection.engine) { _ in
+            onLauncherConfigChanged(launcherConfig)
+        }
+        .onChange(of: launcherConfig.searchProviderSelection.bundleID) { _ in
+            onLauncherConfigChanged(launcherConfig)
+        }
+        .onChange(of: launcherConfig.searchProviderSelection.engine) { _ in
             onLauncherConfigChanged(launcherConfig)
         }
         // tabBarConfig auto-saves via didSet on its properties
@@ -258,110 +262,184 @@ struct SettingsView: View {
                 Divider()
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Browser Provider")
+                    Text("URL Browser Provider")
                         .font(.headline)
 
-                    Picker("Mode", selection: $launcherConfig.providerMode) {
-                        Text("Auto").tag(BrowserProviderMode.auto)
-                        Text("Manual").tag(BrowserProviderMode.manual)
-                    }
-                    .pickerStyle(.segmented)
-
-                    Text(providerDescription)
+                    Text("Choose the browser app used for Open URL actions.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 12)
                 .padding(.top, 12)
                 .padding(.bottom, 10)
 
-                if launcherConfig.providerMode == .manual {
-                    Divider()
+                VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 10) {
+                            providerIcon(for: launcherConfig.urlProviderSelection)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 30, height: 30)
+                                .padding(6)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .fill(Color(nsColor: .windowBackgroundColor))
+                                )
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Manual Provider")
-                            .font(.headline)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(providerNameText(for: launcherConfig.urlProviderSelection))
+                                    .font(.subheadline.weight(.semibold))
 
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack(spacing: 10) {
-                                manualProviderIcon
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 30, height: 30)
-                                    .padding(6)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                            .fill(Color(nsColor: .windowBackgroundColor))
-                                    )
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(manualProviderNameText)
-                                        .font(.subheadline.weight(.semibold))
-
-                                    if launcherConfig.hasManualSelection {
-                                        Text(manualProviderBundleIDText)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                            .textSelection(.enabled)
-                                            .lineLimit(1)
-                                    } else {
-                                        Text("Select a browser app to use for URL and web search actions.")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
+                                if launcherConfig.hasURLProviderSelection {
+                                    Text(providerBundleIDText(for: launcherConfig.urlProviderSelection))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .textSelection(.enabled)
+                                        .lineLimit(1)
+                                } else {
+                                    Text("No browser selected for Open URL.")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
                                 }
-
-                                Spacer()
                             }
 
-                            HStack(spacing: 8) {
-                                Button(launcherConfig.hasManualSelection ? "Change Browser App…" : "Choose Browser App…") {
-                                    chooseManualBrowserApp()
+                            Spacer()
+                        }
+
+                        HStack(spacing: 8) {
+                            Button(launcherConfig.hasURLProviderSelection ? "Change Browser App…" : "Choose Browser App…") {
+                                chooseBrowserApp(for: .url)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+
+                            if launcherConfig.hasURLProviderSelection {
+                                Button("Clear") {
+                                    launcherConfig.urlProviderSelection.bundleID = ""
+                                    urlProviderError = nil
                                 }
-                                .buttonStyle(.borderedProminent)
+                                .buttonStyle(.bordered)
                                 .controlSize(.small)
-
-                                if launcherConfig.hasManualSelection {
-                                    Button("Clear") {
-                                        launcherConfig.manualSelection.bundleID = ""
-                                        manualProviderError = nil
-                                    }
-                                    .buttonStyle(.bordered)
-                                    .controlSize(.small)
-                                }
-                            }
-
-                            if let manualProviderError {
-                                Text(manualProviderError)
-                                    .font(.caption)
-                                    .foregroundStyle(.red)
                             }
                         }
-                        .padding(12)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(Color(nsColor: .controlBackgroundColor))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
-                        )
 
-                        Picker("Engine", selection: $launcherConfig.manualSelection.engine) {
-                            Text("Chromium").tag(BrowserEngine.chromium)
-                            Text("Firefox").tag(BrowserEngine.firefox)
-                            Text("Safari").tag(BrowserEngine.safari)
+                        if let urlProviderError {
+                            Text(urlProviderError)
+                                .font(.caption)
+                                .foregroundStyle(.red)
                         }
-                        .pickerStyle(.segmented)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 12)
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color(nsColor: .controlBackgroundColor))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
+                    )
+
+                    Picker("URL Engine", selection: $launcherConfig.urlProviderSelection.engine) {
+                        Text("Chromium").tag(BrowserEngine.chromium)
+                        Text("Firefox").tag(BrowserEngine.firefox)
+                        Text("Safari").tag(BrowserEngine.safari)
+                    }
+                    .pickerStyle(.segmented)
                 }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 12)
 
                 Divider()
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Search Provider")
+                    Text("Search Browser Provider")
+                        .font(.headline)
+
+                    Text("Choose the browser app used for Web Search actions.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 10) {
+                            providerIcon(for: launcherConfig.searchProviderSelection)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 30, height: 30)
+                                .padding(6)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .fill(Color(nsColor: .windowBackgroundColor))
+                                )
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(providerNameText(for: launcherConfig.searchProviderSelection))
+                                    .font(.subheadline.weight(.semibold))
+
+                                if launcherConfig.hasSearchProviderSelection {
+                                    Text(providerBundleIDText(for: launcherConfig.searchProviderSelection))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .textSelection(.enabled)
+                                        .lineLimit(1)
+                                } else {
+                                    Text("No browser selected for Web Search.")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+
+                            Spacer()
+                        }
+
+                        HStack(spacing: 8) {
+                            Button(launcherConfig.hasSearchProviderSelection ? "Change Browser App…" : "Choose Browser App…") {
+                                chooseBrowserApp(for: .search)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+
+                            if launcherConfig.hasSearchProviderSelection {
+                                Button("Clear") {
+                                    launcherConfig.searchProviderSelection.bundleID = ""
+                                    searchProviderError = nil
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                            }
+                        }
+
+                        if let searchProviderError {
+                            Text(searchProviderError)
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                        }
+                    }
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color(nsColor: .controlBackgroundColor))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
+                    )
+
+                    Picker("Search Engine Adapter", selection: $launcherConfig.searchProviderSelection.engine) {
+                        Text("Chromium").tag(BrowserEngine.chromium)
+                        Text("Firefox").tag(BrowserEngine.firefox)
+                        Text("Safari").tag(BrowserEngine.safari)
+                    }
+                    .pickerStyle(.segmented)
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, 12)
+                .padding(.bottom, 12)
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Search Engine")
                         .font(.headline)
 
                     Picker("Provider", selection: $launcherConfig.searchEngine) {
@@ -703,15 +781,6 @@ struct SettingsView: View {
         }
     }
 
-    private var providerDescription: String {
-        switch launcherConfig.providerMode {
-        case .auto:
-            return "Auto prefers Helium, then known Chromium providers, then Firefox providers, then Safari."
-        case .manual:
-            return "Manual uses the browser app you select and a matching engine adapter."
-        }
-    }
-
     private var searchProviderDescription: String {
         if launcherConfig.searchEngine == .custom {
             return "Use %s as a placeholder for the typed query."
@@ -725,31 +794,31 @@ struct SettingsView: View {
         return "Custom template must include %s, for example: https://example.com/search?q=%s"
     }
 
-    private var manualProviderBundleIDText: String {
-        launcherConfig.manualSelection.bundleID.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func providerBundleIDText(for selection: BrowserProviderSelection) -> String {
+        selection.bundleID.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private var manualProviderNameText: String {
-        guard launcherConfig.hasManualSelection else {
+    private func providerNameText(for selection: BrowserProviderSelection) -> String {
+        let bundleID = providerBundleIDText(for: selection)
+        guard !bundleID.isEmpty else {
             return "No browser selected."
         }
 
-        let bundleID = manualProviderBundleIDText
         if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
             return appURL.deletingPathExtension().lastPathComponent
         }
         return bundleID
     }
 
-    private var manualProviderIcon: Image {
-        guard launcherConfig.hasManualSelection else {
+    private func providerIcon(for selection: BrowserProviderSelection) -> Image {
+        let bundleID = providerBundleIDText(for: selection)
+        guard !bundleID.isEmpty else {
             if let fallback = NSImage(systemSymbolName: "globe", accessibilityDescription: nil) {
                 return Image(nsImage: fallback)
             }
             return Image(systemName: "globe")
         }
 
-        let bundleID = manualProviderBundleIDText
         if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
             return Image(nsImage: NSWorkspace.shared.icon(forFile: appURL.path))
         }
@@ -858,7 +927,12 @@ struct SettingsView: View {
         window.setFrame(frame, display: true)
     }
 
-    private func chooseManualBrowserApp() {
+    private enum BrowserProviderTarget {
+        case url
+        case search
+    }
+
+    private func chooseBrowserApp(for target: BrowserProviderTarget) {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
@@ -867,23 +941,43 @@ struct SettingsView: View {
         panel.allowsOtherFileTypes = false
         panel.directoryURL = URL(fileURLWithPath: "/Applications", isDirectory: true)
         panel.prompt = "Choose Browser"
-        panel.message = "Select a browser app for URL and web search actions."
+        switch target {
+        case .url:
+            panel.message = "Select a browser app for Open URL actions."
+        case .search:
+            panel.message = "Select a browser app for Web Search actions."
+        }
 
         guard panel.runModal() == .OK, let appURL = panel.url else { return }
-        applyManualProviderSelection(appURL: appURL)
+        applyProviderSelection(appURL: appURL, target: target)
     }
 
-    private func applyManualProviderSelection(appURL: URL) {
+    private func applyProviderSelection(appURL: URL, target: BrowserProviderTarget) {
         guard let bundleID = Bundle(url: appURL)?.bundleIdentifier else {
-            manualProviderError = "Could not read a bundle identifier from the selected app."
+            let message = "Could not read a bundle identifier from the selected app."
+            switch target {
+            case .url:
+                urlProviderError = message
+            case .search:
+                searchProviderError = message
+            }
             return
         }
 
-        launcherConfig.manualSelection = browserProviderResolver.manualSelection(
-            forBundleID: bundleID,
-            fallbackEngine: launcherConfig.manualSelection.engine
-        )
-        manualProviderError = nil
+        switch target {
+        case .url:
+            launcherConfig.urlProviderSelection = browserProviderResolver.manualSelection(
+                forBundleID: bundleID,
+                fallbackEngine: launcherConfig.urlProviderSelection.engine
+            )
+            urlProviderError = nil
+        case .search:
+            launcherConfig.searchProviderSelection = browserProviderResolver.manualSelection(
+                forBundleID: bundleID,
+                fallbackEngine: launcherConfig.searchProviderSelection.engine
+            )
+            searchProviderError = nil
+        }
     }
 }
 

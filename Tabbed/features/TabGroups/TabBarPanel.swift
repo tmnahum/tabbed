@@ -22,6 +22,8 @@ class TabBarPanel: NSPanel {
     private var barDragStartPanelOrigin: NSPoint?
     /// The mouseDown location in panel-local coordinates, used for background hit test.
     private var mouseDownLocalPoint: NSPoint?
+    /// Window ID when mouseDown started on the visible tab-title text.
+    private var mouseDownTabTitleWindowID: CGWindowID?
     private var isBarDragging = false
     /// Whether we've decided this gesture is a tab drag (not a bar drag).
     private var isTabDrag = false
@@ -201,6 +203,7 @@ class TabBarPanel: NSPanel {
             barDragStartMouse = NSEvent.mouseLocation
             barDragStartPanelOrigin = self.frame.origin
             mouseDownLocalPoint = event.locationInWindow
+            mouseDownTabTitleWindowID = tabTitleHitWindowID(at: event.locationInWindow)
             isBarDragging = false
             isTabDrag = false
 
@@ -255,7 +258,7 @@ class TabBarPanel: NSPanel {
             // Use the original mouseDown location, not the current drag position,
             // so that 3+ px of mouse movement doesn't shift the test point off the tab.
             let localPoint = mouseDownLocalPoint ?? event.locationInWindow
-            if isOnBackground(localPoint) {
+            if isOnBackground(localPoint) || mouseDownTabTitleWindowID != nil {
                 isBarDragging = true
                 var f = self.frame
                 f.origin.x = startOrigin.x + totalDx
@@ -269,17 +272,32 @@ class TabBarPanel: NSPanel {
 
         case .leftMouseUp:
             let wasBarDragging = isBarDragging
+            let clickedTitleWindowID = mouseDownTabTitleWindowID
             if isBarDragging {
                 onBarDragEnded?()
             }
             barDragStartMouse = nil
             barDragStartPanelOrigin = nil
             mouseDownLocalPoint = nil
+            mouseDownTabTitleWindowID = nil
             isBarDragging = false
             isTabDrag = false
             // Don't pass mouseUp to SwiftUI after a bar drag — otherwise
             // interactive views (like the + button) fire from the original mouseDown.
             if !wasBarDragging {
+                if let clickedTitleWindowID,
+                   let groupID = group?.id,
+                   shouldBeginInlineTitleEdit(for: event) {
+                    NotificationCenter.default.post(
+                        name: .tabbedBeginInlineTabNameEdit,
+                        object: nil,
+                        userInfo: [
+                            TabBarView.inlineGroupNameEditGroupIDKey: groupID,
+                            TabBarView.inlineTabNameEditWindowIDKey: Int(clickedTitleWindowID)
+                        ]
+                    )
+                    return
+                }
                 super.sendEvent(event)
             }
 
@@ -403,5 +421,66 @@ class TabBarPanel: NSPanel {
         }
 
         return false
+    }
+
+    /// Returns the window whose visible title text contains this point.
+    /// Point is panel-local.
+    private func tabTitleHitWindowID(at point: NSPoint) -> CGWindowID? {
+        if isOnBackground(point) {
+            return nil
+        }
+        guard let group,
+              let tabBarConfig,
+              !group.windows.isEmpty else {
+            return nil
+        }
+
+        let panelWidth = frame.width
+        let panelHeight = frame.height
+        let verticalPad: CGFloat = 2
+        let showHandle = tabBarConfig.showDragHandle
+        let leadingPad: CGFloat = showHandle ? 4 : 2
+        let trailingPad: CGFloat = 4
+        let handleWidth: CGFloat = showHandle ? TabBarView.dragHandleWidth : 0
+        let groupNameWidth = TabBarView.groupNameReservedWidth(for: group.name)
+
+        if point.y < verticalPad || point.y > panelHeight - verticalPad {
+            return nil
+        }
+
+        let availableWidth = panelWidth - leadingPad - trailingPad - TabBarView.addButtonWidth - handleWidth - groupNameWidth
+        let layout = TabBarView.tabWidthLayout(
+            availableWidth: availableWidth,
+            tabs: group.windows,
+            style: tabBarConfig.style
+        )
+
+        var tabOriginX = leadingPad + handleWidth + groupNameWidth
+        for index in group.windows.indices {
+            let tab = group.windows[index]
+            let tabWidth = layout.widths[safe: index] ?? 0
+            let tabEndX = tabOriginX + tabWidth
+            defer {
+                tabOriginX += tabWidth + TabBarView.tabGap(after: index, tabs: group.windows)
+            }
+
+            guard point.x >= tabOriginX, point.x <= tabEndX else { continue }
+            let localTabX = point.x - tabOriginX
+            guard let titleRange = TabBarView.tabTitleHitRangeX(for: tab, tabWidth: tabWidth) else { continue }
+            if titleRange.contains(localTabX) {
+                return tab.id
+            }
+        }
+
+        return nil
+    }
+
+    private func shouldBeginInlineTitleEdit(for event: NSEvent) -> Bool {
+        guard event.clickCount == 1 else { return false }
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        return !modifiers.contains(.command)
+            && !modifiers.contains(.shift)
+            && !modifiers.contains(.option)
+            && !modifiers.contains(.control)
     }
 }
