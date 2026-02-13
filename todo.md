@@ -1,4 +1,5 @@
 
+- fullscreen
 
 - tests
 
@@ -14,11 +15,14 @@ Future/Maybe:
     - limitation: pretty much unfeasable to be able to switch what space a window is in
 - maybe: tab groups
 
+
 - maybe replace ghost tabs display with fullscreen icon
-
 - buggish: launching new window from alt tab eg firefox first focuses any existing window then launches, which also puts the tab after the ff tab instead of after the one you launched from
+- fullscreen / ghost tabs mode a bit buggy esp with session restore and stuff, our model prob not built to include fullscreen spaces
+- arrow keys during alt tab are still passed to application instead of just our menu
 
 
+lets add functionality to make a separator tab, which is just space between tabs. we should be able to create one of these using hyper t menu with search, no other way, it should be draggable. the length should be maybe half the length of a normal tab (keep resizing though). it should function just like a normal tab though, we should make sure the dragging and dynamic resizing system is consistent and intermixes with the regular tabs in both directions. maybe it should be treated as a special case of a tab? i don't know, whatever you think works best with the code
 
 
 ------------------------------
