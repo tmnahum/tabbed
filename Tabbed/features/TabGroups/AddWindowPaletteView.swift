@@ -366,6 +366,8 @@ struct AddWindowPaletteView: View {
             return "rectangle.stack.fill"
         case .mergeGroup:
             return "rectangle.on.rectangle"
+        case .insertSeparatorTab:
+            return "line.3.horizontal.decrease.circle"
         case .renameTargetGroup:
             return "character.cursor.ibeam"
         case .renameCurrentTab:

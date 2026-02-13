@@ -116,6 +116,58 @@ final class SessionMRUTests: XCTestCase {
         XCTAssertEqual(loaded.first?.windows.first?.customTabName, "Daily Focus")
     }
 
+    func testSaveSessionPersistsSeparatorsInOrder() {
+        let separator = WindowInfo.separator(withID: 4_000_000_123)
+        let group = TabGroup(
+            windows: [makeWindow(id: 1, app: "Alpha"), separator, makeWindow(id: 2, app: "Alpha")],
+            frame: .zero
+        )
+
+        SessionManager.saveSession(groups: [group], mruGroupOrder: [])
+
+        let loaded = SessionManager.loadSession()!
+        XCTAssertEqual(loaded.first?.windows.count, 3)
+        XCTAssertEqual(loaded.first?.windows[1].isSeparator, true)
+        XCTAssertEqual(loaded.first?.windows[1].windowID, separator.id)
+    }
+
+    func testMatchGroupRestoresSeparatorsAlongsideMatchedWindows() {
+        let live = [
+            makeWindow(id: 10, app: "Alpha"),
+            makeWindow(id: 11, app: "Alpha")
+        ]
+        let separatorID: CGWindowID = 4_000_000_222
+        let snapshot = GroupSnapshot(
+            windows: [
+                WindowSnapshot(windowID: 10, bundleID: "com.Alpha", title: "Alpha Window", appName: "Alpha", isPinned: false),
+                WindowSnapshot(
+                    windowID: separatorID,
+                    bundleID: "dev.tabbed.separator",
+                    title: "Separator",
+                    appName: "Separator",
+                    isPinned: false,
+                    isSeparator: true
+                ),
+                WindowSnapshot(windowID: 11, bundleID: "com.Alpha", title: "Alpha Window", appName: "Alpha", isPinned: false)
+            ],
+            activeIndex: 0,
+            frame: CodableRect(.zero),
+            tabBarSqueezeDelta: 0,
+            name: nil
+        )
+
+        let matched = SessionManager.matchGroup(
+            snapshot: snapshot,
+            liveWindows: live,
+            alreadyClaimed: [],
+            mode: .always
+        )
+
+        XCTAssertEqual(matched?.count, 3)
+        XCTAssertEqual(matched?[1].isSeparator, true)
+        XCTAssertEqual(matched?[1].id, separatorID)
+    }
+
     func testMatchGroupAppliesPinnedStateFromSnapshot() {
         let live = [
             makeWindow(id: 10, app: "Alpha"),

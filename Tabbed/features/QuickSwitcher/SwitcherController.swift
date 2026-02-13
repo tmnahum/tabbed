@@ -27,7 +27,7 @@ class SwitcherController {
               let subSelectedWindowID else {
             return nil
         }
-        return group.windows.firstIndex { $0.id == subSelectedWindowID }
+        return group.managedWindows.firstIndex { $0.id == subSelectedWindowID }
     }
 
     /// Called when the user commits a selection. Passes the selected SwitcherItem and optional sub-selection index.
@@ -72,7 +72,7 @@ class SwitcherController {
         guard session.scope == .global,
               session.hasItems,
               session.selectedIndex < session.items.count else { return }
-        guard case .group(let group) = session.items[session.selectedIndex], group.windows.count > 1 else { return }
+        guard case .group(let group) = session.items[session.selectedIndex], group.managedWindowCount > 1 else { return }
 
         let indices = mruWindowIndices(for: group)
         guard !indices.isEmpty else { return }
@@ -81,7 +81,7 @@ class SwitcherController {
         // differ from what's displayed.
         let currentPos = subSelectedWindowPosition(in: group, mruIndices: indices) ?? 0
         let nextIndex = indices[(currentPos + 1) % indices.count]
-        session.subSelectedWindowID = group.windows[nextIndex].id
+        session.subSelectedWindowID = group.managedWindows[nextIndex].id
         updatePanelContent()
     }
 
@@ -110,13 +110,13 @@ class SwitcherController {
         guard session.scope == .global,
               session.hasItems,
               session.selectedIndex < session.items.count else { return }
-        guard case .group(let group) = session.items[session.selectedIndex], group.windows.count > 1 else { return }
+        guard case .group(let group) = session.items[session.selectedIndex], group.managedWindowCount > 1 else { return }
 
         let indices = mruWindowIndices(for: group)
         guard !indices.isEmpty else { return }
         let currentPos = subSelectedWindowPosition(in: group, mruIndices: indices) ?? 0
         let nextIndex = indices[(currentPos - 1 + indices.count) % indices.count]
-        session.subSelectedWindowID = group.windows[nextIndex].id
+        session.subSelectedWindowID = group.managedWindows[nextIndex].id
         updatePanelContent()
     }
 
@@ -243,19 +243,19 @@ class SwitcherController {
         )
     }
 
-    /// Returns indices into `group.windows` ordered by MRU (most-recent first).
+    /// Returns indices into `group.managedWindows` ordered by MRU (most-recent first).
     private func mruWindowIndices(for group: TabGroup) -> [Int] {
-        let windowIDs = Set(group.windows.map(\.id))
+        let windowIDs = Set(group.managedWindows.map(\.id))
         let mruIDs = group.focusHistory.filter { windowIDs.contains($0) }
-        let remainingIDs = group.windows.map(\.id).filter { !mruIDs.contains($0) }
+        let remainingIDs = group.managedWindows.map(\.id).filter { !mruIDs.contains($0) }
         return (mruIDs + remainingIDs).compactMap { id in
-            group.windows.firstIndex { $0.id == id }
+            group.managedWindows.firstIndex { $0.id == id }
         }
     }
 
     private func subSelectedWindowPosition(in group: TabGroup, mruIndices: [Int]) -> Int? {
         guard let subSelectedWindowID,
-              let selectedWindowIndex = group.windows.firstIndex(where: { $0.id == subSelectedWindowID }) else {
+              let selectedWindowIndex = group.managedWindows.firstIndex(where: { $0.id == subSelectedWindowID }) else {
             return nil
         }
         return mruIndices.firstIndex(of: selectedWindowIndex)
@@ -264,7 +264,7 @@ class SwitcherController {
     private func subSelectedWindowIndex(for item: SwitcherItem) -> Int? {
         guard case .group(let group) = item,
               let subSelectedWindowID else { return nil }
-        return group.windows.firstIndex { $0.id == subSelectedWindowID }
+        return group.managedWindows.firstIndex { $0.id == subSelectedWindowID }
     }
 
     private func precomputeGroupIcons(

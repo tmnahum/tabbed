@@ -43,7 +43,7 @@ enum SwitcherItem: Identifiable {
     var icons: [NSImage?] {
         switch self {
         case .singleWindow(let w): return [w.icon]
-        case .group(let g): return g.windows.map(\.icon)
+        case .group(let g): return g.managedWindows.map(\.icon)
         }
     }
 
@@ -51,7 +51,7 @@ enum SwitcherItem: Identifiable {
     var windowCount: Int {
         switch self {
         case .singleWindow: return 1
-        case .group(let g): return g.windows.count
+        case .group(let g): return g.managedWindowCount
         }
     }
 
@@ -59,14 +59,14 @@ enum SwitcherItem: Identifiable {
     var windowIDs: [CGWindowID] {
         switch self {
         case .singleWindow(let w): return [w.id]
-        case .group(let g): return g.windows.map(\.id)
+        case .group(let g): return g.managedWindows.map(\.id)
         }
     }
 
     /// Returns a specific window from a group by index, or nil for single windows.
     func window(at index: Int) -> WindowInfo? {
         guard case .group(let g) = self else { return nil }
-        return g.windows[safe: index]
+        return g.managedWindows[safe: index]
     }
 
     /// Icon + fullscreen state for ZStack display, capped to `maxVisible`.
@@ -83,16 +83,16 @@ enum SwitcherItem: Identifiable {
         }
 
         // Build MRU list: most-recent first, windows without history at the end
-        let windowIDs = Set(g.windows.map(\.id))
+        let windowIDs = Set(g.managedWindows.map(\.id))
         let mruIDs = g.focusHistory.filter { windowIDs.contains($0) }
-        let remainingIDs = g.windows.map(\.id).filter { !mruIDs.contains($0) }
+        let remainingIDs = g.managedWindows.map(\.id).filter { !mruIDs.contains($0) }
         let mruList: [WindowInfo] = (mruIDs + remainingIDs).compactMap { id in
-            g.windows.first { $0.id == id }
+            g.managedWindows.first { $0.id == id }
         }
 
         // Find the target's position in MRU order (default: 0 = most-recent)
         var targetPos = 0
-        if let fi = frontIndex, let target = g.windows[safe: fi],
+        if let fi = frontIndex, let target = g.managedWindows[safe: fi],
            let pos = mruList.firstIndex(where: { $0.id == target.id }) {
             targetPos = pos
         }
@@ -113,7 +113,7 @@ enum SwitcherItem: Identifiable {
         switch self {
         case .singleWindow(let w): return w.isFullscreened
         case .group(let g):
-            if let index { return g.windows[safe: index]?.isFullscreened ?? false }
+            if let index { return g.managedWindows[safe: index]?.isFullscreened ?? false }
             return g.activeWindow?.isFullscreened ?? false
         }
     }

@@ -49,7 +49,7 @@ final class MRUTracker {
         var groupByWindowID: [CGWindowID: TabGroup] = [:]
         for group in groups {
             groupsByID[group.id] = group
-            for window in group.windows {
+            for window in group.managedWindows {
                 groupByWindowID[window.id] = group
             }
         }
@@ -70,7 +70,7 @@ final class MRUTracker {
                 guard let group = groupsByID[groupID],
                       seenGroupIDs.insert(groupID).inserted else { continue }
                 items.append(.group(group))
-                seenWindowIDs.formUnion(group.windows.map(\.id))
+                seenWindowIDs.formUnion(group.managedWindows.map(\.id))
             case .window(let windowID):
                 guard let window = windowsByID[windowID],
                       !seenWindowIDs.contains(windowID),
@@ -85,7 +85,7 @@ final class MRUTracker {
             if let group = groupByWindowID[window.id] {
                 if seenGroupIDs.insert(group.id).inserted {
                     items.append(.group(group))
-                    seenWindowIDs.formUnion(group.windows.map(\.id))
+                    seenWindowIDs.formUnion(group.managedWindows.map(\.id))
                 }
                 continue
             }

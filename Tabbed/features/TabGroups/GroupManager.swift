@@ -47,7 +47,7 @@ class GroupManager: ObservableObject {
             guard group.removeWindow(withID: windowID) != nil else { return }
         }
 
-        if group.windows.isEmpty {
+        if group.managedWindowCount == 0 {
             dissolveGroup(group)
         } else {
             objectWillChange.send()
@@ -62,6 +62,7 @@ class GroupManager: ObservableObject {
               let index = group.windows.firstIndex(where: { $0.id == windowID }) else {
             return false
         }
+        guard !group.windows[index].isSeparator else { return false }
         guard group.windows[index].title != title else { return false }
         group.windows[index].title = title
         objectWillChange.send()
@@ -76,6 +77,7 @@ class GroupManager: ObservableObject {
               let index = group.windows.firstIndex(where: { $0.id == windowID }) else {
             return false
         }
+        guard !group.windows[index].isSeparator else { return false }
         let normalized = normalizeCustomTabName(rawCustomTabName)
         let existing = normalizeCustomTabName(group.windows[index].customTabName)
         guard existing != normalized else { return false }
@@ -94,7 +96,7 @@ class GroupManager: ObservableObject {
             removed = group.removeWindows(withIDs: ids)
         }
 
-        if group.windows.isEmpty {
+        if group.managedWindowCount == 0 {
             dissolveGroup(group)
         } else {
             objectWillChange.send()

@@ -10,7 +10,7 @@ enum SwitcherItemBuilder {
         // Map window IDs to their group (if any)
         var windowToGroup: [CGWindowID: TabGroup] = [:]
         for group in groups {
-            for window in group.windows {
+            for window in group.managedWindows {
                 windowToGroup[window.id] = group
             }
         }

@@ -257,7 +257,7 @@ struct WindowPickerView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(groupDisplayName(group))
                         .font(.system(size: 12, weight: .medium))
-                    Text("\(group.windows.count) tabs")
+                    Text("\(group.managedWindowCount) tabs")
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 }
@@ -281,9 +281,9 @@ struct WindowPickerView: View {
     }
 
     private func groupDisplayName(_ group: TabGroup) -> String {
-        let appNames = Array(Set(group.windows.map(\.appName)))
+        let appNames = Array(Set(group.managedWindows.map(\.appName)))
         if appNames.count == 1 {
-            return "\(group.windows.count) \(appNames[0]) windows"
+            return "\(group.managedWindowCount) \(appNames[0]) windows"
         } else if appNames.count <= 2 {
             return appNames.joined(separator: ", ")
         } else {
@@ -293,7 +293,7 @@ struct WindowPickerView: View {
 
     /// Small overlapping icons for a group row.
     private func groupIconStack(group: TabGroup) -> some View {
-        let icons = Array(group.windows.prefix(4).map(\.icon))
+        let icons = Array(group.managedWindows.prefix(4).map(\.icon))
         let count = icons.count
         let iconSize: CGFloat = 20
         let overlap: CGFloat = 8

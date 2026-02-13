@@ -316,22 +316,15 @@ class TabBarPanel: NSPanel {
         // Calculate where tab content ends
         let tabCount = group?.windows.count ?? 0
         guard tabCount > 0 else { return true }
-        let pinnedCount = group?.pinnedCount ?? 0
 
         let availableWidth = panelWidth - leadingPad - trailingPad - TabBarView.addButtonWidth - handleWidth - groupNameWidth
         let style = tabBarConfig?.style ?? .compact
-        let widths = TabBarView.tabWidths(
+        let layout = TabBarView.tabWidthLayout(
             availableWidth: availableWidth,
-            tabCount: tabCount,
-            pinnedCount: pinnedCount,
+            tabs: group?.windows ?? [],
             style: style
         )
-        let tabContentWidth = TabBarView.tabContentWidth(
-            tabCount: tabCount,
-            pinnedCount: pinnedCount,
-            pinnedWidth: widths.pinned,
-            unpinnedWidth: widths.unpinned
-        )
+        let tabContentWidth = TabBarView.tabContentWidth(tabWidths: layout.widths)
 
         let tabContentEndX = tabContentStartX + groupNameWidth + tabContentWidth
 
@@ -360,7 +353,6 @@ class TabBarPanel: NSPanel {
         }
 
         let tabCount = group.windows.count
-        let pinnedCount = group.pinnedCount
         let panelWidth = frame.width
         let panelHeight = frame.height
 
@@ -377,10 +369,9 @@ class TabBarPanel: NSPanel {
         }
 
         let availableWidth = panelWidth - leadingPad - trailingPad - TabBarView.addButtonWidth - handleWidth - groupNameWidth
-        let widths = TabBarView.tabWidths(
+        let layout = TabBarView.tabWidthLayout(
             availableWidth: availableWidth,
-            tabCount: tabCount,
-            pinnedCount: pinnedCount,
+            tabs: group.windows,
             style: tabBarConfig.style
         )
 
@@ -393,17 +384,13 @@ class TabBarPanel: NSPanel {
 
         var tabOriginX = tabContentStartX
         for index in 0..<tabCount {
+            let tab = group.windows[index]
             // Pinned tabs don't show trailing close/release controls.
-            if index < pinnedCount {
-                tabOriginX += widths.pinned + TabBarView.tabSpacing
+            if tab.isPinned || tab.isSeparator {
+                tabOriginX += (layout.widths[safe: index] ?? 0) + TabBarView.tabSpacing
                 continue
             }
-            let tabWidth = TabBarView.tabWidth(
-                at: index,
-                pinnedCount: pinnedCount,
-                pinnedWidth: widths.pinned,
-                unpinnedWidth: widths.unpinned
-            )
+            let tabWidth = layout.widths[safe: index] ?? 0
             let tabEndX = tabOriginX + tabWidth
             let controlStartX = max(tabOriginX, tabEndX - controlInset)
 

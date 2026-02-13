@@ -14,6 +14,7 @@ enum LauncherAction: Equatable {
     case looseWindow(windowID: CGWindowID)
     case groupAllInSpace
     case mergeGroup(groupID: UUID)
+    case insertSeparatorTab
     case renameTargetGroup
     case renameCurrentTab
     case releaseCurrentTab
@@ -29,6 +30,8 @@ enum LauncherAction: Equatable {
             return "action.groupAllInSpace"
         case .renameTargetGroup:
             return "action.renameTargetGroup"
+        case .insertSeparatorTab:
+            return "action.insertSeparatorTab"
         case .renameCurrentTab:
             return "action.renameCurrentTab"
         case .releaseCurrentTab:
@@ -145,7 +148,7 @@ final class LauncherEngine {
         if context.mode.isAddToGroup {
             for group in context.mergeGroups {
                 let descriptor = groupDescriptor(group)
-                let appNames = Set(group.windows.map(\.appName)).sorted().joined(separator: " ")
+                let appNames = Set(group.managedWindows.map(\.appName)).sorted().joined(separator: " ")
                 let score = scoreMatch(query: query, fields: [descriptor, appNames])
                 guard score > 0 else { continue }
                 groups.append(LauncherCandidate(
@@ -154,7 +157,7 @@ final class LauncherEngine {
                     tier: 1,
                     score: score,
                     displayName: descriptor,
-                    subtitle: "\(group.windows.count) tabs",
+                    subtitle: "\(group.managedWindowCount) tabs",
                     icon: group.activeWindow?.icon,
                     recency: context.groupRecency[group.id] ?? 0,
                     isRunningApp: false,
@@ -211,7 +214,7 @@ final class LauncherEngine {
                     tier: 1,
                     score: 1,
                     displayName: groupDescriptor(group),
-                    subtitle: "\(group.windows.count) tabs",
+                    subtitle: "\(group.managedWindowCount) tabs",
                     icon: group.activeWindow?.icon,
                     recency: context.groupRecency[group.id] ?? 0,
                     isRunningApp: false,
@@ -475,6 +478,32 @@ final class LauncherEngine {
                 )
             }
 
+            let separatorScore = scoreMatch(query: query, fields: [
+                "separator",
+                "separator tab",
+                "insert separator",
+                "spacer",
+                "gap between tabs"
+            ])
+            if separatorScore > 0 {
+                let action = LauncherAction.insertSeparatorTab
+                let history = action.historyKey.flatMap { context.actionHistory[$0] }
+                actions.append(
+                    LauncherCandidate(
+                        id: "action-insert-separator-tab",
+                        action: action,
+                        tier: 2,
+                        score: separatorScore + actionUsageBoost(entry: history, now: now),
+                        displayName: "Insert Separator Tab",
+                        subtitle: "Adds spacing between tabs",
+                        icon: nil,
+                        recency: history.map { Int($0.lastLaunchedAt.timeIntervalSince1970) } ?? 0,
+                        isRunningApp: false,
+                        hasNativeNewWindow: true
+                    )
+                )
+            }
+
             let ungroupScore = scoreMatch(query: query, fields: ["ungroup", "release from group", "release all tabs"])
             if ungroupScore > 0 {
                 let action = LauncherAction.ungroupTargetGroup
@@ -727,9 +756,9 @@ final class LauncherEngine {
     }
 
     private func groupDescriptor(_ group: TabGroup) -> String {
-        let appNames = Array(Set(group.windows.map(\.appName))).sorted()
+        let appNames = Array(Set(group.managedWindows.map(\.appName))).sorted()
         if appNames.count == 1, let appName = appNames.first {
-            return "\(group.windows.count) \(appName) windows"
+            return "\(group.managedWindowCount) \(appName) windows"
         }
         if appNames.count <= 2 {
             return appNames.joined(separator: ", ")

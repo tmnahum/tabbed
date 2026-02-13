@@ -376,7 +376,7 @@ extension AppDelegate {
 
         for group in groupManager.groups {
             guard group.spaceID != 0 else { continue }
-            let spaceMap = SpaceUtils.spaceIDs(for: group.windows.map(\.id))
+            let spaceMap = SpaceUtils.spaceIDs(for: group.managedWindows.map(\.id))
 
             // If all windows report the same new space, the space ID was reassigned
             // (or a single-tab group was moved). Update the stored ID, don't eject.
@@ -384,7 +384,7 @@ extension AppDelegate {
             if reportedSpaces.count == 1,
                let newSpace = reportedSpaces.first,
                newSpace != group.spaceID,
-               spaceMap.count == group.windows.count {
+               spaceMap.count == group.managedWindowCount {
                 Logger.log("[SPACE] Updating group \(group.id) spaceID \(group.spaceID) → \(newSpace) (all windows moved together)")
                 group.spaceID = newSpace
                 if let panel = tabBarPanels[group.id], let activeWindow = group.activeWindow {
@@ -396,7 +396,7 @@ extension AppDelegate {
             // Find windows whose space differs from the group's space.
             // Windows where the query returned nil are NOT marked stray — the window
             // server may not have settled yet, or the window is mid-transition.
-            let strayIDs = group.windows.compactMap { window -> CGWindowID? in
+            let strayIDs = group.managedWindows.compactMap { window -> CGWindowID? in
                 guard !window.isFullscreened else { return nil }
                 guard let windowSpace = spaceMap[window.id],
                       windowSpace != group.spaceID else { return nil }
@@ -411,7 +411,7 @@ extension AppDelegate {
             let groupSqueezeDelta = group.tabBarSqueezeDelta
 
             for windowID in strayIDs {
-                guard let window = group.windows.first(where: { $0.id == windowID }) else { continue }
+                guard let window = group.managedWindows.first(where: { $0.id == windowID }) else { continue }
                 windowObserver.stopObserving(window: window)
                 expectedFrames.removeValue(forKey: window.id)
 

@@ -213,6 +213,7 @@ final class LauncherEngineTests: XCTestCase {
             if case .appLaunch = $0.action { return true }
             if case .openURL = $0.action { return true }
             if case .webSearch = $0.action { return true }
+            if case .insertSeparatorTab = $0.action { return true }
             if case .renameTargetGroup = $0.action { return true }
             if case .renameCurrentTab = $0.action { return true }
             if case .releaseCurrentTab = $0.action { return true }
@@ -263,6 +264,26 @@ final class LauncherEngineTests: XCTestCase {
         let releaseTab = LauncherEngine().rank(query: "release tab", context: context)
         XCTAssertTrue(releaseTab.contains {
             if case .releaseCurrentTab = $0.action { return true }
+            return false
+        })
+    }
+
+    func testAddModeQueryMatchesInsertSeparatorActionOnlyWhenSearched() {
+        let context = makeContext(
+            mode: .addToGroup(targetGroupID: UUID(), targetSpaceID: 1),
+            looseWindows: [],
+            targetGroupWindowCount: 3
+        )
+
+        let ranked = LauncherEngine().rank(query: "separator", context: context)
+        XCTAssertTrue(ranked.contains {
+            if case .insertSeparatorTab = $0.action { return true }
+            return false
+        })
+
+        let preview = LauncherEngine().rank(query: "", context: context)
+        XCTAssertFalse(preview.contains {
+            if case .insertSeparatorTab = $0.action { return true }
             return false
         })
     }

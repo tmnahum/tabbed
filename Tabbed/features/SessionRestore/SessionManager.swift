@@ -22,7 +22,8 @@ enum SessionManager {
                         title: window.title,
                         appName: window.appName,
                         isPinned: window.isPinned,
-                        customTabName: window.customTabName
+                        customTabName: window.customTabName,
+                        isSeparator: window.isSeparator
                     )
                 },
                 activeIndex: group.activeIndex,
@@ -98,6 +99,10 @@ enum SessionManager {
         var matched: [WindowInfo] = []
 
         for snap in snapshot.windows {
+            if snap.isSeparator {
+                matched.append(WindowInfo.separator(withID: snap.windowID))
+                continue
+            }
             // 1. Exact CGWindowID match — window still exists
             if let byID = liveWindowIndex.windowByID[snap.windowID],
                !claimed.contains(byID.id) {
@@ -143,7 +148,7 @@ enum SessionManager {
             }
         }
 
-        return matched.isEmpty ? nil : matched
+        return matched.contains(where: { !$0.isSeparator }) ? matched : nil
     }
 
     static func makeLiveWindowIndex(liveWindows: [WindowInfo]) -> LiveWindowIndex {

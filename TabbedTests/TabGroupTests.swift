@@ -16,6 +16,10 @@ final class TabGroupTests: XCTestCase {
         )
     }
 
+    func makeSeparator(id: CGWindowID) -> WindowInfo {
+        WindowInfo.separator(withID: id)
+    }
+
     func testInitSetsActiveIndexToZero() {
         let group = TabGroup(windows: [makeWindow(id: 1), makeWindow(id: 2)], frame: .zero)
         XCTAssertEqual(group.activeIndex, 0)
@@ -114,6 +118,16 @@ final class TabGroupTests: XCTestCase {
         XCTAssertEqual(group.windows.count, 1)
     }
 
+    func testAddSeparatorDoesNotChangeManagedWindowCount() {
+        let group = TabGroup(windows: [makeWindow(id: 1), makeWindow(id: 2)], frame: .zero)
+
+        _ = group.addSeparator(at: 1)
+
+        XCTAssertEqual(group.windows.count, 3)
+        XCTAssertEqual(group.managedWindowCount, 2)
+        XCTAssertEqual(group.managedWindows.map(\.id), [1, 2])
+    }
+
     func testRemoveWindow() {
         let group = TabGroup(windows: [makeWindow(id: 1), makeWindow(id: 2)], frame: .zero)
         let removed = group.removeWindow(withID: 1)
@@ -183,6 +197,14 @@ final class TabGroupTests: XCTestCase {
         XCTAssertEqual(group.windows.map(\.id), [3, 1, 2])
         XCTAssertEqual(group.pinnedCount, 1)
         XCTAssertTrue(group.windows[0].isPinned)
+    }
+
+    func testPinWindowIgnoresSeparator() {
+        let group = TabGroup(windows: [makeWindow(id: 1), makeSeparator(id: 4), makeWindow(id: 2)], frame: .zero)
+        group.pinWindow(withID: 4)
+
+        XCTAssertEqual(group.pinnedCount, 0)
+        XCTAssertFalse(group.windows.first(where: { $0.id == 4 })?.isPinned ?? false)
     }
 
     func testPinWindowAtSpecificPinnedIndex() {
@@ -299,6 +321,14 @@ final class TabGroupTests: XCTestCase {
         XCTAssertEqual(removed.count, 3)
         XCTAssertTrue(group.windows.isEmpty)
         XCTAssertEqual(group.activeIndex, 0)
+    }
+
+    func testRemovingLastManagedWindowAlsoRemovesSeparators() {
+        let group = TabGroup(windows: [makeWindow(id: 1), makeSeparator(id: 500)], frame: .zero)
+        _ = group.removeWindow(withID: 1)
+
+        XCTAssertTrue(group.windows.isEmpty)
+        XCTAssertEqual(group.managedWindowCount, 0)
     }
 
     func testMoveTabsToEnd() {
@@ -440,6 +470,15 @@ final class TabGroupTests: XCTestCase {
         XCTAssertGreaterThan(widths.unpinned, widths.pinned)
     }
 
+    func testTabWidthLayoutMakesSeparatorHalfWidthOfRegularUnpinnedTab() {
+        let tabs = [makeWindow(id: 1), makeSeparator(id: 99), makeWindow(id: 2)]
+        let layout = TabBarView.tabWidthLayout(availableWidth: 450, tabs: tabs, style: .equal)
+
+        XCTAssertEqual(layout.widths.count, 3)
+        XCTAssertEqual(layout.widths[1], layout.widths[0] * 0.5, accuracy: 0.01)
+        XCTAssertEqual(layout.widths[2], layout.widths[0], accuracy: 0.01)
+    }
+
     func testInsertionIndexForPointUsesPinnedGeometry() {
         let tabCount = 3
         let pinnedCount = 1
@@ -504,6 +543,11 @@ final class TabGroupTests: XCTestCase {
         let group = TabGroup(windows: [makeWindow(id: 1), makeWindow(id: 2), makeWindow(id: 3)], frame: .zero)
         group.windows[1].isFullscreened = true
         XCTAssertEqual(group.visibleWindows.map(\.id), [1, 3])
+    }
+
+    func testVisibleWindowsExcludesSeparators() {
+        let group = TabGroup(windows: [makeWindow(id: 1), makeSeparator(id: 42), makeWindow(id: 2)], frame: .zero)
+        XCTAssertEqual(group.visibleWindows.map(\.id), [1, 2])
     }
 
     func testMRUCycleSkipsFullscreenedWindows() {

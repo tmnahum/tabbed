@@ -16,7 +16,7 @@ extension AppDelegate {
         }
 
         guard let (group, _) = activeGroup() else { return }
-        guard group.windows.count > 1 else { return }
+        guard group.managedWindowCount > 1 else { return }
 
         cyclingGroup = group
 
@@ -25,12 +25,12 @@ extension AppDelegate {
             return
         }
 
-        let windowIDs = Set(group.windows.map(\.id))
+        let windowIDs = Set(group.managedWindows.map(\.id))
         let mruOrder = group.focusHistory.filter { windowIDs.contains($0) }
         let orderedWindows: [WindowInfo] = mruOrder.compactMap { id in
-            group.windows.first { $0.id == id }
+            group.managedWindows.first { $0.id == id }
         }
-        let remaining = group.windows.filter { w in !mruOrder.contains(w.id) }
+        let remaining = group.managedWindows.filter { w in !mruOrder.contains(w.id) }
         let allWindows = orderedWindows + remaining
 
         let items = allWindows.map { SwitcherItem.singleWindow($0) }
@@ -53,7 +53,7 @@ extension AppDelegate {
         }
 
         if !group.isCycling {
-            _ = group.nextInMRUCycle()
+            group.beginCycle()
         }
 
         switcherController.show(

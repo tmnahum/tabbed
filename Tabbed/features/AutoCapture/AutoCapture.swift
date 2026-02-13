@@ -69,7 +69,7 @@ extension AppDelegate {
             AccessibilityHelper.getWindowList()
                 .compactMap { $0[kCGWindowNumber as String] as? CGWindowID }
         )
-        return group.windows.contains { onScreenIDs.contains($0.id) }
+        return group.managedWindows.contains { onScreenIDs.contains($0.id) }
     }
 
     func isWindowOnCurrentSpace(_ windowID: CGWindowID) -> Bool {

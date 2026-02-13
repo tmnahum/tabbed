@@ -255,12 +255,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 guard let self else { return }
                 self.popover.performClose(nil)
 
-                let appNames = Set(group.windows.map(\.appName))
+                let appNames = Set(group.managedWindows.map(\.appName))
                 let description = appNames.sorted().joined(separator: ", ")
+                let windowCount = group.managedWindowCount
 
                 let alert = NSAlert()
                 alert.messageText = "Quit all windows in this group?"
-                alert.informativeText = "This will close \(group.windows.count) window\(group.windows.count == 1 ? "" : "s") (\(description))."
+                alert.informativeText = "This will close \(windowCount) window\(windowCount == 1 ? "" : "s") (\(description))."
                 alert.alertStyle = .warning
                 alert.addButton(withTitle: "Quit All")
                 alert.addButton(withTitle: "Cancel")
@@ -300,7 +301,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         for group in groupManager.groups {
             let delta = group.tabBarSqueezeDelta
             guard delta > 0 else { continue }
-            for window in group.windows {
+            for window in group.managedWindows {
                 if !window.isFullscreened, let frame = AccessibilityHelper.getFrame(of: window.element) {
                     let expandedFrame = ScreenCompensation.expandFrame(frame, undoingSqueezeDelta: delta)
                     AccessibilityHelper.setFrame(of: window.element, to: expandedFrame)

@@ -88,7 +88,7 @@ struct MenuBarView: View {
                     .help(label)
             }
 
-            ForEach(group.windows) { window in
+            ForEach(group.managedWindows) { window in
                 Button {
                     onFocusWindow(window)
                 } label: {
@@ -135,8 +135,9 @@ struct MenuBarView: View {
         .padding(6)
         .background(
             Button {
-                let window = group.windows[group.activeIndex]
-                onFocusWindow(window)
+                if let window = group.activeWindow {
+                    onFocusWindow(window)
+                }
             } label: {
                 RoundedRectangle(cornerRadius: 6)
                     .fill(Color.primary.opacity(0.05))

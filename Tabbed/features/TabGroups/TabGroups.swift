@@ -176,7 +176,7 @@ extension AppDelegate {
             looseWindows: looseWindows,
             mergeGroups: mergeGroups,
             targetGroupDisplayName: group?.displayName,
-            targetGroupWindowCount: group?.windows.count,
+            targetGroupWindowCount: group?.managedWindowCount,
             targetActiveTabID: group?.activeWindow?.id,
             targetActiveTabTitle: group?.activeWindow?.displayTitle,
             appCatalog: appCatalog,
@@ -311,11 +311,23 @@ extension AppDelegate {
             guard case .addToGroup(let targetGroupID, _) = context.mode,
                   let targetGroup = groupManager.groups.first(where: { $0.id == targetGroupID }),
                   let panel = tabBarPanels[targetGroupID],
-                  !targetGroup.windows.isEmpty else {
+                  targetGroup.managedWindowCount > 0 else {
                 completion(.failed(status: "Tab is no longer available"))
                 return
             }
             releaseTab(at: targetGroup.activeIndex, from: targetGroup, panel: panel)
+            if let actionID = action.historyKey {
+                launcherHistoryStore.recordActionUsage(actionID: actionID, outcome: .succeeded)
+            }
+            completion(.succeeded)
+
+        case .insertSeparatorTab:
+            guard case .addToGroup(let targetGroupID, _) = context.mode,
+                  let targetGroup = groupManager.groups.first(where: { $0.id == targetGroupID }) else {
+                completion(.failed(status: "Group is no longer available"))
+                return
+            }
+            insertSeparatorTab(into: targetGroup, at: insertAt)
             if let actionID = action.historyKey {
                 launcherHistoryStore.recordActionUsage(actionID: actionID, outcome: .succeeded)
             }
@@ -340,7 +352,7 @@ extension AppDelegate {
                 completion(.failed(status: "Group is no longer available"))
                 return
             }
-            closeTabs(withIDs: Set(targetGroup.windows.map(\.id)), from: targetGroup, panel: panel)
+            closeTabs(withIDs: Set(targetGroup.managedWindows.map(\.id)), from: targetGroup, panel: panel)
             if let actionID = action.historyKey {
                 launcherHistoryStore.recordActionUsage(actionID: actionID, outcome: .succeeded)
             }
@@ -539,7 +551,7 @@ extension AppDelegate {
 
         tabBarPanels[group.id] = panel
 
-        for window in group.windows {
+        for window in group.managedWindows {
             windowObserver.observe(window: window)
         }
 
@@ -650,6 +662,16 @@ extension AppDelegate {
 
     func releaseTab(at index: Int, from group: TabGroup, panel: TabBarPanel) {
         guard let window = group.windows[safe: index] else { return }
+        if window.isSeparator {
+            groupManager.releaseWindow(withID: window.id, from: group)
+            if !groupManager.groups.contains(where: { $0.id == group.id }) {
+                handleGroupDissolution(group: group, panel: panel)
+            } else if let newActive = group.activeWindow {
+                panel.orderAbove(windowID: newActive.id)
+            }
+            evaluateAutoCapture()
+            return
+        }
         suppressAutoJoin(windowIDs: [window.id])
 
         windowObserver.stopObserving(window: window)
@@ -683,6 +705,16 @@ extension AppDelegate {
 
     func closeTab(at index: Int, from group: TabGroup, panel: TabBarPanel) {
         guard let window = group.windows[safe: index] else { return }
+        if window.isSeparator {
+            groupManager.releaseWindow(withID: window.id, from: group)
+            if !groupManager.groups.contains(where: { $0.id == group.id }) {
+                handleGroupDissolution(group: group, panel: panel)
+            } else if let newActive = group.activeWindow {
+                panel.orderAbove(windowID: newActive.id)
+            }
+            evaluateAutoCapture()
+            return
+        }
 
         windowObserver.stopObserving(window: window)
         expectedFrames.removeValue(forKey: window.id)
@@ -699,6 +731,10 @@ extension AppDelegate {
     }
 
     func addWindow(_ window: WindowInfo, to group: TabGroup, afterActive: Bool = false, at explicitIndex: Int? = nil) {
+        guard !window.isSeparator else {
+            insertSeparatorTab(into: group, at: explicitIndex)
+            return
+        }
         if group.spaceID != 0,
            let windowSpace = SpaceUtils.spaceID(for: window.id),
            windowSpace != group.spaceID {
@@ -726,6 +762,13 @@ extension AppDelegate {
         evaluateAutoCapture()
     }
 
+    func insertSeparatorTab(into group: TabGroup, at explicitIndex: Int? = nil) {
+        let insertionIndex = explicitIndex ?? min(group.activeIndex + 1, group.windows.count)
+        let separatorID = group.addSeparator(at: insertionIndex)
+        groupManager.objectWillChange.send()
+        Logger.log("[TAB] inserted separator \(separatorID) in group \(group.id) at index \(insertionIndex)")
+    }
+
     func handleGroupDissolution(group: TabGroup, panel: TabBarPanel) {
         if barDraggingGroupID == group.id { barDraggingGroupID = nil }
         if autoCaptureGroup === group { deactivateAutoCapture() }
@@ -736,9 +779,9 @@ extension AppDelegate {
         if cyclingGroup === group { cyclingGroup = nil }
         resyncWorkItems[group.id]?.cancel()
         resyncWorkItems.removeValue(forKey: group.id)
-        for window in group.windows { expectedFrames.removeValue(forKey: window.id) }
+        for window in group.managedWindows { expectedFrames.removeValue(forKey: window.id) }
 
-        if let lastWindow = group.windows.first {
+        if let lastWindow = group.managedWindows.first {
             windowObserver.stopObserving(window: lastWindow)
             if !lastWindow.isFullscreened, group.tabBarSqueezeDelta > 0,
                let lastFrame = AccessibilityHelper.getFrame(of: lastWindow.element) {
@@ -752,7 +795,7 @@ extension AppDelegate {
 
     func disbandGroup(_ group: TabGroup) {
         guard let panel = tabBarPanels[group.id] else { return }
-        suppressAutoJoin(windowIDs: group.windows.map(\.id))
+        suppressAutoJoin(windowIDs: group.managedWindows.map(\.id))
 
         if barDraggingGroupID == group.id { barDraggingGroupID = nil }
         if autoCaptureGroup === group { deactivateAutoCapture() }
@@ -763,9 +806,9 @@ extension AppDelegate {
         if cyclingGroup === group { cyclingGroup = nil }
         resyncWorkItems[group.id]?.cancel()
         resyncWorkItems.removeValue(forKey: group.id)
-        for window in group.windows { expectedFrames.removeValue(forKey: window.id) }
+        for window in group.managedWindows { expectedFrames.removeValue(forKey: window.id) }
 
-        for window in group.windows {
+        for window in group.managedWindows {
             windowObserver.stopObserving(window: window)
             if !window.isFullscreened, group.tabBarSqueezeDelta > 0,
                let frame = AccessibilityHelper.getFrame(of: window.element) {
@@ -792,7 +835,7 @@ extension AppDelegate {
         resyncWorkItems[group.id]?.cancel()
         resyncWorkItems.removeValue(forKey: group.id)
 
-        for window in group.windows {
+        for window in group.managedWindows {
             windowObserver.stopObserving(window: window)
             expectedFrames.removeValue(forKey: window.id)
             AccessibilityHelper.closeWindow(window.element)
@@ -828,7 +871,7 @@ extension AppDelegate {
     /// Keeps the cache in sync by pruning stale IDs that are no longer in the group.
     func multiSelectedTabIDsForHotkey(in group: TabGroup) -> Set<CGWindowID>? {
         guard let selected = selectedTabIDsByGroupID[group.id] else { return nil }
-        let valid = selected.intersection(Set(group.windows.map(\.id)))
+        let valid = selected.intersection(Set(group.managedWindows.map(\.id)))
         selectedTabIDsByGroupID[group.id] = valid
         return valid.count > 1 ? valid : nil
     }
@@ -839,7 +882,7 @@ extension AppDelegate {
             Logger.log("[SPACE] Rejected merge: source space \(source.spaceID) != target space \(target.spaceID)")
             return
         }
-        let windowsToMerge = source.windows
+        let windowsToMerge = source.managedWindows
         guard !windowsToMerge.isEmpty else { return }
 
         // Stop observing source windows (they'll be re-observed under target)
@@ -929,9 +972,12 @@ extension AppDelegate {
 
     func handleHotkeySwitchToTab(_ index: Int) {
         guard let (group, panel) = activeGroup(),
-              index >= 0, !group.windows.isEmpty else { return }
-        let targetIndex = (index == 8) ? group.windows.count - 1 : index
-        guard targetIndex < group.windows.count else { return }
+              index >= 0 else { return }
+        let windows = group.managedWindows
+        guard !windows.isEmpty else { return }
+        let targetWindow = (index == 8) ? windows.last : windows[safe: index]
+        guard let targetWindow,
+              let targetIndex = group.windows.firstIndex(where: { $0.id == targetWindow.id }) else { return }
         switchTab(in: group, to: targetIndex, panel: panel)
     }
 
@@ -1095,7 +1141,6 @@ extension AppDelegate {
 
             guard NSMouseInRect(mouseLocation, hitRect, false) else { continue }
 
-            let tabCount = group.windows.count
             let panelWidth = panel.frame.width
             let showHandle = tabBarConfig.showDragHandle
             let leadingPad: CGFloat = showHandle ? 4 : 2
@@ -1103,11 +1148,9 @@ extension AppDelegate {
             let handleWidth: CGFloat = showHandle ? TabBarView.dragHandleWidth : 0
             let groupNameWidth = TabBarView.groupNameReservedWidth(for: group.name)
             let availableWidth = panelWidth - leadingPad - trailingPad - TabBarView.addButtonWidth - handleWidth - groupNameWidth
-            let pinnedCount = group.pinnedCount
-            let widths = TabBarView.tabWidths(
+            let layout = TabBarView.tabWidthLayout(
                 availableWidth: availableWidth,
-                tabCount: tabCount,
-                pinnedCount: pinnedCount,
+                tabs: group.windows,
                 style: tabBarConfig.style
             )
 
@@ -1115,13 +1158,7 @@ extension AppDelegate {
             let localX = mouseLocation.x - panel.frame.origin.x
             let tabContentStartX = leadingPad + handleWidth + groupNameWidth
             let localTabX = localX - tabContentStartX
-            let insertionIndex = TabBarView.insertionIndexForPoint(
-                localTabX: localTabX,
-                tabCount: tabCount,
-                pinnedCount: pinnedCount,
-                pinnedWidth: widths.pinned,
-                unpinnedWidth: widths.unpinned
-            )
+            let insertionIndex = TabBarView.insertionIndexForPoint(localTabX: localTabX, tabWidths: layout.widths)
 
             return CrossPanelDropTarget(groupID: groupID, insertionIndex: insertionIndex)
         }
@@ -1152,7 +1189,7 @@ extension AppDelegate {
         at insertionIndex: Int
     ) {
         guard let targetGroup = groupManager.groups.first(where: { $0.id == targetGroupID }),
-              let targetPanel = tabBarPanels[targetGroupID] else { return }
+              tabBarPanels[targetGroupID] != nil else { return }
 
         if targetGroup.spaceID != 0, sourceGroup.spaceID != 0, targetGroup.spaceID != sourceGroup.spaceID {
             Logger.log("[SPACE] Rejected cross-panel drop: source space \(sourceGroup.spaceID) != target space \(targetGroup.spaceID)")
@@ -1162,7 +1199,7 @@ extension AppDelegate {
         Logger.log("[DRAG] Cross-panel drop: \(ids) from group \(sourceGroup.id) to group \(targetGroupID) at index \(insertionIndex)")
         targetGroup.dropIndicatorIndex = nil
 
-        let windowsToMove = sourceGroup.windows.filter { ids.contains($0.id) }
+        let windowsToMove = sourceGroup.managedWindows.filter { ids.contains($0.id) }
         guard !windowsToMove.isEmpty else { return }
 
         // Stop observing source windows (they'll be re-observed under target)
@@ -1209,7 +1246,8 @@ extension AppDelegate {
 
     func releaseTabs(withIDs ids: Set<CGWindowID>, from group: TabGroup, panel: TabBarPanel) {
         // Capture windows before removal so we can raise one afterward
-        let releasedWindows = group.windows.filter { ids.contains($0.id) }
+        let releasedWindows = group.managedWindows.filter { ids.contains($0.id) }
+        let separatorIDs = Set(group.windows.filter { ids.contains($0.id) && $0.isSeparator }.map(\.id))
         suppressAutoJoin(windowIDs: releasedWindows.map(\.id))
 
         for window in releasedWindows {
@@ -1229,7 +1267,7 @@ extension AppDelegate {
             }
         }
 
-        groupManager.releaseWindows(withIDs: ids, from: group)
+        groupManager.releaseWindows(withIDs: Set(releasedWindows.map(\.id)).union(separatorIDs), from: group)
 
         // Raise the first released window so it becomes focused
         if let first = releasedWindows.first {
@@ -1245,7 +1283,7 @@ extension AppDelegate {
     }
 
     func moveTabsToNewGroup(withIDs ids: Set<CGWindowID>, from group: TabGroup, panel: TabBarPanel) {
-        let windowsToMove = group.windows.filter { ids.contains($0.id) }
+        let windowsToMove = group.managedWindows.filter { ids.contains($0.id) }
         guard !windowsToMove.isEmpty else { return }
 
         let frame = group.frame
@@ -1271,14 +1309,17 @@ extension AppDelegate {
     }
 
     func closeTabs(withIDs ids: Set<CGWindowID>, from group: TabGroup, panel: TabBarPanel) {
+        let separatorIDs = Set(group.windows.filter { ids.contains($0.id) && $0.isSeparator }.map(\.id))
         for id in ids {
-            guard let window = group.windows.first(where: { $0.id == id }) else { continue }
+            guard let window = group.windows.first(where: { $0.id == id }),
+                  !window.isSeparator else { continue }
             windowObserver.stopObserving(window: window)
             expectedFrames.removeValue(forKey: window.id)
             AccessibilityHelper.closeWindow(window.element)
         }
 
-        groupManager.releaseWindows(withIDs: ids, from: group)
+        let realWindowIDs = Set(group.managedWindows.filter { ids.contains($0.id) }.map(\.id))
+        groupManager.releaseWindows(withIDs: realWindowIDs.union(separatorIDs), from: group)
 
         if !groupManager.groups.contains(where: { $0.id == group.id }) {
             handleGroupDissolution(group: group, panel: panel)
@@ -1294,7 +1335,7 @@ extension AppDelegate {
         Logger.log("[DEBUG] handleAppTerminated: app=\(app.localizedName ?? "?") pid=\(pid)")
 
         for group in groupManager.groups {
-            let affectedWindows = group.windows.filter { $0.ownerPID == pid }
+            let affectedWindows = group.managedWindows.filter { $0.ownerPID == pid }
             guard !affectedWindows.isEmpty else { continue }
             for window in affectedWindows {
                 mruTracker.removeWindow(window.id)
@@ -1304,7 +1345,7 @@ extension AppDelegate {
             }
             if !groupManager.groups.contains(where: { $0.id == group.id }),
                let panel = tabBarPanels[group.id] {
-                if let survivor = group.windows.first, survivor.ownerPID != pid {
+                if let survivor = group.managedWindows.first, survivor.ownerPID != pid {
                     handleGroupDissolution(group: group, panel: panel)
                 } else {
                     // All windows belonged to the terminated app — no survivor

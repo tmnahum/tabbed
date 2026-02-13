@@ -15,6 +15,20 @@ struct WindowInfo: Identifiable, Equatable {
     var cgBounds: CGRect?
     var isFullscreened: Bool = false
     var isPinned: Bool = false
+    var isSeparator: Bool = false
+
+    static func separator(withID id: CGWindowID) -> WindowInfo {
+        WindowInfo(
+            id: id,
+            element: AXUIElementCreateApplication(ProcessInfo.processInfo.processIdentifier),
+            ownerPID: ProcessInfo.processInfo.processIdentifier,
+            bundleID: "dev.tabbed.separator",
+            title: "Separator",
+            appName: "Separator",
+            icon: nil,
+            isSeparator: true
+        )
+    }
 
     var displayedCustomTabName: String? {
         guard let customTabName else { return nil }
@@ -23,10 +37,14 @@ struct WindowInfo: Identifiable, Equatable {
     }
 
     var displayTitle: String {
-        displayedCustomTabName ?? (title.isEmpty ? appName : title)
+        if isSeparator { return "" }
+        return displayedCustomTabName ?? (title.isEmpty ? appName : title)
     }
 
     static func == (lhs: WindowInfo, rhs: WindowInfo) -> Bool {
-        lhs.id == rhs.id && lhs.isFullscreened == rhs.isFullscreened && lhs.isPinned == rhs.isPinned
+        lhs.id == rhs.id &&
+            lhs.isFullscreened == rhs.isFullscreened &&
+            lhs.isPinned == rhs.isPinned &&
+            lhs.isSeparator == rhs.isSeparator
     }
 }
