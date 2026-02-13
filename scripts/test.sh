@@ -13,7 +13,7 @@ if [ -z "$DEVELOPMENT_TEAM" ]; then
   exit 1
 fi
 
-OUTPUT=$(xcodegen generate 2>&1 && \
+OUTPUT=$(xcodegen generate --use-cache --quiet 2>&1 && \
   xcodebuild -project Tabbed.xcodeproj -scheme TabbedTests -derivedDataPath build \
     DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
     -allowProvisioningUpdates \

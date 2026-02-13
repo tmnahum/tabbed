@@ -42,4 +42,21 @@ final class SessionRestoreDiagnosticsTests: XCTestCase {
         let disabledEnv = [SessionRestoreDiagnostics.environmentKey: "false"]
         XCTAssertFalse(SessionRestoreDiagnostics.isEnabled(userDefaults: defaults, environment: disabledEnv))
     }
+
+    func testIsEnabledDefaultsToTrueWhenUnset() {
+        let suiteName = "SessionRestoreDiagnosticsTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+
+        XCTAssertTrue(SessionRestoreDiagnostics.isEnabled(userDefaults: defaults, environment: [:]))
+    }
+
+    func testIsEnabledCanBeDisabledViaUserDefaults() {
+        let suiteName = "SessionRestoreDiagnosticsTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        defaults.set(false, forKey: SessionRestoreDiagnostics.userDefaultsKey)
+
+        XCTAssertFalse(SessionRestoreDiagnostics.isEnabled(userDefaults: defaults, environment: [:]))
+    }
 }

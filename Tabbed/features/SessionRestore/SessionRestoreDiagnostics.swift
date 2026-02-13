@@ -12,6 +12,9 @@ enum SessionRestoreDiagnostics {
            let parsed = parseBool(value) {
             return parsed
         }
+        guard userDefaults.object(forKey: userDefaultsKey) != nil else {
+            return true
+        }
         return userDefaults.bool(forKey: userDefaultsKey)
     }
 

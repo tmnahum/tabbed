@@ -14,6 +14,10 @@ Future/Maybe:
     - limitation: pretty much unfeasable to be able to switch what space a window is in
 - maybe: tab groups
 
+- maybe replace ghost tabs display with fullscreen icon
+
+- buggish: launching new window from alt tab eg firefox first focuses any existing window then launches, which also puts the tab after the ff tab instead of after the one you launched from
+
 
 
 
