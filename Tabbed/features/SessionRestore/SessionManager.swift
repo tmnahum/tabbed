@@ -3,6 +3,12 @@ import CoreGraphics
 
 enum SessionManager {
     private static let userDefaultsKey = "savedSession"
+    private static let bundleAndTitleSeparator = "\u{1f}"
+
+    struct LiveWindowIndex {
+        let windowByID: [CGWindowID: WindowInfo]
+        let windowsByBundleAndTitle: [String: [WindowInfo]]
+    }
 
     // MARK: - Save / Load
 
@@ -69,15 +75,35 @@ enum SessionManager {
         snapshot: GroupSnapshot,
         liveWindows: [WindowInfo],
         alreadyClaimed: Set<CGWindowID>,
-        mode: RestoreMode
+        mode: RestoreMode,
+        diagnosticsEnabled: Bool = SessionRestoreDiagnostics.isEnabled()
+    ) -> [WindowInfo]? {
+        matchGroup(
+            snapshot: snapshot,
+            liveWindowIndex: makeLiveWindowIndex(liveWindows: liveWindows),
+            alreadyClaimed: alreadyClaimed,
+            mode: mode,
+            diagnosticsEnabled: diagnosticsEnabled
+        )
+    }
+
+    static func matchGroup(
+        snapshot: GroupSnapshot,
+        liveWindowIndex: LiveWindowIndex,
+        alreadyClaimed: Set<CGWindowID>,
+        mode: RestoreMode,
+        diagnosticsEnabled: Bool = SessionRestoreDiagnostics.isEnabled()
     ) -> [WindowInfo]? {
         var claimed = alreadyClaimed
         var matched: [WindowInfo] = []
 
         for snap in snapshot.windows {
             // 1. Exact CGWindowID match — window still exists
-            if let byID = liveWindows.first(where: { $0.id == snap.windowID && !claimed.contains($0.id) }) {
-                Logger.log("[SessionMatch] ✓ wid match: \(snap.appName)(\(snap.windowID))")
+            if let byID = liveWindowIndex.windowByID[snap.windowID],
+               !claimed.contains(byID.id) {
+                if diagnosticsEnabled {
+                    Logger.log("[SessionMatch] ✓ wid match: \(snap.appName)(\(snap.windowID))")
+                }
                 var matchedWindow = byID
                 matchedWindow.isPinned = snap.isPinned
                 matchedWindow.customTabName = snap.customTabName
@@ -87,10 +113,13 @@ enum SessionManager {
             }
 
             // 2. Fallback: bundleID + title (app restarted, window has same title)
-            if let byTitle = liveWindows.first(where: {
-                !claimed.contains($0.id) && $0.bundleID == snap.bundleID && $0.title == snap.title
+            let titleKey = makeBundleAndTitleKey(bundleID: snap.bundleID, title: snap.title)
+            if let byTitle = liveWindowIndex.windowsByBundleAndTitle[titleKey]?.first(where: {
+                !claimed.contains($0.id)
             }) {
-                Logger.log("[SessionMatch] ✓ title match: \(snap.appName)(\(snap.windowID)) → live(\(byTitle.id))")
+                if diagnosticsEnabled {
+                    Logger.log("[SessionMatch] ✓ title match: \(snap.appName)(\(snap.windowID)) → live(\(byTitle.id))")
+                }
                 var matchedWindow = byTitle
                 matchedWindow.isPinned = snap.isPinned
                 matchedWindow.customTabName = snap.customTabName
@@ -100,16 +129,42 @@ enum SessionManager {
             }
 
             // 3. No match — skip this window.
-            let widInLive = liveWindows.contains { $0.id == snap.windowID }
-            let widClaimed = claimed.contains(snap.windowID)
-            Logger.log("[SessionMatch] ✗ no match: \(snap.appName)(\(snap.windowID)):\"\(snap.title)\" bundle=\(snap.bundleID) | widInLive=\(widInLive) widClaimed=\(widClaimed)")
+            if diagnosticsEnabled {
+                let widInLive = liveWindowIndex.windowByID[snap.windowID] != nil
+                let widClaimed = claimed.contains(snap.windowID)
+                Logger.log("[SessionMatch] ✗ no match: \(snap.appName)(\(snap.windowID)):\"\(snap.title)\" bundle=\(snap.bundleID) | widInLive=\(widInLive) widClaimed=\(widClaimed)")
+            }
             // Smart mode: ALL windows must be present, so fail the whole group.
             if mode == .smart {
-                Logger.log("[SessionMatch] → smart mode: rejecting entire group")
+                if diagnosticsEnabled {
+                    Logger.log("[SessionMatch] → smart mode: rejecting entire group")
+                }
                 return nil
             }
         }
 
         return matched.isEmpty ? nil : matched
+    }
+
+    static func makeLiveWindowIndex(liveWindows: [WindowInfo]) -> LiveWindowIndex {
+        var windowByID: [CGWindowID: WindowInfo] = [:]
+        var windowsByBundleAndTitle: [String: [WindowInfo]] = [:]
+        windowByID.reserveCapacity(liveWindows.count)
+        windowsByBundleAndTitle.reserveCapacity(liveWindows.count)
+
+        for window in liveWindows {
+            windowByID[window.id] = window
+            let key = makeBundleAndTitleKey(bundleID: window.bundleID, title: window.title)
+            windowsByBundleAndTitle[key, default: []].append(window)
+        }
+
+        return LiveWindowIndex(
+            windowByID: windowByID,
+            windowsByBundleAndTitle: windowsByBundleAndTitle
+        )
+    }
+
+    private static func makeBundleAndTitleKey(bundleID: String, title: String) -> String {
+        "\(bundleID)\(bundleAndTitleSeparator)\(title)"
     }
 }

@@ -3,16 +3,53 @@ import AppKit
 // MARK: - Session Restore
 
 extension AppDelegate {
+    private static let launchRestoreRetryDelay: TimeInterval = 0.2
+    private static let launchRestoreMaxAttempts = 15
 
-    func restoreSession(snapshots: [GroupSnapshot], mode: RestoreMode) {
-        let liveWindows = WindowDiscovery.allSpaces().filter {
-            !groupManager.isWindowGrouped($0.id)
+    func restoreSessionOnLaunch(
+        snapshots: [GroupSnapshot],
+        mode: RestoreMode,
+        attempt: Int = 0
+    ) {
+        let inventoryWindows = windowInventory.allSpacesForSwitcher()
+
+        if !windowInventory.hasCompletedRefresh {
+            if attempt < Self.launchRestoreMaxAttempts {
+                DispatchQueue.main.asyncAfter(deadline: .now() + Self.launchRestoreRetryDelay) { [weak self] in
+                    self?.restoreSessionOnLaunch(
+                        snapshots: snapshots,
+                        mode: mode,
+                        attempt: attempt + 1
+                    )
+                }
+                return
+            }
+            Logger.log("[SessionRestore] launch restore inventory timeout; falling back to sync discovery")
+            restoreSession(snapshots: snapshots, mode: mode)
+            return
         }
 
+        restoreSession(snapshots: snapshots, mode: mode, preloadedLiveWindows: inventoryWindows)
+    }
+
+    func restoreSession(
+        snapshots: [GroupSnapshot],
+        mode: RestoreMode,
+        preloadedLiveWindows: [WindowInfo]? = nil
+    ) {
+        let diagnosticsEnabled = SessionRestoreDiagnostics.isEnabled()
+        let discovered = preloadedLiveWindows ?? WindowDiscovery.allSpaces()
+        let liveWindows = discovered.filter {
+            !groupManager.isWindowGrouped($0.id)
+        }
+        let liveWindowIndex = SessionManager.makeLiveWindowIndex(liveWindows: liveWindows)
+
         Logger.log("[SessionRestore] mode=\(mode) snapshots=\(snapshots.count) liveWindows=\(liveWindows.count)")
-        for (i, snap) in snapshots.enumerated() {
-            let descs = snap.windows.map { "\($0.appName)(\($0.windowID)):\"\($0.title)\"" }
-            Logger.log("[SessionRestore] snapshot[\(i)]: \(descs.joined(separator: ", "))")
+        if diagnosticsEnabled {
+            for (i, snap) in snapshots.enumerated() {
+                let descs = snap.windows.map { "\($0.appName)(\($0.windowID)):\"\($0.title)\"" }
+                Logger.log("[SessionRestore] snapshot[\(i)]: \(descs.joined(separator: ", "))")
+            }
         }
 
         // Diagnostic: check CG window list for all saved window IDs
@@ -20,21 +57,25 @@ extension AppDelegate {
         let liveIDs = Set(liveWindows.map { $0.id })
         let missingFromLive = savedIDs.subtracting(liveIDs)
         if !missingFromLive.isEmpty {
-            Logger.log("[SessionRestore] ⚠ \(missingFromLive.count) saved windows missing from liveWindows: \(missingFromLive.sorted())")
-            // Check raw CG list to see if these windows exist at the CG level
-            let cgList = CGWindowListCopyWindowInfo([.excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
-            for wid in missingFromLive.sorted() {
-                if let info = cgList.first(where: { ($0[kCGWindowNumber as String] as? CGWindowID) == wid }) {
-                    let layer = info[kCGWindowLayer as String] as? Int ?? -999
-                    let owner = info[kCGWindowOwnerName as String] as? String ?? "?"
-                    let pid = info[kCGWindowOwnerPID as String] as? pid_t ?? 0
-                    var bounds = CGRect.zero
-                    if let bd = info[kCGWindowBounds as String] as? NSDictionary as CFDictionary? {
-                        CGRectMakeWithDictionaryRepresentation(bd, &bounds)
+            let missingIDs = missingFromLive.sorted()
+            Logger.log("[SessionRestore] ⚠ \(missingFromLive.count) saved windows missing from liveWindows: \(missingIDs)")
+            if diagnosticsEnabled {
+                // Check raw CG list to see if these windows exist at the CG level.
+                // This can be expensive, so keep it behind an explicit diagnostics flag.
+                let cgList = CGWindowListCopyWindowInfo([.excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+                for wid in missingIDs {
+                    if let info = cgList.first(where: { ($0[kCGWindowNumber as String] as? CGWindowID) == wid }) {
+                        let layer = info[kCGWindowLayer as String] as? Int ?? -999
+                        let owner = info[kCGWindowOwnerName as String] as? String ?? "?"
+                        let pid = info[kCGWindowOwnerPID as String] as? pid_t ?? 0
+                        var bounds = CGRect.zero
+                        if let bd = info[kCGWindowBounds as String] as? NSDictionary as CFDictionary? {
+                            CGRectMakeWithDictionaryRepresentation(bd, &bounds)
+                        }
+                        Logger.log("[SessionRestore] CG has wid=\(wid): owner=\(owner) pid=\(pid) layer=\(layer) bounds=\(bounds)")
+                    } else {
+                        Logger.log("[SessionRestore] CG does NOT have wid=\(wid)")
                     }
-                    Logger.log("[SessionRestore] CG has wid=\(wid): owner=\(owner) pid=\(pid) layer=\(layer) bounds=\(bounds)")
-                } else {
-                    Logger.log("[SessionRestore] CG does NOT have wid=\(wid)")
                 }
             }
         }
@@ -44,9 +85,10 @@ extension AppDelegate {
         for (snapshotIndex, snapshot) in snapshots.enumerated() {
             guard let matchedWindows = SessionManager.matchGroup(
                 snapshot: snapshot,
-                liveWindows: liveWindows,
+                liveWindowIndex: liveWindowIndex,
                 alreadyClaimed: claimed,
-                mode: mode
+                mode: mode,
+                diagnosticsEnabled: diagnosticsEnabled
             ) else {
                 Logger.log("[SessionRestore] snapshot[\(snapshotIndex)] FAILED — skipped")
                 continue

@@ -200,7 +200,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             if sessionConfig.restoreMode == .smart || sessionConfig.restoreMode == .always {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                     guard let self else { return }
-                    self.restoreSession(snapshots: snapshots, mode: sessionConfig.restoreMode)
+                    self.restoreSessionOnLaunch(
+                        snapshots: snapshots,
+                        mode: sessionConfig.restoreMode
+                    )
                     if sessionConfig.restoreMode == .smart,
                        self.groupManager.groups.count < snapshots.count {
                         self.pendingSessionSnapshots = snapshots

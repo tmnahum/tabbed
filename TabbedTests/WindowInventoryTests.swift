@@ -90,4 +90,15 @@ final class WindowInventoryTests: XCTestCase {
         XCTAssertEqual(discoverCalls, 2)
         XCTAssertEqual(inventory.cachedAllSpacesWindows.map(\.id), [2])
     }
+
+    func testHasCompletedRefreshFlipsAfterRefresh() {
+        let inventory = WindowInventory(
+            staleAfter: 60,
+            discoverAllSpaces: { [self.makeWindow(id: 1)] }
+        )
+
+        XCTAssertFalse(inventory.hasCompletedRefresh)
+        inventory.refreshSync()
+        XCTAssertTrue(inventory.hasCompletedRefresh)
+    }
 }

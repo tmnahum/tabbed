@@ -13,6 +13,7 @@ final class WindowInventory {
     private(set) var cachedAllSpacesWindows: [WindowInfo] = []
     private(set) var lastRefreshAt: Date?
     private var refreshInFlight = false
+    var hasCompletedRefresh: Bool { lastRefreshAt != nil }
 
     init(
         staleAfter: TimeInterval = 0.75,

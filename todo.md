@@ -1,4 +1,9 @@
 
+
+- tests
+
+
+
 - improve window size/position syncing, 
 - clean up / simplify code
 
