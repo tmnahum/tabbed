@@ -257,4 +257,28 @@ final class MRUTrackerTests: XCTestCase {
         XCTAssertEqual(items[0].windowIDs, [81])
         XCTAssertEqual(items[1].windowIDs, [72])
     }
+
+    func testRecordActivationPrunesEntriesToMax() {
+        let tracker = MRUTracker()
+
+        for index in 0..<1_100 {
+            tracker.recordActivation(.window(CGWindowID(index)))
+        }
+
+        XCTAssertEqual(tracker.entries.count, 1_024)
+        XCTAssertEqual(tracker.entries.first, .window(1_099))
+        XCTAssertEqual(tracker.entries.last, .window(76))
+    }
+
+    func testAppendIfMissingPrunesEntriesToMax() {
+        let tracker = MRUTracker()
+
+        for index in 0..<1_100 {
+            tracker.appendIfMissing(.window(CGWindowID(index)))
+        }
+
+        XCTAssertEqual(tracker.entries.count, 1_024)
+        XCTAssertEqual(tracker.entries.first, .window(0))
+        XCTAssertEqual(tracker.entries.last, .window(1_023))
+    }
 }

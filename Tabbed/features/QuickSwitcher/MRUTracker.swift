@@ -10,6 +10,7 @@ enum MRUEntry: Equatable {
 
 /// Tracks global most-recently-used entities and builds ordered switcher items.
 final class MRUTracker {
+    private static let maxEntries = 1024
     private(set) var entries: [MRUEntry] = []
 
     var count: Int { entries.count }
@@ -17,15 +18,22 @@ final class MRUTracker {
     func recordActivation(_ entry: MRUEntry) {
         remove(entry)
         entries.insert(entry, at: 0)
+        pruneIfNeeded()
     }
 
     func appendIfMissing(_ entry: MRUEntry) {
         guard !entries.contains(entry) else { return }
         entries.append(entry)
+        pruneIfNeeded()
     }
 
     func remove(_ entry: MRUEntry) {
         entries.removeAll { $0 == entry }
+    }
+
+    private func pruneIfNeeded() {
+        guard entries.count > Self.maxEntries else { return }
+        entries.removeSubrange(Self.maxEntries...)
     }
 
     func removeWindow(_ windowID: CGWindowID) {
