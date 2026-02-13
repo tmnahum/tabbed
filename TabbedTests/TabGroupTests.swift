@@ -128,6 +128,17 @@ final class TabGroupTests: XCTestCase {
         XCTAssertEqual(group.managedWindows.map(\.id), [1, 2])
     }
 
+    func testAddSeparatorAfterPinnedTabInsertsAtPinnedBoundary() {
+        var pinned = makeWindow(id: 1)
+        pinned.isPinned = true
+        let group = TabGroup(windows: [pinned, makeWindow(id: 2), makeWindow(id: 3)], frame: .zero)
+
+        let separatorID = group.addSeparator(at: 1)
+
+        XCTAssertEqual(group.windows.map(\.id), [1, separatorID, 2, 3])
+        XCTAssertEqual(group.managedWindows.map(\.id), [1, 2, 3])
+    }
+
     func testRemoveWindow() {
         let group = TabGroup(windows: [makeWindow(id: 1), makeWindow(id: 2)], frame: .zero)
         let removed = group.removeWindow(withID: 1)

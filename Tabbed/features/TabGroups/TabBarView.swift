@@ -18,6 +18,7 @@ struct TabBarView: View {
     var onCloseTab: (Int) -> Void
     var onAddWindow: () -> Void
     var onAddWindowAfterTab: (Int) -> Void
+    var onAddSeparatorAfterTab: (Int) -> Void
     var onBeginTabNameEdit: () -> Void
     var onCommitTabName: (CGWindowID, String?) -> Void
     var onBeginGroupNameEdit: () -> Void
@@ -1009,6 +1010,9 @@ struct TabBarView: View {
                 Button("New Tab to the Right") {
                     onAddWindowAfterTab(index)
                 }
+                Button("Add Separator to the Right") {
+                    onAddSeparatorAfterTab(index)
+                }
                 Divider()
                 Button("Remove Separator") {
                     onCloseTab(index)
@@ -1019,6 +1023,9 @@ struct TabBarView: View {
                 let allPinned = !targetWindows.isEmpty && targetWindows.allSatisfy(\.isPinned)
                 Button("New Tab to the Right") {
                     onAddWindowAfterTab(index)
+                }
+                Button("Add Separator to the Right") {
+                    onAddSeparatorAfterTab(index)
                 }
                 Button(window.displayedCustomTabName == nil ? "Name Tab…" : "Rename Tab…") {
                     selectedIDs = []

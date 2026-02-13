@@ -493,6 +493,9 @@ extension AppDelegate {
             onAddWindowAfterTab: { [weak self] index in
                 self?.showWindowPicker(addingTo: group, insertAt: index + 1)
             },
+            onAddSeparatorAfterTab: { index in
+                _ = group.addSeparator(at: index + 1)
+            },
             onBeginTabNameEdit: { [weak self, weak panel] in
                 guard let self, let panel else { return }
                 self.preparePanelForInlineGroupNameEdit(panel, group: group)
