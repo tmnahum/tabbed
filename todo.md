@@ -1,4 +1,11 @@
 
+- hyper t autojoin should work 
+
+- if window confirms delete wait until that happens to remove from tab
+
+- two instances of preview focusing between them wrong window stays on top...
+
+
 - allow autogroup 1 window in never group mode
 
 - improve dragging
