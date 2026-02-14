@@ -64,10 +64,16 @@ final class CGWindowFilterTests: XCTestCase {
         ))
     }
 
-    func testNoTitleLargeBoundsOffScreenIsNotPlausible() {
-        // No title, off-screen — likely a rendering surface on another space
+    func testNoTitleWindowSizedBoundsOffScreenIsPlausible() {
+        // Off-space windows are often untitled and report off-screen on the active Space.
+        XCTAssertTrue(WindowDiscriminator.isPlausibleCGWindow(
+            meta(bounds: CGRect(x: 120, y: 80, width: 900, height: 700), isOnscreen: false)
+        ))
+    }
+
+    func testNoTitleSmallBoundsOffScreenIsNotPlausible() {
         XCTAssertFalse(WindowDiscriminator.isPlausibleCGWindow(
-            meta(bounds: CGRect(x: 0, y: 0, width: 1440, height: 900), isOnscreen: false)
+            meta(bounds: CGRect(x: 0, y: 0, width: 80, height: 80), isOnscreen: false)
         ))
     }
 
@@ -86,11 +92,10 @@ final class CGWindowFilterTests: XCTestCase {
         ))
     }
 
-    func testGameRenderingSurface() {
-        // Typical game pattern: no title, full-screen bounds, off-screen, visible alpha.
-        // This is what Balatro's extra CG windows look like.
+    func testOffScreenMenuBarStripIsNotPlausible() {
+        // Typical non-window surface: untitled, thin menu-bar-sized strip.
         XCTAssertFalse(WindowDiscriminator.isPlausibleCGWindow(
-            meta(bounds: CGRect(x: 0, y: 0, width: 1440, height: 900), isOnscreen: false)
+            meta(bounds: CGRect(x: 0, y: 0, width: 1440, height: 24), isOnscreen: false)
         ))
     }
 

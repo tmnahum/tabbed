@@ -217,7 +217,11 @@ enum WindowDiscovery {
                     if !plausibleMissing.isEmpty {
                         let bfStart = CFAbsoluteTimeGetCurrent()
                         let targets = Set(plausibleMissing)
-                        let bruteForce = discoverWindowsByBruteForce(pid: snap.pid, targetWindowIDs: targets)
+                        let bruteForce = discoverWindowsByBruteForce(
+                            pid: snap.pid,
+                            targetWindowIDs: targets,
+                            timeout: 0.2
+                        )
                         bruteForceTime = CFAbsoluteTimeGetCurrent() - bfStart
                         bruteForceFound = bruteForce.count
                         for (element, wid) in bruteForce {

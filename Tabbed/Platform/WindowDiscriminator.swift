@@ -27,6 +27,8 @@ enum WindowDiscriminator {
     /// A CG window is considered a plausible real window if ANY of:
     ///   • It has a non-empty window name (real windows almost always have titles)
     ///   • It has reasonable bounds (≥ 50×50) AND is marked on-screen
+    ///   • It has window-like bounds (≥ 240×140), even if currently off-screen on
+    ///     this Space (cross-space windows commonly report `isOnscreen = false`)
     ///
     /// AND all of:
     ///   • Its alpha is > 0 (invisible surfaces are never real windows)
@@ -41,7 +43,11 @@ enum WindowDiscriminator {
         // No title but reasonably sized and on-screen — could be a real window
         // (some apps have untitled windows, e.g. splash screens, loading windows)
         if meta.bounds.width >= 50, meta.bounds.height >= 50, meta.isOnscreen { return true }
-        // No title, not on-screen or too small — likely a surface
+        // Off-space windows are often untitled and report not on-screen relative to
+        // the active Space. Require larger "window-like" geometry to avoid menu-bar
+        // strips / tiny utility surfaces while still admitting real off-space windows.
+        if meta.bounds.width >= 240, meta.bounds.height >= 140 { return true }
+        // No title and too small/non-window-like — likely a surface
         return false
     }
 
