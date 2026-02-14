@@ -565,7 +565,8 @@ extension AppDelegate {
         }
 
         if let activeWindow = group.activeWindow {
-            panel.show(above: frame, windowID: activeWindow.id)
+            let maximized = isGroupMaximized(group).0
+            panel.show(above: frame, windowID: activeWindow.id, isMaximized: maximized)
             panel.orderAbove(windowID: activeWindow.id)
             movePanelToWindowSpace(panel, windowID: activeWindow.id)
         }
@@ -595,7 +596,7 @@ extension AppDelegate {
                     }
                 }
             }
-            panel.positionAbove(windowFrame: group.frame)
+            panel.positionAbove(windowFrame: group.frame, isMaximized: self.isGroupMaximized(group).0)
             panel.orderAbove(windowID: activeWindow.id)
             self.movePanelToWindowSpace(panel, windowID: activeWindow.id)
         }
@@ -660,7 +661,7 @@ extension AppDelegate {
             group.frame = CGRect(x: group.frame.origin.x, y: group.frame.origin.y,
                                  width: group.frame.width, height: correctedHeight)
             Logger.log("[DEBUG] switchTab: defensive trim applied, corrected height=\(correctedHeight)")
-            panel.positionAbove(windowFrame: group.frame)
+            panel.positionAbove(windowFrame: group.frame, isMaximized: isGroupMaximized(group).0)
         }
 
         setExpectedFrame(group.frame, for: [window.id])
@@ -1083,7 +1084,7 @@ extension AppDelegate {
             }
         }
 
-        panel.positionAbove(windowFrame: group.frame)
+        panel.positionAbove(windowFrame: group.frame, isMaximized: isGroupMaximized(group).0)
         panel.orderAbove(windowID: activeWindow.id)
         evaluateAutoCapture()
     }
@@ -1121,7 +1122,7 @@ extension AppDelegate {
         for window in group.visibleWindows {
             AccessibilityHelper.setFrame(of: window.element, to: frame)
         }
-        panel.positionAbove(windowFrame: frame)
+        panel.positionAbove(windowFrame: frame, isMaximized: isGroupMaximized(group).0)
         if let activeWindow = group.activeWindow {
             panel.orderAbove(windowID: activeWindow.id)
         }

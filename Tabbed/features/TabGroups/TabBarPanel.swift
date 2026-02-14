@@ -121,8 +121,9 @@ class TabBarPanel: NSPanel {
         visualEffectView.addSubview(hostingView)
     }
 
-    /// Position the panel above the given window frame (in AX/CG coordinates)
-    func positionAbove(windowFrame: CGRect) {
+    /// Position the panel above the given window frame (in AX/CG coordinates).
+    /// When `isMaximized` is true, top corners are not rounded so the bar aligns with the screen edge.
+    func positionAbove(windowFrame: CGRect, isMaximized: Bool = false) {
         let appKitOrigin = CoordinateConverter.axToAppKit(
             point: CGPoint(
                 x: windowFrame.origin.x,
@@ -139,6 +140,8 @@ class TabBarPanel: NSPanel {
             ),
             display: true
         )
+        let radius: CGFloat = isMaximized ? 0 : 8
+        visualEffectView.layer?.cornerRadius = radius
     }
 
     /// Order this panel directly above the specified window
@@ -146,8 +149,8 @@ class TabBarPanel: NSPanel {
         self.order(.above, relativeTo: Int(windowID))
     }
 
-    func show(above windowFrame: CGRect, windowID: CGWindowID) {
-        positionAbove(windowFrame: windowFrame)
+    func show(above windowFrame: CGRect, windowID: CGWindowID, isMaximized: Bool = false) {
+        positionAbove(windowFrame: windowFrame, isMaximized: isMaximized)
         orderFront(nil)
         orderAbove(windowID: windowID)
     }

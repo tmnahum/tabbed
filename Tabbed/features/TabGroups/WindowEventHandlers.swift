@@ -92,7 +92,7 @@ extension AppDelegate {
             AccessibilityHelper.setFrame(of: window.element, to: adjustedFrame)
         }
 
-        panel.positionAbove(windowFrame: adjustedFrame)
+        panel.positionAbove(windowFrame: adjustedFrame, isMaximized: isGroupMaximized(group).0)
         panel.orderAbove(windowID: activeWindow.id)
         evaluateAutoCapture()
     }
@@ -163,7 +163,7 @@ extension AppDelegate {
             AccessibilityHelper.setFrame(of: window.element, to: adjustedFrame)
         }
 
-        panel.positionAbove(windowFrame: adjustedFrame)
+        panel.positionAbove(windowFrame: adjustedFrame, isMaximized: isGroupMaximized(group).0)
         panel.orderAbove(windowID: activeWindow.id)
         evaluateAutoCapture()
 
@@ -204,7 +204,7 @@ extension AppDelegate {
             for window in others {
                 AccessibilityHelper.setFrame(of: window.element, to: clamped)
             }
-            panel.positionAbove(windowFrame: clamped)
+            panel.positionAbove(windowFrame: clamped, isMaximized: self.isGroupMaximized(group).0)
             panel.orderAbove(windowID: activeWindow.id)
             self.evaluateAutoCapture()
         }
@@ -462,8 +462,9 @@ extension AppDelegate {
         lastActiveGroupID = group.id
 
         // Ensure tab bar is visible (it may have been hidden if all were fullscreened)
-        panel.positionAbove(windowFrame: group.frame)
-        panel.show(above: group.frame, windowID: windowID)
+        let maximized = isGroupMaximized(group).0
+        panel.positionAbove(windowFrame: group.frame, isMaximized: maximized)
+        panel.show(above: group.frame, windowID: windowID, isMaximized: maximized)
 
         // Delay frame restoration — macOS fullscreen exit animation takes ~0.7s.
         // Setting the frame immediately fights the animation and looks janky.
