@@ -4,6 +4,7 @@
 - settings should show up in control tab (investigate?)
 
 
+- newly opened windows / launched apps sometimes end up at bottom of MRU instead of top / correct pos
 
 - fullscreen
 

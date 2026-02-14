@@ -113,6 +113,16 @@ final class SwitcherItemTests: XCTestCase {
         XCTAssertEqual(item.displayTitle, "Workspace")
     }
 
+    func testNamedGroupIsAvailableForSplitGroupSegments() {
+        let w1 = makeWindow(id: 605, title: "Pinned", appName: "Finder")
+        let w2 = makeWindow(id: 606, title: "Main", appName: "Finder")
+        let group = TabGroup(windows: [w1, w2], frame: .zero, name: "Workspace")
+        let segmented = SwitcherItem.groupSegment(group, windowIDs: [w2.id])
+
+        XCTAssertNotNil(segmented.namedGroup)
+        XCTAssertEqual(segmented.namedGroup?.displayName, "Workspace")
+    }
+
     func testGroupSegmentUsesOnlySegmentWindows() {
         let w1 = makeWindow(id: 610, title: "Pinned", appName: "Finder")
         let w2 = makeWindow(id: 611, title: "Main", appName: "Finder")

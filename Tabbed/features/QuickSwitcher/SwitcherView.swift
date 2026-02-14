@@ -75,13 +75,24 @@ struct SwitcherView: View {
         return item.appName
     }
 
+    /// Returns the window title for label composition (never a named-group title).
+    private func displayWindowTitle(for item: SwitcherItem, isSelected: Bool) -> String {
+        if isSelected, let subIndex = subSelectedWindowIndex, let window = item.window(at: subIndex) {
+            return window.displayTitle
+        }
+        if case .group(let group) = item {
+            return group.activeWindow?.displayTitle ?? ""
+        }
+        return item.displayTitle
+    }
+
     /// Label shown under app icons. Named groups use the group name by default.
     private func iconLabel(for item: SwitcherItem, isSelected: Bool) -> String {
-        if let group = item.wholeGroup,
+        if let group = item.namedGroup,
            !(isSelected && subSelectedWindowIndex != nil),
            let groupName = group.displayName {
-            let appName = group.activeWindow?.appName ?? ""
-            let windowTitle = group.activeWindow?.displayTitle ?? ""
+            let appName = displayAppName(for: item, isSelected: isSelected)
+            let windowTitle = displayWindowTitle(for: item, isSelected: isSelected)
             return truncatedTitle(
                 SwitcherTextFormatter.namedGroupLabel(
                     groupName: groupName,
@@ -95,14 +106,11 @@ struct SwitcherView: View {
         return displayAppName(for: item, isSelected: isSelected)
     }
 
-    private func groupHeaderText(_ group: TabGroup) -> Text {
-        let groupName = group.displayName ?? ""
+    private func groupHeaderText(groupName: String, appName: String, windowTitle: String) -> Text {
         switch namedGroupLabelMode {
         case .groupNameOnly:
             return Text(groupName).bold()
         case .groupAppWindow:
-            let appName = group.activeWindow?.appName ?? ""
-            let windowTitle = group.activeWindow?.displayTitle ?? ""
             let suffix = SwitcherTextFormatter.namedGroupTitleSuffix(appName: appName, windowTitle: windowTitle)
             return Text(groupName).bold() + Text(suffix)
         }
@@ -357,10 +365,14 @@ struct SwitcherView: View {
 
     @ViewBuilder
     private func titleRowText(for item: SwitcherItem, isSelected: Bool) -> some View {
-        if let group = item.wholeGroup,
+        if let group = item.namedGroup,
            !(isSelected && subSelectedWindowIndex != nil),
            group.displayName != nil {
-            groupHeaderText(group)
+            groupHeaderText(
+                groupName: group.displayName ?? "",
+                appName: displayAppName(for: item, isSelected: isSelected),
+                windowTitle: displayWindowTitle(for: item, isSelected: isSelected)
+            )
         } else {
             let title = displayTitle(for: item, isSelected: isSelected)
             let appName = displayAppName(for: item, isSelected: isSelected)

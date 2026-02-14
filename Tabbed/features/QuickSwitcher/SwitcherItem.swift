@@ -39,10 +39,14 @@ enum SwitcherItem: Identifiable {
         }
     }
 
-    /// Only whole-group items use named-group labels.
-    var wholeGroup: TabGroup? {
-        if case .group(let g) = self { return g }
-        return nil
+    /// Group used for named-group labels in switcher UI.
+    var namedGroup: TabGroup? {
+        switch self {
+        case .group(let g), .groupSegment(let g, _):
+            return g
+        case .singleWindow:
+            return nil
+        }
     }
 
     /// Title to display — active window's title (or app name if empty).
