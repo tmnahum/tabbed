@@ -70,6 +70,7 @@ class TabBarPanel: NSPanel {
         onSwitchTab: @escaping (Int) -> Void,
         onReleaseTab: @escaping (Int) -> Void,
         onCloseTab: @escaping (Int) -> Void,
+        onFocusGroup: @escaping (UUID) -> Void,
         onAddWindow: @escaping () -> Void,
         onAddWindowAfterTab: @escaping (Int) -> Void,
         onAddSeparatorAfterTab: @escaping (Int) -> Void,
@@ -94,6 +95,7 @@ class TabBarPanel: NSPanel {
             onSwitchTab: onSwitchTab,
             onReleaseTab: onReleaseTab,
             onCloseTab: onCloseTab,
+            onFocusGroup: onFocusGroup,
             onAddWindow: onAddWindow,
             onAddWindowAfterTab: onAddWindowAfterTab,
             onAddSeparatorAfterTab: onAddSeparatorAfterTab,
@@ -310,6 +312,14 @@ class TabBarPanel: NSPanel {
         // Match SwiftUI layout: leading pad is 4 with handle, 2 without
         let leadingPad: CGFloat = showHandle ? 4 : 2
         let trailingPad: CGFloat = 4
+        let counterIDs = group?.maximizedGroupCounterIDs ?? []
+        let currentGroupID = group?.id ?? UUID()
+        let countersEnabled = tabBarConfig?.showMaximizedGroupCounters ?? true
+        let groupCounterWidth = TabBarView.groupCounterReservedWidth(
+            counterGroupIDs: counterIDs,
+            currentGroupID: currentGroupID,
+            enabled: countersEnabled
+        )
 
         // Top/bottom padding is always background
         if point.y < verticalPad || point.y > panelHeight - verticalPad {
@@ -318,8 +328,14 @@ class TabBarPanel: NSPanel {
         // Left padding + drag handle area
         let handleWidth: CGFloat = showHandle ? TabBarView.dragHandleWidth : 0
         let groupNameWidth = TabBarView.groupNameReservedWidth(for: group?.name)
-        let groupNameStartX = leadingPad + handleWidth
-        if point.x < groupNameStartX {
+        let groupCounterStartX = leadingPad
+        let groupCounterEndX = groupCounterStartX + groupCounterWidth
+        let dragHandleStartX = groupCounterEndX
+        let groupNameStartX = dragHandleStartX + handleWidth
+        if point.x < leadingPad {
+            return true
+        }
+        if point.x >= dragHandleStartX && point.x < groupNameStartX {
             return true
         }
         // Group title zone: click/release enters inline edit, drag moves the group.
@@ -327,6 +343,7 @@ class TabBarPanel: NSPanel {
            Self.isGroupNameDragRegion(
                pointX: point.x,
                leadingPad: leadingPad,
+               groupCounterWidth: groupCounterWidth,
                handleWidth: handleWidth,
                groupNameWidth: groupNameWidth
            ) {
@@ -341,7 +358,7 @@ class TabBarPanel: NSPanel {
         let tabCount = group?.windows.count ?? 0
         guard tabCount > 0 else { return true }
 
-        let availableWidth = panelWidth - leadingPad - trailingPad - TabBarView.addButtonWidth - handleWidth - groupNameWidth
+        let availableWidth = panelWidth - leadingPad - trailingPad - TabBarView.addButtonWidth - groupCounterWidth - handleWidth - groupNameWidth
         let style = tabBarConfig?.style ?? .compact
         let layout = TabBarView.tabWidthLayout(
             availableWidth: availableWidth,
@@ -364,11 +381,12 @@ class TabBarPanel: NSPanel {
     static func isGroupNameDragRegion(
         pointX: CGFloat,
         leadingPad: CGFloat,
+        groupCounterWidth: CGFloat,
         handleWidth: CGFloat,
         groupNameWidth: CGFloat
     ) -> Bool {
         guard groupNameWidth > 0 else { return false }
-        let minX = leadingPad + handleWidth
+        let minX = leadingPad + groupCounterWidth + handleWidth
         let maxX = minX + groupNameWidth
         return pointX >= minX && pointX <= maxX
     }
@@ -402,21 +420,32 @@ class TabBarPanel: NSPanel {
         let leadingPad: CGFloat = showHandle ? 4 : 2
         let trailingPad: CGFloat = 4
         let handleWidth: CGFloat = showHandle ? TabBarView.dragHandleWidth : 0
+        let groupCounterWidth = TabBarView.groupCounterReservedWidth(
+            counterGroupIDs: group.maximizedGroupCounterIDs,
+            currentGroupID: group.id,
+            enabled: tabBarConfig.showMaximizedGroupCounters
+        )
         let groupNameWidth = TabBarView.groupNameReservedWidth(for: group.name)
+        let groupCounterStartX = leadingPad
+        let groupCounterEndX = groupCounterStartX + groupCounterWidth
+
+        if groupCounterWidth > 0 && point.x >= groupCounterStartX && point.x <= groupCounterEndX {
+            return true
+        }
 
         // Points in top/bottom padding are not on controls
         if point.y < verticalPad || point.y > panelHeight - verticalPad {
             return false
         }
 
-        let availableWidth = panelWidth - leadingPad - trailingPad - TabBarView.addButtonWidth - handleWidth - groupNameWidth
+        let availableWidth = panelWidth - leadingPad - trailingPad - TabBarView.addButtonWidth - groupCounterWidth - handleWidth - groupNameWidth
         let layout = TabBarView.tabWidthLayout(
             availableWidth: availableWidth,
             tabs: group.windows,
             style: tabBarConfig.style
         )
 
-        let tabContentStartX = leadingPad + handleWidth + groupNameWidth
+        let tabContentStartX = leadingPad + groupCounterWidth + handleWidth + groupNameWidth
 
         // Approximate the trailing control hit area as the last 22pt of each tab.
         // The actual close/confirm button is a 16×16 square with horizontal padding,

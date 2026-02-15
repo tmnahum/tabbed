@@ -8,7 +8,7 @@ enum SettingsTab: Int {
         switch self {
         case .general:   return 390
         case .launcher:  return 420
-        case .tabBar:    return 330
+        case .tabBar:    return 360
         case .shortcuts: return 520
         case .switcher:  return 510
         }
@@ -536,6 +536,21 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Show Title Tooltip")
                     Text("Shows the full window title on hover when tabs are narrow.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .toggleStyle(.checkbox)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+
+            Divider()
+
+            Toggle(isOn: $tabBarConfig.showMaximizedGroupCounters) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Show Maximized Group Counters")
+                    Text("Shows clickable `1 2 3...` group counters on maximized groups in the same space.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

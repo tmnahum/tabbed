@@ -493,6 +493,9 @@ extension AppDelegate {
                 guard let panel else { return }
                 self?.closeTab(at: index, from: group, panel: panel)
             },
+            onFocusGroup: { [weak self] targetGroupID in
+                self?.focusGroupFromCounter(targetGroupID)
+            },
             onAddWindow: { [weak self] in
                 self?.showWindowPicker(addingTo: group)
             },
@@ -603,6 +606,45 @@ extension AppDelegate {
 
         evaluateAutoCapture()
         return group
+    }
+
+    func resolvedSpaceID(for group: TabGroup) -> UInt64? {
+        if group.spaceID != 0 {
+            return group.spaceID
+        }
+        if let activeWindowID = group.activeWindow?.id,
+           let spaceID = SpaceUtils.spaceID(for: activeWindowID) {
+            return spaceID
+        }
+        return group.managedWindows.first.flatMap { SpaceUtils.spaceID(for: $0.id) }
+    }
+
+    func refreshMaximizedGroupCounters() {
+        let candidates = groupManager.groups.map { group in
+            MaximizedGroupCounterPolicy.Candidate(
+                groupID: group.id,
+                spaceID: resolvedSpaceID(for: group),
+                isMaximized: isGroupMaximized(group).0
+            )
+        }
+        let countersByGroupID = MaximizedGroupCounterPolicy.counterGroupIDsByGroupID(candidates: candidates)
+        for group in groupManager.groups {
+            let next = countersByGroupID[group.id] ?? []
+            if group.maximizedGroupCounterIDs != next {
+                group.maximizedGroupCounterIDs = next
+            }
+        }
+    }
+
+    func focusGroupFromCounter(_ targetGroupID: UUID) {
+        guard let group = groupManager.groups.first(where: { $0.id == targetGroupID }),
+              let activeWindow = group.activeWindow else { return }
+        lastActiveGroupID = group.id
+        group.recordFocus(windowID: activeWindow.id)
+        focusWindow(activeWindow)
+        if !activeWindow.isFullscreened, let panel = tabBarPanels[group.id] {
+            panel.orderAbove(windowID: activeWindow.id)
+        }
     }
 
     /// Bring a tab to front: raise its window, activate its app, and order the
@@ -801,6 +843,7 @@ extension AppDelegate {
         }
         panel.close()
         tabBarPanels.removeValue(forKey: group.id)
+        refreshMaximizedGroupCounters()
     }
 
     func disbandGroup(_ group: TabGroup) {
@@ -830,6 +873,7 @@ extension AppDelegate {
         groupManager.dissolveGroup(group)
         panel.close()
         tabBarPanels.removeValue(forKey: group.id)
+        refreshMaximizedGroupCounters()
     }
 
     func quitGroup(_ group: TabGroup) {
@@ -854,6 +898,7 @@ extension AppDelegate {
         groupManager.dissolveGroup(group)
         panel.close()
         tabBarPanels.removeValue(forKey: group.id)
+        refreshMaximizedGroupCounters()
     }
 
     /// Resolve the group the user is currently interacting with.
@@ -1156,8 +1201,13 @@ extension AppDelegate {
             let leadingPad: CGFloat = showHandle ? 4 : 2
             let trailingPad: CGFloat = 4
             let handleWidth: CGFloat = showHandle ? TabBarView.dragHandleWidth : 0
+            let groupCounterWidth = TabBarView.groupCounterReservedWidth(
+                counterGroupIDs: group.maximizedGroupCounterIDs,
+                currentGroupID: group.id,
+                enabled: tabBarConfig.showMaximizedGroupCounters
+            )
             let groupNameWidth = TabBarView.groupNameReservedWidth(for: group.name)
-            let availableWidth = panelWidth - leadingPad - trailingPad - TabBarView.addButtonWidth - handleWidth - groupNameWidth
+            let availableWidth = panelWidth - leadingPad - trailingPad - TabBarView.addButtonWidth - groupCounterWidth - handleWidth - groupNameWidth
             let layout = TabBarView.tabWidthLayout(
                 availableWidth: availableWidth,
                 tabs: group.windows,
@@ -1166,7 +1216,7 @@ extension AppDelegate {
 
             // Convert mouse X to local panel coordinates
             let localX = mouseLocation.x - panel.frame.origin.x
-            let tabContentStartX = leadingPad + handleWidth + groupNameWidth
+            let tabContentStartX = leadingPad + groupCounterWidth + handleWidth + groupNameWidth
             let localTabX = localX - tabContentStartX
             let insertionIndex = TabBarView.insertionIndexForPoint(
                 localTabX: localTabX,

@@ -16,6 +16,7 @@ struct TabBarView: View {
     var onSwitchTab: (Int) -> Void
     var onReleaseTab: (Int) -> Void
     var onCloseTab: (Int) -> Void
+    var onFocusGroup: (UUID) -> Void
     var onAddWindow: () -> Void
     var onAddWindowAfterTab: (Int) -> Void
     var onAddSeparatorAfterTab: (Int) -> Void
@@ -44,6 +45,10 @@ struct TabBarView: View {
     static let groupNameFontSize: CGFloat = 11
     static let groupNameEmptyHitWidth: CGFloat = 3
     static let groupNamePlaceholder = "Group name"
+    static let groupCounterFontSize: CGFloat = 11
+    static let groupCounterHorizontalPadding: CGFloat = 5
+    static let groupCounterItemSpacing: CGFloat = 3
+    static let groupCounterTrailingSpacing: CGFloat = 6
     static let inlineGroupNameEditGroupIDKey = "groupID"
     static let inlineTabNameEditWindowIDKey = "windowID"
 
@@ -72,6 +77,40 @@ struct TabBarView: View {
                 : groupNameEmptyHitWidth
         }
         return measuredGroupNameReservedWidth(for: name)
+    }
+
+    static func shouldShowMaximizedGroupCounters(
+        counterGroupIDs: [UUID],
+        currentGroupID: UUID,
+        enabled: Bool
+    ) -> Bool {
+        enabled && counterGroupIDs.count >= 2 && counterGroupIDs.contains(currentGroupID)
+    }
+
+    private static func measuredGroupCounterItemWidth(number: Int) -> CGFloat {
+        let textWidth = ("\(number)" as NSString).size(
+            withAttributes: [.font: NSFont.systemFont(ofSize: groupCounterFontSize, weight: .semibold)]
+        ).width
+        return ceil(textWidth) + groupCounterHorizontalPadding * 2
+    }
+
+    static func groupCounterReservedWidth(
+        counterGroupIDs: [UUID],
+        currentGroupID: UUID,
+        enabled: Bool
+    ) -> CGFloat {
+        guard shouldShowMaximizedGroupCounters(
+            counterGroupIDs: counterGroupIDs,
+            currentGroupID: currentGroupID,
+            enabled: enabled
+        ) else { return 0 }
+
+        let count = counterGroupIDs.count
+        let itemsWidth = (1...count).reduce(CGFloat(0)) { partial, number in
+            partial + measuredGroupCounterItemWidth(number: number)
+        }
+        let spacing = CGFloat(max(0, count - 1)) * groupCounterItemSpacing
+        return itemsWidth + spacing + groupCounterTrailingSpacing
     }
 
     static func tabWidths(
@@ -345,11 +384,19 @@ struct TabBarView: View {
             let pinnedCount = group.pinnedCount
             let isCompact = tabBarConfig.style == .compact
             let handleWidth: CGFloat = tabBarConfig.showDragHandle ? Self.dragHandleWidth : 0
+            let groupCounterWidth = Self.groupCounterReservedWidth(
+                counterGroupIDs: group.maximizedGroupCounterIDs,
+                currentGroupID: group.id,
+                enabled: tabBarConfig.showMaximizedGroupCounters
+            )
             let groupNameLayoutName = isEditingGroupName ? groupNameDraft : group.name
             let groupNameWidth = Self.groupNameReservedWidth(for: groupNameLayoutName, isEditing: isEditingGroupName)
             let leadingPad: CGFloat = tabBarConfig.showDragHandle ? 4 : 2
             let trailingPad: CGFloat = 4
-            let availableWidth = max(0, geo.size.width - leadingPad - trailingPad - Self.addButtonWidth - handleWidth - groupNameWidth)
+            let availableWidth = max(
+                0,
+                geo.size.width - leadingPad - trailingPad - Self.addButtonWidth - groupCounterWidth - handleWidth - groupNameWidth
+            )
             let widthLayout = Self.tabWidthLayout(
                 availableWidth: availableWidth,
                 tabs: group.windows,
@@ -360,10 +407,11 @@ struct TabBarView: View {
             let dragTabStep = dragStep(tabWidths: widthLayout.widths)
             let targetIndex = computeTargetIndex(tabWidths: widthLayout.widths, fallbackStep: dragTabStep)
             let showPinDropZone = shouldShowPinDropZone(targetIndex: targetIndex)
-            let tabContentStartX = leadingPad + handleWidth + groupNameWidth
+            let tabContentStartX = leadingPad + groupCounterWidth + handleWidth + groupNameWidth
 
             ZStack(alignment: .leading) {
                 HStack(spacing: Self.tabSpacing) {
+                    groupCounterControl(groupCounterWidth: groupCounterWidth)
                     if tabBarConfig.showDragHandle {
                         dragHandle
                     }
@@ -1124,6 +1172,35 @@ struct TabBarView: View {
             }
         }
         .frame(width: Self.dragHandleWidth)
+    }
+
+    @ViewBuilder
+    private func groupCounterControl(groupCounterWidth: CGFloat) -> some View {
+        if groupCounterWidth > 0 {
+            HStack(spacing: Self.groupCounterItemSpacing) {
+                ForEach(Array(group.maximizedGroupCounterIDs.enumerated()), id: \.element) { index, targetGroupID in
+                    let isCurrent = targetGroupID == group.id
+                    Button {
+                        if !isCurrent {
+                            onFocusGroup(targetGroupID)
+                        }
+                    } label: {
+                        Text("\(index + 1)")
+                            .font(.system(size: Self.groupCounterFontSize, weight: .semibold))
+                            .foregroundStyle(isCurrent ? Color.white : Color.secondary)
+                            .padding(.horizontal, Self.groupCounterHorizontalPadding)
+                            .padding(.vertical, 1)
+                            .background(
+                                Capsule()
+                                    .fill(isCurrent ? Color.accentColor : Color.primary.opacity(0.1))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.trailing, Self.groupCounterTrailingSpacing)
+            .frame(width: groupCounterWidth, alignment: .leading)
+        }
     }
 
     @ViewBuilder

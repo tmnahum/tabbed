@@ -25,6 +25,7 @@ final class TabBarConfigTests: XCTestCase {
         XCTAssertTrue(config.showDragHandle)
         XCTAssertEqual(config.closeButtonMode, .xmarkOnAllTabs)
         XCTAssertTrue(config.showCloseConfirmation)
+        XCTAssertTrue(config.showMaximizedGroupCounters)
     }
 
     func testSaveAndLoad() {
@@ -57,7 +58,8 @@ final class TabBarConfigTests: XCTestCase {
             showDragHandle: false,
             showTooltip: false,
             closeButtonMode: .minusOnCurrentTab,
-            showCloseConfirmation: false
+            showCloseConfirmation: false,
+            showMaximizedGroupCounters: false
         )
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(TabBarConfig.self, from: data)
@@ -66,6 +68,7 @@ final class TabBarConfigTests: XCTestCase {
         XCTAssertFalse(decoded.showTooltip)
         XCTAssertEqual(decoded.closeButtonMode, .minusOnCurrentTab)
         XCTAssertFalse(decoded.showCloseConfirmation)
+        XCTAssertFalse(decoded.showMaximizedGroupCounters)
     }
 
     func testDecodesWithMissingStyleKey() throws {
@@ -77,6 +80,7 @@ final class TabBarConfigTests: XCTestCase {
         XCTAssertTrue(decoded.showTooltip)
         XCTAssertEqual(decoded.closeButtonMode, .xmarkOnAllTabs)
         XCTAssertTrue(decoded.showCloseConfirmation)
+        XCTAssertTrue(decoded.showMaximizedGroupCounters)
     }
 
     func testSaveAndLoadDragHandle() {
@@ -98,5 +102,13 @@ final class TabBarConfigTests: XCTestCase {
         let loaded = TabBarConfig.load()
         XCTAssertEqual(loaded.closeButtonMode, .minusOnAllTabs)
         XCTAssertFalse(loaded.showCloseConfirmation)
+    }
+
+    func testSaveAndLoadMaximizedGroupCountersToggle() {
+        let config = TabBarConfig(style: .compact, showMaximizedGroupCounters: false)
+        config.save()
+
+        let loaded = TabBarConfig.load()
+        XCTAssertFalse(loaded.showMaximizedGroupCounters)
     }
 }

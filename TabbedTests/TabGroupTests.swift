@@ -66,6 +66,53 @@ final class TabGroupTests: XCTestCase {
         )
     }
 
+    func testGroupCounterReservedWidthIsZeroForZeroOrOneVisibleCounter() {
+        let current = UUID()
+        XCTAssertEqual(
+            TabBarView.groupCounterReservedWidth(
+                counterGroupIDs: [],
+                currentGroupID: current,
+                enabled: true
+            ),
+            0
+        )
+        XCTAssertEqual(
+            TabBarView.groupCounterReservedWidth(
+                counterGroupIDs: [current],
+                currentGroupID: current,
+                enabled: true
+            ),
+            0
+        )
+        XCTAssertEqual(
+            TabBarView.groupCounterReservedWidth(
+                counterGroupIDs: [UUID(), UUID()],
+                currentGroupID: current,
+                enabled: true
+            ),
+            0
+        )
+    }
+
+    func testGroupCounterReservedWidthGrowsAsCounterCountIncreases() {
+        let current = UUID()
+        let two = [current, UUID()]
+        let three = [current, UUID(), UUID()]
+        let widthTwo = TabBarView.groupCounterReservedWidth(
+            counterGroupIDs: two,
+            currentGroupID: current,
+            enabled: true
+        )
+        let widthThree = TabBarView.groupCounterReservedWidth(
+            counterGroupIDs: three,
+            currentGroupID: current,
+            enabled: true
+        )
+
+        XCTAssertGreaterThan(widthTwo, 0)
+        XCTAssertGreaterThan(widthThree, widthTwo)
+    }
+
     func testDisplayedTabTitlePrefersCustomTabName() {
         var window = makeWindow(id: 1)
         window.customTabName = "  Focus  "

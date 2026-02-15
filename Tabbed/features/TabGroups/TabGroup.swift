@@ -7,6 +7,8 @@ class TabGroup: Identifiable, ObservableObject {
     @Published var activeIndex: Int
     @Published var frame: CGRect
     @Published var name: String?
+    /// Ordered group IDs for the maximized-group counter strip shown in the tab bar.
+    @Published var maximizedGroupCounterIDs: [UUID] = []
     /// Insertion index shown as a drop indicator when another group is dragging tabs over this group's tab bar.
     @Published var dropIndicatorIndex: Int? = nil
     /// How many pixels the window was squeezed down when the group was created (0 if no squeeze was needed).

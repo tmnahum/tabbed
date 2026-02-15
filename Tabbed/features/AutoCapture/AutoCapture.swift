@@ -138,6 +138,7 @@ extension AppDelegate {
     }
 
     func evaluateAutoCapture() {
+        refreshMaximizedGroupCounters()
         let mode = sessionConfig.autoCaptureMode
         guard mode != .never else {
             Logger.log("[AutoCapture] evaluate: disabled in config")
