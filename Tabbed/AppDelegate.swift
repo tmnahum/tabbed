@@ -65,6 +65,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var wakeRecoveryWorkItem: DispatchWorkItem?
     /// Current tab multi-selection per group (owned by TabBarView, consumed by hotkeys).
     var selectedTabIDsByGroupID: [UUID: Set<CGWindowID>] = [:]
+    /// User-defined ordering for maximized-group counters, keyed by space ID.
+    var maximizedCounterOrderBySpaceID: [UInt64: [UUID]] = [:]
 
     var isCommitEchoSuppressionActive: Bool {
         guard let deadline = pendingCommitEchoDeadline else { return false }

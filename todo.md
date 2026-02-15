@@ -9,6 +9,7 @@
 - improve dragging
     - too easy to drag tab off
 
+- mirror tabs within the same space (same window, two windowgroups)
 
 - autocapture AND mode
 

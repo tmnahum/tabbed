@@ -66,6 +66,44 @@ final class MaximizedGroupCounterPolicyTests: XCTestCase {
         XCTAssertEqual(result[third], [second, first, third])
     }
 
+    func testPreferredOrderOverridesCreationOrderWithinSpace() {
+        let first = UUID()
+        let second = UUID()
+        let third = UUID()
+
+        let result = MaximizedGroupCounterPolicy.counterGroupIDsByGroupID(
+            candidates: [
+                .init(groupID: first, spaceID: 30, isMaximized: true),
+                .init(groupID: second, spaceID: 30, isMaximized: true),
+                .init(groupID: third, spaceID: 30, isMaximized: true)
+            ],
+            preferredOrderBySpaceID: [30: [third, first, second]]
+        )
+
+        XCTAssertEqual(result[first], [third, first, second])
+        XCTAssertEqual(result[second], [third, first, second])
+        XCTAssertEqual(result[third], [third, first, second])
+    }
+
+    func testPreferredOrderIsPrunedToCurrentMembers() {
+        let first = UUID()
+        let second = UUID()
+        let third = UUID()
+
+        let result = MaximizedGroupCounterPolicy.counterGroupIDsByGroupID(
+            candidates: [
+                .init(groupID: first, spaceID: 30, isMaximized: true),
+                .init(groupID: second, spaceID: 30, isMaximized: true),
+                .init(groupID: third, spaceID: 30, isMaximized: true)
+            ],
+            preferredOrderBySpaceID: [30: [UUID(), second]]
+        )
+
+        XCTAssertEqual(result[first], [second, first, third])
+        XCTAssertEqual(result[second], [second, first, third])
+        XCTAssertEqual(result[third], [second, first, third])
+    }
+
     func testNonParticipatingGroupsResolveToEmptyList() {
         let maximized = UUID()
         let unknownSpace = UUID()

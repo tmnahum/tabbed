@@ -496,6 +496,9 @@ extension AppDelegate {
             onFocusGroup: { [weak self] targetGroupID in
                 self?.focusGroupFromCounter(targetGroupID)
             },
+            onReorderGroupCounters: { [weak self] orderedGroupIDs in
+                self?.reorderMaximizedGroupCounters(from: group.id, orderedGroupIDs: orderedGroupIDs)
+            },
             onAddWindow: { [weak self] in
                 self?.showWindowPicker(addingTo: group)
             },
@@ -627,7 +630,27 @@ extension AppDelegate {
                 isMaximized: isGroupMaximized(group).0
             )
         }
-        let countersByGroupID = MaximizedGroupCounterPolicy.counterGroupIDsByGroupID(candidates: candidates)
+        var validIDsBySpaceID: [UInt64: Set<UUID>] = [:]
+        for candidate in candidates where candidate.isMaximized {
+            guard let spaceID = candidate.spaceID else { continue }
+            validIDsBySpaceID[spaceID, default: []].insert(candidate.groupID)
+        }
+        for (spaceID, order) in maximizedCounterOrderBySpaceID {
+            guard let validIDs = validIDsBySpaceID[spaceID], !validIDs.isEmpty else {
+                maximizedCounterOrderBySpaceID.removeValue(forKey: spaceID)
+                continue
+            }
+            let pruned = order.filter { validIDs.contains($0) }
+            if pruned.isEmpty {
+                maximizedCounterOrderBySpaceID.removeValue(forKey: spaceID)
+            } else if pruned != order {
+                maximizedCounterOrderBySpaceID[spaceID] = pruned
+            }
+        }
+        let countersByGroupID = MaximizedGroupCounterPolicy.counterGroupIDsByGroupID(
+            candidates: candidates,
+            preferredOrderBySpaceID: maximizedCounterOrderBySpaceID
+        )
         for group in groupManager.groups {
             let next = countersByGroupID[group.id] ?? []
             if group.maximizedGroupCounterIDs != next {
@@ -645,6 +668,28 @@ extension AppDelegate {
         if !activeWindow.isFullscreened, let panel = tabBarPanels[group.id] {
             panel.orderAbove(windowID: activeWindow.id)
         }
+    }
+
+    func reorderMaximizedGroupCounters(from sourceGroupID: UUID, orderedGroupIDs: [UUID]) {
+        guard let sourceGroup = groupManager.groups.first(where: { $0.id == sourceGroupID }),
+              let spaceID = resolvedSpaceID(for: sourceGroup) else { return }
+        let maximizedGroupIDs = groupManager.groups.compactMap { group -> UUID? in
+            guard resolvedSpaceID(for: group) == spaceID, isGroupMaximized(group).0 else { return nil }
+            return group.id
+        }
+        guard maximizedGroupIDs.count >= 2 else { return }
+
+        let validSet = Set(maximizedGroupIDs)
+        var preferred: [UUID] = []
+        preferred.reserveCapacity(maximizedGroupIDs.count)
+        for id in orderedGroupIDs where validSet.contains(id) && !preferred.contains(id) {
+            preferred.append(id)
+        }
+        for id in maximizedGroupIDs where !preferred.contains(id) {
+            preferred.append(id)
+        }
+        maximizedCounterOrderBySpaceID[spaceID] = preferred
+        refreshMaximizedGroupCounters()
     }
 
     /// Bring a tab to front: raise its window, activate its app, and order the

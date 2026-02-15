@@ -17,6 +17,7 @@ struct TabBarView: View {
     var onReleaseTab: (Int) -> Void
     var onCloseTab: (Int) -> Void
     var onFocusGroup: (UUID) -> Void
+    var onReorderGroupCounters: ([UUID]) -> Void
     var onAddWindow: () -> Void
     var onAddWindowAfterTab: (Int) -> Void
     var onAddSeparatorAfterTab: (Int) -> Void
@@ -118,6 +119,27 @@ struct TabBarView: View {
     static func groupCounterLeadingSpacing(showDragHandle: Bool) -> CGFloat {
         // Keep the visual left margin stable even though leadingPad changes with handle visibility.
         showDragHandle ? groupCounterBaseLeadingSpacing : groupCounterBaseLeadingSpacing + 2
+    }
+
+    static func groupCounterItemWidths(count: Int) -> [CGFloat] {
+        guard count > 0 else { return [] }
+        return (1...count).map { measuredGroupCounterItemWidth(number: $0) }
+    }
+
+    static func groupCounterCenters(widths: [CGFloat]) -> [CGFloat] {
+        guard !widths.isEmpty else { return [] }
+        var centers: [CGFloat] = []
+        centers.reserveCapacity(widths.count)
+        var cursor: CGFloat = 0
+        for (index, width) in widths.enumerated() {
+            centers.append(cursor + width / 2)
+            if index < widths.count - 1 {
+                cursor += width + groupCounterItemSpacing
+            } else {
+                cursor += width
+            }
+        }
+        return centers
     }
 
     static func tabWidths(
@@ -382,6 +404,8 @@ struct TabBarView: View {
     @State private var localFlagsMonitor: Any?
     @State private var globalFlagsMonitor: Any?
     @State private var shiftPollTimer: Timer?
+    @State private var counterDraggingGroupID: UUID?
+    @State private var counterDragTranslation: CGFloat = 0
     @FocusState private var isGroupNameFieldFocused: Bool
     @FocusState private var focusedTabNameID: CGWindowID?
 
@@ -390,9 +414,15 @@ struct TabBarView: View {
             let tabCount = group.windows.count
             let pinnedCount = group.pinnedCount
             let isCompact = tabBarConfig.style == .compact
+            let counterGroupIDs = group.maximizedGroupCounterIDs
+            let counterItemWidths = Self.groupCounterItemWidths(count: counterGroupIDs.count)
+            let counterTargetIndex = currentCounterTargetIndex(
+                counterGroupIDs: counterGroupIDs,
+                itemWidths: counterItemWidths
+            )
             let handleWidth: CGFloat = tabBarConfig.showDragHandle ? Self.dragHandleWidth : 0
             let groupCounterWidth = Self.groupCounterReservedWidth(
-                counterGroupIDs: group.maximizedGroupCounterIDs,
+                counterGroupIDs: counterGroupIDs,
                 currentGroupID: group.id,
                 enabled: tabBarConfig.showMaximizedGroupCounters,
                 showDragHandle: tabBarConfig.showDragHandle
@@ -421,7 +451,10 @@ struct TabBarView: View {
                 HStack(spacing: Self.tabSpacing) {
                     groupCounterControl(
                         groupCounterWidth: groupCounterWidth,
-                        showDragHandle: tabBarConfig.showDragHandle
+                        showDragHandle: tabBarConfig.showDragHandle,
+                        counterGroupIDs: counterGroupIDs,
+                        counterItemWidths: counterItemWidths,
+                        targetIndex: counterTargetIndex
                     )
                     if tabBarConfig.showDragHandle {
                         dragHandle
@@ -592,6 +625,9 @@ struct TabBarView: View {
             if let idx = lastClickedIndex, idx >= group.windows.count {
                 lastClickedIndex = nil
             }
+        }
+        .onChange(of: group.maximizedGroupCounterIDs) { _ in
+            resetCounterDragState()
         }
         .onChange(of: selectedIDs) { ids in
             onSelectionChanged(ids)
@@ -1185,12 +1221,76 @@ struct TabBarView: View {
         .frame(width: Self.dragHandleWidth)
     }
 
+    private func currentCounterTargetIndex(counterGroupIDs: [UUID], itemWidths: [CGFloat]) -> Int? {
+        guard let draggingID = counterDraggingGroupID,
+              let sourceIndex = counterGroupIDs.firstIndex(of: draggingID) else { return nil }
+        let centers = Self.groupCounterCenters(widths: itemWidths)
+        guard sourceIndex < centers.count else { return nil }
+        let draggedCenter = centers[sourceIndex] + counterDragTranslation
+        var nearestIndex = sourceIndex
+        var nearestDistance = abs(draggedCenter - centers[sourceIndex])
+        for index in centers.indices where index != sourceIndex {
+            let distance = abs(draggedCenter - centers[index])
+            if distance < nearestDistance {
+                nearestDistance = distance
+                nearestIndex = index
+            }
+        }
+        return nearestIndex
+    }
+
+    private func counterShiftOffset(for index: Int, targetIndex: Int?, counterGroupIDs: [UUID], itemWidths: [CGFloat]) -> CGFloat {
+        guard let targetIndex,
+              let draggingID = counterDraggingGroupID,
+              let sourceIndex = counterGroupIDs.firstIndex(of: draggingID),
+              sourceIndex != targetIndex,
+              sourceIndex < itemWidths.count else {
+            return 0
+        }
+        let draggedWidth = itemWidths[sourceIndex]
+        let shift = draggedWidth + Self.groupCounterItemSpacing
+        if sourceIndex < targetIndex {
+            if index > sourceIndex && index <= targetIndex {
+                return -shift
+            }
+        } else {
+            if index >= targetIndex && index < sourceIndex {
+                return shift
+            }
+        }
+        return 0
+    }
+
+    private func handleCounterDragEnded(counterGroupIDs: [UUID], targetIndex: Int?) {
+        defer { resetCounterDragState() }
+        guard let draggingID = counterDraggingGroupID,
+              let sourceIndex = counterGroupIDs.firstIndex(of: draggingID),
+              let targetIndex,
+              sourceIndex != targetIndex else { return }
+        var reordered = counterGroupIDs
+        let moved = reordered.remove(at: sourceIndex)
+        reordered.insert(moved, at: targetIndex)
+        onReorderGroupCounters(reordered)
+    }
+
+    private func resetCounterDragState() {
+        counterDraggingGroupID = nil
+        counterDragTranslation = 0
+    }
+
     @ViewBuilder
-    private func groupCounterControl(groupCounterWidth: CGFloat, showDragHandle: Bool) -> some View {
+    private func groupCounterControl(
+        groupCounterWidth: CGFloat,
+        showDragHandle: Bool,
+        counterGroupIDs: [UUID],
+        counterItemWidths: [CGFloat],
+        targetIndex: Int?
+    ) -> some View {
         if groupCounterWidth > 0 {
             HStack(spacing: Self.groupCounterItemSpacing) {
-                ForEach(Array(group.maximizedGroupCounterIDs.enumerated()), id: \.element) { index, targetGroupID in
+                ForEach(Array(counterGroupIDs.enumerated()), id: \.element) { index, targetGroupID in
                     let isCurrent = targetGroupID == group.id
+                    let isDragging = counterDraggingGroupID == targetGroupID
                     Button {
                         if !isCurrent {
                             onFocusGroup(targetGroupID)
@@ -1204,6 +1304,28 @@ struct TabBarView: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .offset(x: isDragging
+                        ? counterDragTranslation
+                        : counterShiftOffset(
+                            for: index,
+                            targetIndex: targetIndex,
+                            counterGroupIDs: counterGroupIDs,
+                            itemWidths: counterItemWidths
+                        )
+                    )
+                    .animation(isDragging ? nil : .easeOut(duration: 0.12), value: targetIndex)
+                    .highPriorityGesture(
+                        DragGesture(minimumDistance: 3)
+                            .onChanged { value in
+                                if counterDraggingGroupID == nil {
+                                    counterDraggingGroupID = targetGroupID
+                                }
+                                counterDragTranslation = value.translation.width
+                            }
+                            .onEnded { _ in
+                                handleCounterDragEnded(counterGroupIDs: counterGroupIDs, targetIndex: targetIndex)
+                            }
+                    )
                 }
             }
             .padding(.leading, Self.groupCounterLeadingSpacing(showDragHandle: showDragHandle))
