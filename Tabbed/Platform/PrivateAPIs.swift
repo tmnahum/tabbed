@@ -50,7 +50,7 @@ func canonicalizeDiscoveredElement<Element>(
 /// Returns discovered (AXUIElement, CGWindowID) pairs for the caller to filter.
 func discoverWindowsByBruteForce(
     pid: pid_t,
-    maxID: UInt64 = 2000,
+    maxID: UInt64 = 10_000,
     targetWindowIDs: Set<CGWindowID>? = nil,
     timeout: TimeInterval = 0.5
 ) -> [(element: AXUIElement, windowID: CGWindowID)] {
