@@ -77,6 +77,16 @@ enum AutoCapturePolicy {
 
         return candidates.first
     }
+
+    /// Seed known-window snapshots only when creating a fresh observer.
+    /// Re-seeding on every evaluation is expensive and can stall the app,
+    /// especially right after wake when AX is slow to respond.
+    static func shouldSeedKnownWindows(
+        requestedSeed: Bool,
+        observerAlreadyExists: Bool
+    ) -> Bool {
+        requestedSeed && !observerAlreadyExists
+    }
 }
 
 struct AutoCaptureRetryKey: Hashable {
@@ -249,7 +259,11 @@ extension AppDelegate {
         for app in NSWorkspace.shared.runningApplications where app.activationPolicy == .regular {
             let pid = app.processIdentifier
             guard pid != ownPID else { continue }
-            addAutoCaptureObserver(for: pid, seedKnownWindows: true)
+            let shouldSeed = AutoCapturePolicy.shouldSeedKnownWindows(
+                requestedSeed: true,
+                observerAlreadyExists: autoCaptureObservers[pid] != nil
+            )
+            addAutoCaptureObserver(for: pid, seedKnownWindows: shouldSeed)
         }
 
         if autoCaptureNotificationTokens.isEmpty {

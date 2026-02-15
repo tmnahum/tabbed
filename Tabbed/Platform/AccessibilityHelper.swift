@@ -128,6 +128,20 @@ enum AccessibilityHelper {
         return boolValue
     }
 
+    static func focusedWindowID(for pid: pid_t) -> CGWindowID? {
+        let app = appElement(for: pid)
+        var focusedValue: AnyObject?
+        let result = AXUIElementCopyAttributeValue(
+            app,
+            kAXFocusedWindowAttribute as CFString,
+            &focusedValue
+        )
+        guard result == .success,
+              let focusedRef = focusedValue else { return nil }
+        let focusedElement = focusedRef as! AXUIElement // swiftlint:disable:this force_cast
+        return windowID(for: focusedElement)
+    }
+
     // MARK: - Write Attributes
 
     @discardableResult
@@ -152,6 +166,33 @@ enum AccessibilityHelper {
         setSize(of: element, to: frame.size)
     }
 
+    @discardableResult
+    static func setMain(_ element: AXUIElement, to value: Bool = true) -> AXError {
+        AXUIElementSetAttributeValue(
+            element,
+            kAXMainAttribute as CFString,
+            value ? kCFBooleanTrue : kCFBooleanFalse
+        )
+    }
+
+    @discardableResult
+    static func setFocusedWindow(_ element: AXUIElement, appPID: pid_t) -> AXError {
+        AXUIElementSetAttributeValue(
+            appElement(for: appPID),
+            kAXFocusedWindowAttribute as CFString,
+            element
+        )
+    }
+
+    static func shouldPromoteAfterRaise(
+        appIsActive: Bool,
+        focusedWindowID: CGWindowID?,
+        targetWindowID: CGWindowID
+    ) -> Bool {
+        if !appIsActive { return true }
+        return focusedWindowID != targetWindowID
+    }
+
     // MARK: - Actions
 
     @discardableResult
@@ -168,11 +209,10 @@ enum AccessibilityHelper {
         return AXUIElementPerformAction(button as! AXUIElement, kAXPressAction as CFString) == .success
     }
 
-    /// Activate the owning app and raise the window, with a fallback chain
-    /// for stale AXUIElements:
-    /// 1. Activate app + kAXRaiseAction on stored element
-    /// 2. Refresh AXUIElement by CGWindowID, retry kAXRaiseAction
-    /// 3. kAXRaiseAction on fresh element (app already active)
+    /// Activate/raise the owning app window with a fallback chain:
+    /// 1. Re-resolve AXUIElement by CGWindowID (when available), then raise.
+    /// 2. If app is inactive OR focused window is still not the target, activate + re-raise.
+    /// 3. If still not focused, nudge AX main/focused-window attributes and re-raise.
     ///
     /// Returns a fresh AXUIElement if one was resolved (caller should update
     /// the group's stored element), or nil if the original was fine.
@@ -182,42 +222,52 @@ enum AccessibilityHelper {
         // window is already in front when the app comes forward, avoiding a
         // brief flash of whatever window the app had focused previously.
 
-        // Fast path: raise with the stored element
-        var freshElement: AXUIElement? = nil
-        if raise(window.element) != .success {
-            // The stored AXUIElement may be stale. Look up a fresh one by CGWindowID.
-            let allElements = windowElements(for: window.ownerPID)
-            if let match = allElements.first(where: { windowID(for: $0) == window.id }) {
-                freshElement = match
-            } else {
-                freshElement = window.element
-            }
-            raise(freshElement!)
+        // Re-resolve by CGWindowID when possible; some apps (including Preview)
+        // can keep a "valid" AX object that no longer raises reliably.
+        var freshElement: AXUIElement?
+        let resolvedElement = windowElements(for: window.ownerPID)
+            .first(where: { windowID(for: $0) == window.id })
+        if let resolvedElement, resolvedElement !== window.element {
+            freshElement = resolvedElement
         }
+        let elementToRaise = freshElement ?? window.element
+        raise(elementToRaise)
 
-        // Activate the app only if it isn't already active.  When the app is
-        // already frontmost, AXRaise alone is sufficient; calling activate()
-        // again can cause macOS to switch Spaces to the app's "main" window
-        // when it has windows on multiple Spaces.
         let appForActivation = NSRunningApplication(processIdentifier: window.ownerPID)
-        if let app = appForActivation, !app.isActive {
-            if #available(macOS 14.0, *) {
-                app.activate()
-            } else {
-                app.activate(options: [])
+        let appIsActive = appForActivation?.isActive ?? false
+        let focusedAfterRaise = focusedWindowID(for: window.ownerPID)
+        if shouldPromoteAfterRaise(
+            appIsActive: appIsActive,
+            focusedWindowID: focusedAfterRaise,
+            targetWindowID: window.id
+        ) {
+            if let app = appForActivation {
+                activate(app)
             }
 
-            // Re-raise after activate: app.activate() can bring forward the
-            // app's own previously-focused window, overriding our initial
-            // raise.  This matters for same-app multi-window groups.
-            let elementToRaise = freshElement ?? window.element
             raise(elementToRaise)
+
+            // Some same-app multi-window cases ignore raise+activate; set
+            // main/focused window attributes as a final accessibility nudge.
+            if focusedWindowID(for: window.ownerPID) != window.id {
+                setMain(elementToRaise)
+                setFocusedWindow(elementToRaise, appPID: window.ownerPID)
+                raise(elementToRaise)
+            }
         }
 
         if let fresh = freshElement, fresh !== window.element {
             return fresh
         }
         return nil
+    }
+
+    private static func activate(_ app: NSRunningApplication) {
+        if #available(macOS 14.0, *) {
+            app.activate()
+        } else {
+            app.activate(options: [])
+        }
     }
 
     // MARK: - Observer

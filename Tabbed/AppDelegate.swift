@@ -61,6 +61,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var barDragInitialFrame: CGRect?
     /// Debounce token for space-change handling — lets the animation settle before querying.
     var spaceChangeWorkItem: DispatchWorkItem?
+    /// Deferred wake recovery to let WindowServer/AX settle before rebuilding observers.
+    var wakeRecoveryWorkItem: DispatchWorkItem?
     /// Current tab multi-selection per group (owned by TabBarView, consumed by hotkeys).
     var selectedTabIDsByGroupID: [UUID: Set<CGWindowID>] = [:]
 
@@ -148,6 +150,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         ) { [weak self] _ in
             self?.scheduleSpaceChangeCheck()
         }
+
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(handleSystemWillSleep(_:)),
+            name: NSWorkspace.willSleepNotification,
+            object: nil
+        )
+
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(handleSystemDidWake(_:)),
+            name: NSWorkspace.didWakeNotification,
+            object: nil
+        )
 
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)

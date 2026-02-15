@@ -155,4 +155,31 @@ final class AutoCapturePolicyTests: XCTestCase {
 
         XCTAssertEqual(selected, groupB)
     }
+
+    func testShouldSeedKnownWindowsWhenRequestedForFreshObserver() {
+        XCTAssertTrue(
+            AutoCapturePolicy.shouldSeedKnownWindows(
+                requestedSeed: true,
+                observerAlreadyExists: false
+            )
+        )
+    }
+
+    func testShouldNotSeedKnownWindowsForExistingObserver() {
+        XCTAssertFalse(
+            AutoCapturePolicy.shouldSeedKnownWindows(
+                requestedSeed: true,
+                observerAlreadyExists: true
+            )
+        )
+    }
+
+    func testShouldNotSeedKnownWindowsWhenSeedNotRequested() {
+        XCTAssertFalse(
+            AutoCapturePolicy.shouldSeedKnownWindows(
+                requestedSeed: false,
+                observerAlreadyExists: false
+            )
+        )
+    }
 }
