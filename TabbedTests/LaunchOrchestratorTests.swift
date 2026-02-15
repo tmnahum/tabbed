@@ -303,7 +303,7 @@ final class LaunchOrchestratorTests: XCTestCase {
         XCTAssertTrue(LaunchOrchestrator.hasNativeNewWindowSupport(bundleID: "com.microsoft.VSCode"))
         // iTerm2 (app-specific AppleScript + shortcut fallback)
         XCTAssertTrue(LaunchOrchestrator.hasNativeNewWindowSupport(bundleID: "com.googlecode.iterm2"))
-        // Warp (confirmed Cmd+N)
+        // Warp (Cmd+N primary with Cmd+Shift+N fallback)
         XCTAssertTrue(LaunchOrchestrator.hasNativeNewWindowSupport(bundleID: "dev.warp.Warp-Stable"))
         XCTAssertTrue(LaunchOrchestrator.hasNativeNewWindowSupport(bundleID: "dev.warp.Warp"))
         XCTAssertTrue(LaunchOrchestrator.hasNativeNewWindowSupport(bundleID: "dev.warp.WarpPreview"))
@@ -320,6 +320,15 @@ final class LaunchOrchestratorTests: XCTestCase {
         XCTAssertTrue(LaunchOrchestrator.hasNativeNewWindowSupport(bundleID: "org.mozilla.librewolf"))
         // Unknown app
         XCTAssertFalse(LaunchOrchestrator.hasNativeNewWindowSupport(bundleID: "com.unknown.app"))
+    }
+
+    func testKnownNewWindowShortcutAutomationListsWarpAndVSCodeShortcuts() {
+        let shortcutMap = LaunchOrchestrator.knownNewWindowShortcutAutomation()
+
+        XCTAssertEqual(shortcutMap["dev.warp.Warp-Stable"], ["cmd+n"])
+        XCTAssertEqual(shortcutMap["dev.warp.Warp"], ["cmd+n"])
+        XCTAssertEqual(shortcutMap["dev.warp.WarpPreview"], ["cmd+n"])
+        XCTAssertEqual(shortcutMap["com.microsoft.VSCode"], ["cmd+shift+n"])
     }
 
     func testKnownAppProviderSucceedsCapturesWindowSkipsReopen() {

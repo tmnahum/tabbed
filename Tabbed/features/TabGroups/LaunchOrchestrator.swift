@@ -391,6 +391,15 @@ final class LaunchOrchestrator {
 
         var key: String { "n" }
 
+        var automationLabel: String {
+            switch self {
+            case .commandN:
+                return "cmd+n"
+            case .commandShiftN:
+                return "cmd+shift+n"
+            }
+        }
+
         var modifiersClause: String {
             switch self {
             case .commandN:
@@ -469,39 +478,40 @@ final class LaunchOrchestrator {
     ]
 
     /// Confirmed keyboard shortcuts for creating new windows in running apps.
+    /// Multiple entries are attempted in order.
     /// Used for both behavior and UI confidence.
-    private static let knownNewWindowKeystrokes: [String: NewWindowKeystroke] = [
+    private static let knownNewWindowKeystrokes: [String: [NewWindowKeystroke]] = [
         // Terminals
-        "com.googlecode.iterm2": .commandN,
-        "com.apple.Terminal": .commandN,
-        "dev.warp.Warp-Stable": .commandN,
-        "dev.warp.Warp": .commandN,
-        "dev.warp.WarpPreview": .commandN,
+        "com.googlecode.iterm2": [.commandN],
+        "com.apple.Terminal": [.commandN],
+        "dev.warp.Warp-Stable": [.commandN],
+        "dev.warp.Warp": [.commandN],
+        "dev.warp.WarpPreview": [.commandN],
 
         // Browsers
-        "org.chromium.Chromium": .commandN,
-        "com.google.Chrome": .commandN,
-        "com.google.Chrome.canary": .commandN,
-        "com.google.Chrome.dev": .commandN,
-        "com.google.Chrome.beta": .commandN,
-        "com.microsoft.edgemac": .commandN,
-        "com.brave.Browser": .commandN,
-        "com.operasoftware.Opera": .commandN,
-        "com.vivaldi.Vivaldi": .commandN,
-        "org.mozilla.firefox": .commandN,
-        "org.mozilla.firefoxdeveloperedition": .commandN,
-        "org.mozilla.nightly": .commandN,
-        "org.mozilla.floorp": .commandN,
-        "org.torproject.torbrowser": .commandN,
-        "net.mullvad.mullvadbrowser": .commandN,
-        "com.apple.Safari": .commandN,
-        "com.apple.SafariTechnologyPreview": .commandN,
+        "org.chromium.Chromium": [.commandN],
+        "com.google.Chrome": [.commandN],
+        "com.google.Chrome.canary": [.commandN],
+        "com.google.Chrome.dev": [.commandN],
+        "com.google.Chrome.beta": [.commandN],
+        "com.microsoft.edgemac": [.commandN],
+        "com.brave.Browser": [.commandN],
+        "com.operasoftware.Opera": [.commandN],
+        "com.vivaldi.Vivaldi": [.commandN],
+        "org.mozilla.firefox": [.commandN],
+        "org.mozilla.firefoxdeveloperedition": [.commandN],
+        "org.mozilla.nightly": [.commandN],
+        "org.mozilla.floorp": [.commandN],
+        "org.torproject.torbrowser": [.commandN],
+        "net.mullvad.mullvadbrowser": [.commandN],
+        "com.apple.Safari": [.commandN],
+        "com.apple.SafariTechnologyPreview": [.commandN],
 
         // VSCode family
-        "com.microsoft.VSCode": .commandShiftN,
-        "com.microsoft.VSCodeInsiders": .commandShiftN,
-        "com.vscodium": .commandShiftN,
-        "com.visualstudio.code.oss": .commandShiftN,
+        "com.microsoft.VSCode": [.commandShiftN],
+        "com.microsoft.VSCodeInsiders": [.commandShiftN],
+        "com.vscodium": [.commandShiftN],
+        "com.visualstudio.code.oss": [.commandShiftN],
     ]
 
     /// Best-effort shortcuts scoped to specific apps. Not counted as guaranteed support.
@@ -542,6 +552,12 @@ final class LaunchOrchestrator {
         if BrowserProviderResolver.knownChromiumBundleIDs.contains(bundleID) { return true }
         if BrowserProviderResolver.knownFirefoxBundleIDs.contains(bundleID) { return true }
         return false
+    }
+
+    static func knownNewWindowShortcutAutomation() -> [String: [String]] {
+        knownNewWindowKeystrokes.mapValues { shortcuts in
+            shortcuts.map(\.automationLabel)
+        }
     }
 
     private func defaultAttemptProviderNewWindow(bundleID: String, appURL: URL? = nil) -> Bool {
@@ -730,13 +746,13 @@ final class LaunchOrchestrator {
     }
 
     private static func sendKnownNewWindowKeystrokes(bundleID: String) -> Bool {
-        guard let keystroke = knownNewWindowKeystrokes[bundleID] else { return false }
-        return sendNewWindowKeystrokes(bundleID: bundleID, strategy: keystroke)
+        guard let keystrokes = knownNewWindowKeystrokes[bundleID] else { return false }
+        return sendNewWindowKeystrokes(bundleID: bundleID, strategies: keystrokes)
     }
 
     private static func sendBestEffortNewWindowKeystrokes(bundleID: String) -> Bool {
         guard let keystroke = bestEffortNewWindowKeystrokes[bundleID] else { return false }
-        return sendNewWindowKeystrokes(bundleID: bundleID, strategy: keystroke)
+        return sendNewWindowKeystrokes(bundleID: bundleID, strategies: [keystroke])
     }
 
     private static func attemptSpeculativeNewWindowArgs(bundleID: String) {
@@ -746,7 +762,19 @@ final class LaunchOrchestrator {
         runOpenCommand(bundleID: bundleID, args: ["-n"])
     }
 
-    private static func sendNewWindowKeystrokes(bundleID: String, strategy: NewWindowKeystroke) -> Bool {
+    private static func sendNewWindowKeystrokes(bundleID: String, strategies: [NewWindowKeystroke]) -> Bool {
+        guard !strategies.isEmpty else { return false }
+
+        var dispatched = false
+
+        for strategy in strategies {
+            dispatched = sendNewWindowKeystroke(bundleID: bundleID, strategy: strategy) || dispatched
+        }
+
+        return dispatched
+    }
+
+    private static func sendNewWindowKeystroke(bundleID: String, strategy: NewWindowKeystroke) -> Bool {
         let escapedID = bundleID.replacingOccurrences(of: "\"", with: "\\\"")
         let source = """
         tell application id "\(escapedID)"
@@ -761,9 +789,10 @@ final class LaunchOrchestrator {
         let script = NSAppleScript(source: source)
         _ = script?.executeAndReturnError(&error)
         if let error {
-            Logger.log("[APP_LAUNCH] new-window keystroke failed bundle=\(bundleID): \(error)")
+            Logger.log("[APP_LAUNCH] new-window keystroke failed bundle=\(bundleID) shortcut=\(strategy.automationLabel): \(error)")
             return false
         }
+        Logger.log("[APP_LAUNCH] new-window keystroke sent bundle=\(bundleID) shortcut=\(strategy.automationLabel)")
         return true
     }
 

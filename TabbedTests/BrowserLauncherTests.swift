@@ -3,6 +3,20 @@ import XCTest
 
 final class BrowserLauncherTests: XCTestCase {
 
+    func testChromiumNewWindowArgsUsesRealNewTabForHelium() {
+        XCTAssertEqual(
+            ChromiumBrowserLauncher.newWindowArgs(bundleID: BrowserProviderResolver.heliumBundleID),
+            ["--new-window"]
+        )
+    }
+
+    func testChromiumNewWindowArgsUsesBlankURLForOtherChromiumBrowsers() {
+        XCTAssertEqual(
+            ChromiumBrowserLauncher.newWindowArgs(bundleID: "com.google.Chrome"),
+            ["--new-window", "about:blank"]
+        )
+    }
+
     func testFirefoxNewWindowArgsUsesDoubleHyphenFlagForBlankWindow() {
         XCTAssertEqual(
             FirefoxBrowserLauncher.newWindowArgs(url: nil),

@@ -130,8 +130,18 @@ protocol BrowserLauncher {
 
 final class ChromiumBrowserLauncher: BrowserLauncher {
     let engine: BrowserEngine = .chromium
+    static let newWindowFlag = "--new-window"
+
+    static func newWindowArgs(bundleID: String) -> [String] {
+        // Helium should open its native new tab page instead of about:blank.
+        if bundleID == BrowserProviderResolver.heliumBundleID {
+            return [newWindowFlag]
+        }
+        return [newWindowFlag, "about:blank"]
+    }
 
     func openNewWindow(provider: ResolvedBrowserProvider) -> Bool {
+        let args = Self.newWindowArgs(bundleID: provider.selection.bundleID)
         let script = """
         tell application id "\(provider.selection.bundleID)"
             activate
@@ -144,10 +154,10 @@ final class ChromiumBrowserLauncher: BrowserLauncher {
         end tell
         """
         if runAppleScript(script) { return true }
-        if runExecutable(appURL: provider.appURL, args: ["--new-window", "about:blank"]) {
+        if runExecutable(appURL: provider.appURL, args: args) {
             return true
         }
-        return runOpenWithArgs(bundleID: provider.selection.bundleID, args: ["--new-window", "about:blank"])
+        return runOpenWithArgs(bundleID: provider.selection.bundleID, args: args)
     }
 
     func openURL(_ url: URL, provider: ResolvedBrowserProvider) -> Bool {
