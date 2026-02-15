@@ -1204,7 +1204,8 @@ extension AppDelegate {
             let groupCounterWidth = TabBarView.groupCounterReservedWidth(
                 counterGroupIDs: group.maximizedGroupCounterIDs,
                 currentGroupID: group.id,
-                enabled: tabBarConfig.showMaximizedGroupCounters
+                enabled: tabBarConfig.showMaximizedGroupCounters,
+                showDragHandle: showHandle
             )
             let groupNameWidth = TabBarView.groupNameReservedWidth(for: group.name)
             let availableWidth = panelWidth - leadingPad - trailingPad - TabBarView.addButtonWidth - groupCounterWidth - handleWidth - groupNameWidth

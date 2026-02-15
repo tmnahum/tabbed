@@ -37,4 +37,22 @@ final class AccessibilityHelperFocusTests: XCTestCase {
         )
         XCTAssertTrue(shouldPromote)
     }
+
+    func testShouldActivateViaNSAppForCurrentProcess() {
+        XCTAssertTrue(
+            AccessibilityHelper.shouldActivateViaNSApp(
+                windowOwnerPID: 123,
+                currentProcessID: 123
+            )
+        )
+    }
+
+    func testShouldActivateViaNSAppForDifferentProcess() {
+        XCTAssertFalse(
+            AccessibilityHelper.shouldActivateViaNSApp(
+                windowOwnerPID: 456,
+                currentProcessID: 123
+            )
+        )
+    }
 }

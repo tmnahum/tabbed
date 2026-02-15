@@ -10,7 +10,7 @@ Tabbed is a native macOS menu bar utility that groups arbitrary cross-app applic
 ## Build & Test
 
 - **Build:** `scripts/build.sh` (runs xcodegen + xcodebuild, silent on success)
-- **Test:** `scripts/test.sh` (runs unit tests, silent on success)
+- **Test:** `scripts/test.sh` (runs unit tests, silent on success) -> takes 30 seconds, no need to run after small styling related changes
 
 The project uses **XcodeGen** (`project.yml` is the source of truth, `.xcodeproj` is gitignored). Scripts load `DEVELOPMENT_TEAM` from `.env`
 

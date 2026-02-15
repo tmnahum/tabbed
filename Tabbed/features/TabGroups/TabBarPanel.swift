@@ -318,7 +318,8 @@ class TabBarPanel: NSPanel {
         let groupCounterWidth = TabBarView.groupCounterReservedWidth(
             counterGroupIDs: counterIDs,
             currentGroupID: currentGroupID,
-            enabled: countersEnabled
+            enabled: countersEnabled,
+            showDragHandle: showHandle
         )
 
         // Top/bottom padding is always background
@@ -423,7 +424,8 @@ class TabBarPanel: NSPanel {
         let groupCounterWidth = TabBarView.groupCounterReservedWidth(
             counterGroupIDs: group.maximizedGroupCounterIDs,
             currentGroupID: group.id,
-            enabled: tabBarConfig.showMaximizedGroupCounters
+            enabled: tabBarConfig.showMaximizedGroupCounters,
+            showDragHandle: showHandle
         )
         let groupNameWidth = TabBarView.groupNameReservedWidth(for: group.name)
         let groupCounterStartX = leadingPad

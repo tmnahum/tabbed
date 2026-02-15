@@ -193,6 +193,13 @@ enum AccessibilityHelper {
         return focusedWindowID != targetWindowID
     }
 
+    static func shouldActivateViaNSApp(
+        windowOwnerPID: pid_t,
+        currentProcessID: pid_t = ProcessInfo.processInfo.processIdentifier
+    ) -> Bool {
+        windowOwnerPID == currentProcessID
+    }
+
     // MARK: - Actions
 
     @discardableResult
@@ -233,15 +240,18 @@ enum AccessibilityHelper {
         let elementToRaise = freshElement ?? window.element
         raise(elementToRaise)
 
-        let appForActivation = NSRunningApplication(processIdentifier: window.ownerPID)
-        let appIsActive = appForActivation?.isActive ?? false
+        let useNSAppActivation = shouldActivateViaNSApp(windowOwnerPID: window.ownerPID)
+        let appForActivation = useNSAppActivation ? nil : NSRunningApplication(processIdentifier: window.ownerPID)
+        let appIsActive = useNSAppActivation ? NSApp.isActive : (appForActivation?.isActive ?? false)
         let focusedAfterRaise = focusedWindowID(for: window.ownerPID)
         if shouldPromoteAfterRaise(
             appIsActive: appIsActive,
             focusedWindowID: focusedAfterRaise,
             targetWindowID: window.id
         ) {
-            if let app = appForActivation {
+            if useNSAppActivation {
+                activateCurrentApp()
+            } else if let app = appForActivation {
                 activate(app)
             }
 
@@ -268,6 +278,10 @@ enum AccessibilityHelper {
         } else {
             app.activate(options: [])
         }
+    }
+
+    private static func activateCurrentApp() {
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     // MARK: - Observer

@@ -46,9 +46,10 @@ struct TabBarView: View {
     static let groupNameEmptyHitWidth: CGFloat = 3
     static let groupNamePlaceholder = "Group name"
     static let groupCounterFontSize: CGFloat = 11
-    static let groupCounterHorizontalPadding: CGFloat = 5
-    static let groupCounterItemSpacing: CGFloat = 3
-    static let groupCounterTrailingSpacing: CGFloat = 6
+    static let groupCounterHorizontalPadding: CGFloat = 2
+    static let groupCounterItemSpacing: CGFloat = 4
+    static let groupCounterBaseLeadingSpacing: CGFloat = 4
+    static let groupCounterTrailingSpacing: CGFloat = 4
     static let inlineGroupNameEditGroupIDKey = "groupID"
     static let inlineTabNameEditWindowIDKey = "windowID"
 
@@ -97,7 +98,8 @@ struct TabBarView: View {
     static func groupCounterReservedWidth(
         counterGroupIDs: [UUID],
         currentGroupID: UUID,
-        enabled: Bool
+        enabled: Bool,
+        showDragHandle: Bool = true
     ) -> CGFloat {
         guard shouldShowMaximizedGroupCounters(
             counterGroupIDs: counterGroupIDs,
@@ -110,7 +112,12 @@ struct TabBarView: View {
             partial + measuredGroupCounterItemWidth(number: number)
         }
         let spacing = CGFloat(max(0, count - 1)) * groupCounterItemSpacing
-        return itemsWidth + spacing + groupCounterTrailingSpacing
+        return itemsWidth + spacing + groupCounterLeadingSpacing(showDragHandle: showDragHandle) + groupCounterTrailingSpacing
+    }
+
+    static func groupCounterLeadingSpacing(showDragHandle: Bool) -> CGFloat {
+        // Keep the visual left margin stable even though leadingPad changes with handle visibility.
+        showDragHandle ? groupCounterBaseLeadingSpacing : groupCounterBaseLeadingSpacing + 2
     }
 
     static func tabWidths(
@@ -387,7 +394,8 @@ struct TabBarView: View {
             let groupCounterWidth = Self.groupCounterReservedWidth(
                 counterGroupIDs: group.maximizedGroupCounterIDs,
                 currentGroupID: group.id,
-                enabled: tabBarConfig.showMaximizedGroupCounters
+                enabled: tabBarConfig.showMaximizedGroupCounters,
+                showDragHandle: tabBarConfig.showDragHandle
             )
             let groupNameLayoutName = isEditingGroupName ? groupNameDraft : group.name
             let groupNameWidth = Self.groupNameReservedWidth(for: groupNameLayoutName, isEditing: isEditingGroupName)
@@ -411,7 +419,10 @@ struct TabBarView: View {
 
             ZStack(alignment: .leading) {
                 HStack(spacing: Self.tabSpacing) {
-                    groupCounterControl(groupCounterWidth: groupCounterWidth)
+                    groupCounterControl(
+                        groupCounterWidth: groupCounterWidth,
+                        showDragHandle: tabBarConfig.showDragHandle
+                    )
                     if tabBarConfig.showDragHandle {
                         dragHandle
                     }
@@ -1175,7 +1186,7 @@ struct TabBarView: View {
     }
 
     @ViewBuilder
-    private func groupCounterControl(groupCounterWidth: CGFloat) -> some View {
+    private func groupCounterControl(groupCounterWidth: CGFloat, showDragHandle: Bool) -> some View {
         if groupCounterWidth > 0 {
             HStack(spacing: Self.groupCounterItemSpacing) {
                 ForEach(Array(group.maximizedGroupCounterIDs.enumerated()), id: \.element) { index, targetGroupID in
@@ -1186,18 +1197,16 @@ struct TabBarView: View {
                         }
                     } label: {
                         Text("\(index + 1)")
-                            .font(.system(size: Self.groupCounterFontSize, weight: .semibold))
-                            .foregroundStyle(isCurrent ? Color.white : Color.secondary)
+                            .font(.system(size: Self.groupCounterFontSize, weight: isCurrent ? .semibold : .regular))
+                            .foregroundStyle(Color.primary.opacity(isCurrent ? 0.95 : 0.45))
                             .padding(.horizontal, Self.groupCounterHorizontalPadding)
                             .padding(.vertical, 1)
-                            .background(
-                                Capsule()
-                                    .fill(isCurrent ? Color.accentColor : Color.primary.opacity(0.1))
-                            )
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
             }
+            .padding(.leading, Self.groupCounterLeadingSpacing(showDragHandle: showDragHandle))
             .padding(.trailing, Self.groupCounterTrailingSpacing)
             .frame(width: groupCounterWidth, alignment: .leading)
         }
