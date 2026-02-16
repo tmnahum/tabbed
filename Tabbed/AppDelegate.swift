@@ -240,12 +240,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // Session restoration
         let sessionConfig = SessionConfig.load()
         if let snapshots = SessionManager.loadSession() {
+            let maximizedCounterMetadata = SessionManager.loadMaximizedCounterOrderMetadata()
             if sessionConfig.restoreMode == .smart || sessionConfig.restoreMode == .always {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                     guard let self else { return }
                     self.restoreSessionOnLaunch(
                         snapshots: snapshots,
-                        mode: sessionConfig.restoreMode
+                        mode: sessionConfig.restoreMode,
+                        maximizedCounterOrderMetadata: maximizedCounterMetadata
                     )
                     if sessionConfig.restoreMode == .smart,
                        self.groupManager.groups.count < snapshots.count {
@@ -340,7 +342,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         switcherController.dismiss()
         deactivateAutoCapture()
         windowObserver.stopAll()
-        SessionManager.saveSession(groups: groupManager.groups, mruGroupOrder: mruTracker.mruGroupOrder())
+        SessionManager.saveSession(
+            groups: groupManager.groups,
+            mruGroupOrder: mruTracker.mruGroupOrder(),
+            maximizedCounterOrderBySpaceID: maximizedCounterOrderBySpaceID
+        )
         for group in groupManager.groups {
             let delta = group.tabBarSqueezeDelta
             guard delta > 0 else { continue }

@@ -3,7 +3,14 @@ import CoreGraphics
 
 enum SessionManager {
     private static let userDefaultsKey = "savedSession"
+    private static let maximizedCounterOrderKey = "savedSessionMaximizedCounterOrder"
     private static let bundleAndTitleSeparator = "\u{1f}"
+
+    /// Saved maximized counter order: space ID (as string) -> restore indices.
+    /// Applied after restore to preserve user's tab bar order when multiple groups are maximized.
+    struct MaximizedCounterOrderMetadata: Codable {
+        let orderBySpaceID: [String: [Int]]
+    }
 
     struct SnapshotWindowIdentity: Hashable {
         let windowID: CGWindowID
@@ -18,7 +25,11 @@ enum SessionManager {
 
     // MARK: - Save / Load
 
-    static func saveSession(groups: [TabGroup], mruGroupOrder: [UUID] = []) {
+    static func saveSession(
+        groups: [TabGroup],
+        mruGroupOrder: [UUID] = [],
+        maximizedCounterOrderBySpaceID: [UInt64: [UUID]] = [:]
+    ) {
         let snapshots = groups.map { group in
             GroupSnapshot(
                 windows: group.windows.map { window in
@@ -59,6 +70,43 @@ enum SessionManager {
 
         guard let data = try? JSONEncoder().encode(ordered) else { return }
         UserDefaults.standard.set(data, forKey: userDefaultsKey)
+
+        saveMaximizedCounterOrder(
+            maximizedCounterOrderBySpaceID: maximizedCounterOrderBySpaceID,
+            mruGroupOrder: mruGroupOrder,
+            groups: groups
+        )
+    }
+
+    private static func saveMaximizedCounterOrder(
+        maximizedCounterOrderBySpaceID: [UInt64: [UUID]],
+        mruGroupOrder: [UUID],
+        groups: [TabGroup]
+    ) {
+        guard !maximizedCounterOrderBySpaceID.isEmpty else { return }
+        let restoreOrder = mruGroupOrder + groups.map(\.id).filter { !mruGroupOrder.contains($0) }
+        var groupIDToIndex: [UUID: Int] = [:]
+        for (index, groupID) in restoreOrder.enumerated() {
+            groupIDToIndex[groupID] = index
+        }
+        var orderBySpaceID: [String: [Int]] = [:]
+        for (spaceID, orderedGroupIDs) in maximizedCounterOrderBySpaceID {
+            let indices = orderedGroupIDs.compactMap { groupIDToIndex[$0] }
+            guard !indices.isEmpty else { continue }
+            orderBySpaceID[String(spaceID)] = indices
+        }
+        guard !orderBySpaceID.isEmpty else { return }
+        let metadata = MaximizedCounterOrderMetadata(orderBySpaceID: orderBySpaceID)
+        guard let data = try? JSONEncoder().encode(metadata) else { return }
+        UserDefaults.standard.set(data, forKey: maximizedCounterOrderKey)
+    }
+
+    static func loadMaximizedCounterOrderMetadata() -> MaximizedCounterOrderMetadata? {
+        guard let data = UserDefaults.standard.data(forKey: maximizedCounterOrderKey),
+              let metadata = try? JSONDecoder().decode(MaximizedCounterOrderMetadata.self, from: data) else {
+            return nil
+        }
+        return metadata
     }
 
     static func loadSession() -> [GroupSnapshot]? {

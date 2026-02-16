@@ -9,6 +9,7 @@ extension AppDelegate {
     func restoreSessionOnLaunch(
         snapshots: [GroupSnapshot],
         mode: RestoreMode,
+        maximizedCounterOrderMetadata: SessionManager.MaximizedCounterOrderMetadata? = nil,
         attempt: Int = 0
     ) {
         let inventoryWindows = windowInventory.allSpacesForSwitcher()
@@ -19,23 +20,30 @@ extension AppDelegate {
                     self?.restoreSessionOnLaunch(
                         snapshots: snapshots,
                         mode: mode,
+                        maximizedCounterOrderMetadata: maximizedCounterOrderMetadata,
                         attempt: attempt + 1
                     )
                 }
                 return
             }
             Logger.log("[SessionRestore] launch restore inventory timeout; falling back to sync discovery")
-            restoreSession(snapshots: snapshots, mode: mode)
+            restoreSession(snapshots: snapshots, mode: mode, maximizedCounterOrderMetadata: maximizedCounterOrderMetadata)
             return
         }
 
-        restoreSession(snapshots: snapshots, mode: mode, preloadedLiveWindows: inventoryWindows)
+        restoreSession(
+            snapshots: snapshots,
+            mode: mode,
+            preloadedLiveWindows: inventoryWindows,
+            maximizedCounterOrderMetadata: maximizedCounterOrderMetadata
+        )
     }
 
     func restoreSession(
         snapshots: [GroupSnapshot],
         mode: RestoreMode,
-        preloadedLiveWindows: [WindowInfo]? = nil
+        preloadedLiveWindows: [WindowInfo]? = nil,
+        maximizedCounterOrderMetadata: SessionManager.MaximizedCounterOrderMetadata? = nil
     ) {
         let diagnosticsEnabled = SessionRestoreDiagnostics.isEnabled()
         let discovered = preloadedLiveWindows ?? WindowDiscovery.allSpaces()
@@ -82,6 +90,7 @@ extension AppDelegate {
 
         var claimed = Set<CGWindowID>()
         var sharedMatchesBySnapshotIdentity: [SessionManager.SnapshotWindowIdentity: WindowInfo] = [:]
+        var restoreIndexToGroupID: [Int: UUID] = [:]
 
         for (snapshotIndex, snapshot) in snapshots.enumerated() {
             guard let matchedWindows = SessionManager.matchGroup(
@@ -122,14 +131,30 @@ extension AppDelegate {
                 return zA < zB
             }) ?? 0
 
-            setupGroup(
+            if let group = setupGroup(
                 with: matchedWindows,
                 frame: restoredFrame,
                 squeezeDelta: effectiveSqueezeDelta,
                 activeIndex: frontmostIndex,
                 name: snapshot.name,
                 allowSharedMembership: true
-            )
+            ), maximizedCounterOrderMetadata != nil {
+                restoreIndexToGroupID[snapshotIndex] = group.id
+            }
+        }
+
+        // Apply persisted maximized counter order. Map saved restore indices to current group IDs.
+        // Use each group's current space ID (space IDs can change across restarts).
+        if let metadata = maximizedCounterOrderMetadata, !metadata.orderBySpaceID.isEmpty {
+            for (_, indices) in metadata.orderBySpaceID {
+                let orderedGroupIDs = indices.compactMap { restoreIndexToGroupID[$0] }
+                guard orderedGroupIDs.count >= 2,
+                      let firstGroupID = orderedGroupIDs.first,
+                      let firstGroup = groupManager.groups.first(where: { $0.id == firstGroupID }),
+                      let spaceID = resolvedSpaceID(for: firstGroup) else { continue }
+                maximizedCounterOrderBySpaceID[spaceID] = orderedGroupIDs
+            }
+            refreshMaximizedGroupCounters()
         }
 
         // Seed MRU from restore order (reflects previous session's MRU).
@@ -166,6 +191,7 @@ extension AppDelegate {
         guard let snapshots = pendingSessionSnapshots else { return }
         pendingSessionSnapshots = nil
         sessionState.hasPendingSession = false
-        restoreSession(snapshots: snapshots, mode: .always)
+        let metadata = SessionManager.loadMaximizedCounterOrderMetadata()
+        restoreSession(snapshots: snapshots, mode: .always, maximizedCounterOrderMetadata: metadata)
     }
 }

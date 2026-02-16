@@ -47,6 +47,8 @@ enum LauncherAction: Equatable {
 }
 
 struct LauncherCandidate: Identifiable {
+    static let mirrorWindowSectionTitle = "Mirror Windows"
+
     let id: String
     let action: LauncherAction
     let tier: Int
@@ -57,8 +59,12 @@ struct LauncherCandidate: Identifiable {
     let recency: Int
     let isRunningApp: Bool
     let hasNativeNewWindow: Bool
+    let sectionTitleOverride: String?
 
     var sectionTitle: String {
+        if let sectionTitleOverride {
+            return sectionTitleOverride
+        }
         switch tier {
         case 0: return "Windows"
         case 1: return "Groups"
@@ -79,7 +85,8 @@ extension LauncherCandidate: Equatable {
         lhs.subtitle == rhs.subtitle &&
         lhs.recency == rhs.recency &&
         lhs.isRunningApp == rhs.isRunningApp &&
-        lhs.hasNativeNewWindow == rhs.hasNativeNewWindow
+        lhs.hasNativeNewWindow == rhs.hasNativeNewWindow &&
+        lhs.sectionTitleOverride == rhs.sectionTitleOverride
     }
 }
 
@@ -99,6 +106,7 @@ struct LauncherQueryContext {
     let windowRecency: [CGWindowID: Int]
     let groupRecency: [UUID: Int]
     let appRecency: [String: Int]
+    var mirroredWindowIDs: Set<CGWindowID> = []
     let urlHistory: [LauncherHistoryStore.URLEntry]
     let appLaunchHistory: [String: LauncherHistoryStore.AppEntry]
     let actionHistory: [String: LauncherHistoryStore.ActionEntry]
@@ -141,7 +149,8 @@ final class LauncherEngine {
                 icon: window.icon,
                 recency: context.windowRecency[window.id] ?? 0,
                 isRunningApp: false,
-                hasNativeNewWindow: true
+                hasNativeNewWindow: true,
+                sectionTitleOverride: context.mirroredWindowIDs.contains(window.id) ? LauncherCandidate.mirrorWindowSectionTitle : nil
             ))
         }
 
@@ -162,7 +171,8 @@ final class LauncherEngine {
                     icon: group.activeWindow?.icon,
                     recency: context.groupRecency[group.id] ?? 0,
                     isRunningApp: false,
-                    hasNativeNewWindow: true
+                    hasNativeNewWindow: true,
+                    sectionTitleOverride: nil
                 ))
             }
         }
@@ -201,7 +211,8 @@ final class LauncherEngine {
                     icon: window.icon,
                     recency: context.windowRecency[window.id] ?? 0,
                     isRunningApp: false,
-                    hasNativeNewWindow: true
+                    hasNativeNewWindow: true,
+                    sectionTitleOverride: context.mirroredWindowIDs.contains(window.id) ? LauncherCandidate.mirrorWindowSectionTitle : nil
                 )
             }
         let previewWindows = sortWindows(windows).prefix(Self.previewWindowCap)
@@ -219,7 +230,8 @@ final class LauncherEngine {
                     icon: group.activeWindow?.icon,
                     recency: context.groupRecency[group.id] ?? 0,
                     isRunningApp: false,
-                    hasNativeNewWindow: true
+                    hasNativeNewWindow: true,
+                    sectionTitleOverride: nil
                 )
             }).prefix(Self.previewGroupCap))
         } else {
@@ -359,7 +371,8 @@ final class LauncherEngine {
                 icon: app.icon,
                 recency: max(context.appRecency[app.bundleID] ?? app.recency, historyRecency),
                 isRunningApp: app.isRunning,
-                hasNativeNewWindow: app.isRunning ? LaunchOrchestrator.hasNativeNewWindowSupport(bundleID: app.bundleID) : true
+                hasNativeNewWindow: app.isRunning ? LaunchOrchestrator.hasNativeNewWindowSupport(bundleID: app.bundleID) : true,
+                sectionTitleOverride: nil
             ))
         }
 
@@ -399,7 +412,8 @@ final class LauncherEngine {
                     icon: nil,
                     recency: historyRecency,
                     isRunningApp: false,
-                    hasNativeNewWindow: true
+                    hasNativeNewWindow: true,
+                    sectionTitleOverride: nil
                 )
                 upsertURLSuggestion(typedCandidate, canonical: canonical)
             }
@@ -424,7 +438,8 @@ final class LauncherEngine {
                     icon: nil,
                     recency: Int(entry.lastLaunchedAt.timeIntervalSince1970),
                     isRunningApp: false,
-                    hasNativeNewWindow: true
+                    hasNativeNewWindow: true,
+                    sectionTitleOverride: nil
                 )
                 upsertURLSuggestion(historyCandidate, canonical: canonical)
             }
@@ -449,7 +464,8 @@ final class LauncherEngine {
                 icon: nil,
                 recency: 0,
                 isRunningApp: false,
-                hasNativeNewWindow: true
+                hasNativeNewWindow: true,
+                sectionTitleOverride: nil
             )
         ]
     }
@@ -474,7 +490,8 @@ final class LauncherEngine {
                         icon: nil,
                         recency: history.map { Int($0.lastLaunchedAt.timeIntervalSince1970) } ?? 0,
                         isRunningApp: false,
-                        hasNativeNewWindow: true
+                        hasNativeNewWindow: true,
+                        sectionTitleOverride: nil
                     )
                 )
             }
@@ -500,7 +517,8 @@ final class LauncherEngine {
                         icon: nil,
                         recency: history.map { Int($0.lastLaunchedAt.timeIntervalSince1970) } ?? 0,
                         isRunningApp: false,
-                        hasNativeNewWindow: true
+                        hasNativeNewWindow: true,
+                        sectionTitleOverride: nil
                     )
                 )
             }
@@ -520,7 +538,8 @@ final class LauncherEngine {
                         icon: nil,
                         recency: history.map { Int($0.lastLaunchedAt.timeIntervalSince1970) } ?? 0,
                         isRunningApp: false,
-                        hasNativeNewWindow: true
+                        hasNativeNewWindow: true,
+                        sectionTitleOverride: nil
                     )
                 )
             }
@@ -540,7 +559,8 @@ final class LauncherEngine {
                         icon: nil,
                         recency: history.map { Int($0.lastLaunchedAt.timeIntervalSince1970) } ?? 0,
                         isRunningApp: false,
-                        hasNativeNewWindow: true
+                        hasNativeNewWindow: true,
+                        sectionTitleOverride: nil
                     )
                 )
             }
@@ -561,7 +581,8 @@ final class LauncherEngine {
                             icon: nil,
                             recency: history.map { Int($0.lastLaunchedAt.timeIntervalSince1970) } ?? 0,
                             isRunningApp: false,
-                            hasNativeNewWindow: true
+                            hasNativeNewWindow: true,
+                            sectionTitleOverride: nil
                         )
                     )
                 }
@@ -581,7 +602,8 @@ final class LauncherEngine {
                             icon: nil,
                             recency: history.map { Int($0.lastLaunchedAt.timeIntervalSince1970) } ?? 0,
                             isRunningApp: false,
-                            hasNativeNewWindow: true
+                            hasNativeNewWindow: true,
+                            sectionTitleOverride: nil
                         )
                     )
                 }
@@ -607,7 +629,8 @@ final class LauncherEngine {
                 icon: nil,
                 recency: history.map { Int($0.lastLaunchedAt.timeIntervalSince1970) } ?? 0,
                 isRunningApp: false,
-                hasNativeNewWindow: true
+                hasNativeNewWindow: true,
+                sectionTitleOverride: nil
             )
         ]
     }
@@ -625,7 +648,8 @@ final class LauncherEngine {
                 icon: nil,
                 recency: 0,
                 isRunningApp: false,
-                hasNativeNewWindow: true
+                hasNativeNewWindow: true,
+                sectionTitleOverride: nil
             )
         ]
     }
@@ -721,6 +745,9 @@ final class LauncherEngine {
 
     private func sortWindows(_ candidates: [LauncherCandidate]) -> [LauncherCandidate] {
         candidates.sorted { lhs, rhs in
+            let lhsIsMirror = lhs.sectionTitleOverride == LauncherCandidate.mirrorWindowSectionTitle
+            let rhsIsMirror = rhs.sectionTitleOverride == LauncherCandidate.mirrorWindowSectionTitle
+            if lhsIsMirror != rhsIsMirror { return !lhsIsMirror }
             if lhs.score != rhs.score { return lhs.score > rhs.score }
             if lhs.recency != rhs.recency { return lhs.recency > rhs.recency }
             return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending

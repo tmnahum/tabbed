@@ -193,6 +193,7 @@ extension AppDelegate {
 
         let mergeGroups: [TabGroup]
         let looseWindows: [WindowInfo]
+        let mirroredWindowIDs: Set<CGWindowID>
         let mode: LauncherMode
         if let group {
             mode = .addToGroup(targetGroupID: group.id, targetSpaceID: group.spaceID)
@@ -225,10 +226,16 @@ extension AppDelegate {
                 }
                 return candidate.spaceID == group.spaceID
             }
+            mirroredWindowIDs = Set(
+                looseWindows
+                    .map(\.id)
+                    .filter { groupManager.isWindowGrouped($0) }
+            )
         } else {
             mode = .newGroup
             looseWindows = spaceWindows.filter { !groupManager.isWindowGrouped($0.id) }
             mergeGroups = []
+            mirroredWindowIDs = []
         }
 
         var windowRecency: [CGWindowID: Int] = [:]
@@ -268,6 +275,7 @@ extension AppDelegate {
             windowRecency: windowRecency,
             groupRecency: groupRecency,
             appRecency: appRecency,
+            mirroredWindowIDs: mirroredWindowIDs,
             urlHistory: launcherHistoryStore.urlEntries(),
             appLaunchHistory: launcherHistoryStore.appEntriesByBundleID(),
             actionHistory: launcherHistoryStore.actionEntriesByID()
@@ -1042,6 +1050,7 @@ extension AppDelegate {
             // Don't raise the next tab — keep the released window focused
             panel.orderAbove(windowID: newActive.id)
         }
+        dissolveFunctionallyEmptySuperpinGroups()
         evaluateAutoCapture()
     }
 
@@ -1076,6 +1085,7 @@ extension AppDelegate {
         } else if let newActive = group.activeWindow {
             bringTabToFront(newActive, in: group)
         }
+        dissolveFunctionallyEmptySuperpinGroups()
         evaluateAutoCapture()
     }
 
@@ -1944,6 +1954,7 @@ extension AppDelegate {
         } else if let newActive = group.activeWindow {
             panel.orderAbove(windowID: newActive.id)
         }
+        dissolveFunctionallyEmptySuperpinGroups()
         evaluateAutoCapture()
     }
 
@@ -1986,6 +1997,8 @@ extension AppDelegate {
             AccessibilityHelper.closeWindow(window.element)
             removeWindowFromAllGroups(windowID: window.id)
         }
+
+        dissolveFunctionallyEmptySuperpinGroups()
 
         guard tabBarPanels[group.id] != nil else {
             evaluateAutoCapture()

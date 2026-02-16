@@ -37,6 +37,7 @@ final class LauncherEngineTests: XCTestCase {
         mode: LauncherMode = .newGroup,
         looseWindows: [WindowInfo],
         mergeGroups: [TabGroup] = [],
+        mirroredWindowIDs: Set<CGWindowID> = [],
         targetGroupDisplayName: String? = nil,
         targetGroupWindowCount: Int? = nil,
         targetActiveTabID: CGWindowID? = nil,
@@ -69,6 +70,7 @@ final class LauncherEngineTests: XCTestCase {
             windowRecency: [:],
             groupRecency: [:],
             appRecency: [:],
+            mirroredWindowIDs: mirroredWindowIDs,
             urlHistory: urlHistory,
             appLaunchHistory: appLaunchHistory,
             actionHistory: actionHistory
@@ -229,6 +231,25 @@ final class LauncherEngineTests: XCTestCase {
         XCTAssertEqual(windowCount, 6)
         XCTAssertEqual(groupCount, 3)
         XCTAssertFalse(hasNonPreviewType)
+    }
+
+    func testAddModeMirrorWindowsUseMirrorWindowsSection() {
+        let regularWindow = makeWindow(id: 1, appName: "Safari", title: "Regular")
+        let mirrorWindow = makeWindow(id: 2, appName: "Terminal", title: "Mirror")
+        let context = makeContext(
+            mode: .addToGroup(targetGroupID: UUID(), targetSpaceID: 1),
+            looseWindows: [regularWindow, mirrorWindow],
+            mirroredWindowIDs: [mirrorWindow.id]
+        )
+
+        let ranked = LauncherEngine().rank(query: "", context: context)
+        let windowSections: [CGWindowID: String] = Dictionary(uniqueKeysWithValues: ranked.compactMap { candidate in
+            guard case .looseWindow(let windowID) = candidate.action else { return nil }
+            return (windowID, candidate.sectionTitle)
+        })
+
+        XCTAssertEqual(windowSections[regularWindow.id], "Windows")
+        XCTAssertEqual(windowSections[mirrorWindow.id], LauncherCandidate.mirrorWindowSectionTitle)
     }
 
     func testAddModeQueryMatchesGroupActions() {

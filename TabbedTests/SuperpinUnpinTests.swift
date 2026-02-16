@@ -3,6 +3,11 @@ import XCTest
 import ApplicationServices
 
 final class SuperpinUnpinTests: XCTestCase {
+    private final class StubTabBarPanel: TabBarPanel {
+        override func orderAbove(windowID: CGWindowID) {}
+        override func close() {}
+    }
+
     private func makeWindow(id: CGWindowID) -> WindowInfo {
         WindowInfo(
             id: id,
@@ -124,5 +129,61 @@ final class SuperpinUnpinTests: XCTestCase {
         XCTAssertTrue(third.contains(windowID: thirdWindow.id))
         XCTAssertTrue(target.contains(windowID: sourceWindow.id))
         XCTAssertEqual(app.groupManager.group(for: sourceWindow.id)?.id, target.id)
+    }
+
+    func testReleaseTabDissolvesGroupThatBecomesMirrorsOnly() {
+        let app = makeAppDelegateWithSuperpinEnabled()
+        let sourceWindow = makeWindow(id: 601)
+        let targetWindow = makeWindow(id: 602)
+        let thirdWindow = makeWindow(id: 603)
+
+        guard let source = app.groupManager.createGroup(with: [sourceWindow], frame: .zero),
+              let target = app.groupManager.createGroup(with: [targetWindow], frame: .zero),
+              let third = app.groupManager.createGroup(with: [thirdWindow], frame: .zero) else {
+            XCTFail("Expected group creation")
+            return
+        }
+
+        let counters = [source.id, target.id, third.id]
+        source.maximizedGroupCounterIDs = counters
+        target.maximizedGroupCounterIDs = counters
+        third.maximizedGroupCounterIDs = counters
+
+        app.setSuperPinned(true, forWindowIDs: [thirdWindow.id], in: third)
+        XCTAssertTrue(source.contains(windowID: thirdWindow.id))
+
+        app.releaseTabs(withIDs: [sourceWindow.id], from: source, panel: StubTabBarPanel())
+
+        XCTAssertFalse(app.groupManager.groups.contains(where: { $0.id == source.id }))
+        XCTAssertTrue(third.contains(windowID: thirdWindow.id))
+    }
+
+    func testCloseTabDissolvesGroupThatBecomesMirrorsOnly() {
+        let app = makeAppDelegateWithSuperpinEnabled()
+        let sourceWindow = makeWindow(id: 701)
+        let targetWindow = makeWindow(id: 702)
+        let thirdWindow = makeWindow(id: 703)
+
+        guard let source = app.groupManager.createGroup(with: [sourceWindow], frame: .zero),
+              let target = app.groupManager.createGroup(with: [targetWindow], frame: .zero),
+              let third = app.groupManager.createGroup(with: [thirdWindow], frame: .zero) else {
+            XCTFail("Expected group creation")
+            return
+        }
+
+        let counters = [source.id, target.id, third.id]
+        source.maximizedGroupCounterIDs = counters
+        target.maximizedGroupCounterIDs = counters
+        third.maximizedGroupCounterIDs = counters
+
+        app.setSuperPinned(true, forWindowIDs: [thirdWindow.id], in: third)
+        XCTAssertTrue(source.contains(windowID: thirdWindow.id))
+
+        let sourcePanel = StubTabBarPanel()
+        app.tabBarPanels[source.id] = sourcePanel
+        app.closeTabs(withIDs: [sourceWindow.id], from: source, panel: sourcePanel)
+
+        XCTAssertFalse(app.groupManager.groups.contains(where: { $0.id == source.id }))
+        XCTAssertTrue(third.contains(windowID: thirdWindow.id))
     }
 }
