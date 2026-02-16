@@ -1170,15 +1170,55 @@ extension AppDelegate {
             return
         }
 
-        let mirrored = superpinMirroredWindowIDsByGroupID[sourceGroup.id] ?? []
-        let mirroredToRelease = ids.intersection(mirrored)
-        let localOnly = ids.subtracting(mirroredToRelease)
+        let sourceWindowsByID = Dictionary(uniqueKeysWithValues: sourceGroup.windows.map { ($0.id, $0) })
+        let mirroredInSourceGroup = superpinMirroredWindowIDsByGroupID[sourceGroup.id] ?? []
+        sourceGroup.setPinned(false, forWindowIDs: ids)
 
-        sourceGroup.setPinned(false, forWindowIDs: localOnly)
-        if !mirroredToRelease.isEmpty {
-            _ = releaseMirroredSuperpinWindows(withIDs: mirroredToRelease, from: sourceGroup)
+        for windowID in ids {
+            let sourceWasMirror = mirroredInSourceGroup.contains(windowID)
+            let sourceWasSuperPinned = sourceWindowsByID[windowID]?.pinState == .super
+            let hasMirroredPeers = superpinMirroredWindowIDsByGroupID.contains { groupID, mirroredWindowIDs in
+                groupID != sourceGroup.id && mirroredWindowIDs.contains(windowID)
+            }
+            guard sourceWasMirror || sourceWasSuperPinned || hasMirroredPeers else { continue }
+
+            removeSuperpinMirrors(windowIDs: [windowID], from: sourceGroup.id)
+            collapseSuperpinMembership(forWindowID: windowID, keeping: sourceGroup)
         }
         groupManager.objectWillChange.send()
+    }
+
+    /// Collapse shared superpin memberships so a window lives only in the chosen source group.
+    private func collapseSuperpinMembership(forWindowID windowID: CGWindowID, keeping sourceGroup: TabGroup) {
+        let groupsToRelease = groupManager.groups(for: windowID).filter { $0.id != sourceGroup.id }
+        for group in groupsToRelease {
+            if isSuperpinMirror(windowID: windowID, in: group.id) {
+                _ = releaseMirroredSuperpinWindows(withIDs: [windowID], from: group)
+                continue
+            }
+
+            let representativeWindow = group.windows.first(where: { $0.id == windowID })
+            _ = groupManager.releaseWindow(withID: windowID, from: group)
+            removeSuperpinMirrors(windowIDs: [windowID], from: group.id)
+
+            if !groupManager.groups.contains(where: { $0.id == group.id }) {
+                if let panel = tabBarPanels[group.id] {
+                    handleGroupDissolution(group: group, panel: panel)
+                }
+            } else if let panel = tabBarPanels[group.id], let newActive = group.activeWindow {
+                if lastActiveGroupID == group.id {
+                    bringTabToFront(newActive, in: group)
+                } else {
+                    panel.orderAbove(windowID: newActive.id)
+                }
+            }
+
+            if let representativeWindow {
+                stopObservingWindowIfUnused(representativeWindow)
+            }
+        }
+
+        promoteWindowOwnership(windowID: windowID, group: sourceGroup)
     }
 
     func setSuperPinned(_ superPinned: Bool, forWindowIDs ids: Set<CGWindowID>, in sourceGroup: TabGroup) {

@@ -1297,19 +1297,22 @@ struct TabBarView: View {
                     beginTabNameEditing(for: window, fromContextMenu: true)
                 }
                 Divider()
-                if canSuperpin {
-                    Button(
-                        allSuperPinned
-                            ? (targets.count == 1 ? "Remove Superpin" : "Remove Superpins")
-                            : (targets.count == 1 ? "Superpin Tab" : "Superpin Tabs")
-                    ) {
+                if allSuperPinned {
+                    Button(targets.count == 1 ? "Unsuperpin Tab" : "Unsuperpin Tabs") {
                         selectedIDs = []
-                        onSetSuperPinned(targets, !allSuperPinned)
+                        onSetPinned(targets, false)
                     }
-                }
-                Button(allPinned ? (targets.count == 1 ? "Unpin Tab" : "Unpin Tabs") : (targets.count == 1 ? "Pin Tab" : "Pin Tabs")) {
-                    selectedIDs = []
-                    onSetPinned(targets, !allPinned)
+                } else {
+                    if canSuperpin {
+                        Button(targets.count == 1 ? "Superpin Tab" : "Superpin Tabs") {
+                            selectedIDs = []
+                            onSetSuperPinned(targets, true)
+                        }
+                    }
+                    Button(allPinned ? (targets.count == 1 ? "Unpin Tab" : "Unpin Tabs") : (targets.count == 1 ? "Pin Tab" : "Pin Tabs")) {
+                        selectedIDs = []
+                        onSetPinned(targets, !allPinned)
+                    }
                 }
                 Divider()
                 Button("Release from Group") {
