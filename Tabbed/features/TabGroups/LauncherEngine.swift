@@ -47,7 +47,7 @@ enum LauncherAction: Equatable {
 }
 
 struct LauncherCandidate: Identifiable {
-    static let mirrorWindowSectionTitle = "Mirror Windows"
+    static let mirrorTabsSectionTitle = "Mirror Tabs"
 
     let id: String
     let action: LauncherAction
@@ -67,7 +67,7 @@ struct LauncherCandidate: Identifiable {
         }
         switch tier {
         case 0: return "Windows"
-        case 1: return "Groups"
+        case 1: return "Merge-in Groups"
         case 2: return "Suggestions"
         case 3: return "Web Search"
         default: return "Actions"
@@ -144,13 +144,13 @@ final class LauncherEngine {
                 action: .looseWindow(windowID: window.id),
                 tier: 0,
                 score: score,
-                displayName: window.appName,
-                subtitle: window.title,
+                displayName: window.title.isEmpty ? window.appName : window.title,
+                subtitle: window.title.isEmpty ? "" : window.appName,
                 icon: window.icon,
                 recency: context.windowRecency[window.id] ?? 0,
                 isRunningApp: false,
                 hasNativeNewWindow: true,
-                sectionTitleOverride: context.mirroredWindowIDs.contains(window.id) ? LauncherCandidate.mirrorWindowSectionTitle : nil
+                sectionTitleOverride: context.mirroredWindowIDs.contains(window.id) ? LauncherCandidate.mirrorTabsSectionTitle : nil
             ))
         }
 
@@ -186,9 +186,12 @@ final class LauncherEngine {
         ) + actions
         let search = buildSearchCandidates(query: query, context: context)
 
+        let regularWindows = windows.filter { $0.sectionTitleOverride != LauncherCandidate.mirrorTabsSectionTitle }
+        let mirrorWindows = windows.filter { $0.sectionTitleOverride == LauncherCandidate.mirrorTabsSectionTitle }
         let ranked =
-            sortWindows(windows) +
+            sortWindows(regularWindows) +
             sortGroups(groups) +
+            sortWindows(mirrorWindows) +
             sortSuggestions(suggestions) +
             sortSearches(search)
 
@@ -206,16 +209,19 @@ final class LauncherEngine {
                     action: .looseWindow(windowID: window.id),
                     tier: 0,
                     score: 1,
-                    displayName: window.appName,
-                    subtitle: window.title,
+                    displayName: window.title.isEmpty ? window.appName : window.title,
+                    subtitle: window.title.isEmpty ? "" : window.appName,
                     icon: window.icon,
                     recency: context.windowRecency[window.id] ?? 0,
                     isRunningApp: false,
                     hasNativeNewWindow: true,
-                    sectionTitleOverride: context.mirroredWindowIDs.contains(window.id) ? LauncherCandidate.mirrorWindowSectionTitle : nil
+                    sectionTitleOverride: context.mirroredWindowIDs.contains(window.id) ? LauncherCandidate.mirrorTabsSectionTitle : nil
                 )
             }
-        let previewWindows = sortWindows(windows).prefix(Self.previewWindowCap)
+        let regularWindows = windows.filter { $0.sectionTitleOverride != LauncherCandidate.mirrorTabsSectionTitle }
+        let mirrorWindows = windows.filter { $0.sectionTitleOverride == LauncherCandidate.mirrorTabsSectionTitle }
+        let previewWindows = sortWindows(regularWindows).prefix(Self.previewWindowCap)
+        let previewMirror = sortWindows(mirrorWindows).prefix(Self.previewWindowCap)
 
         let previewGroups: [LauncherCandidate]
         if context.mode.isAddToGroup {
@@ -240,7 +246,7 @@ final class LauncherEngine {
 
         let previewActions = previewActionCandidates(context: context)
 
-        return previewActions + Array(previewWindows) + previewGroups
+        return previewActions + Array(previewWindows) + previewGroups + Array(previewMirror)
     }
 
     static func normalizeQuery(_ query: String) -> String {
@@ -745,8 +751,8 @@ final class LauncherEngine {
 
     private func sortWindows(_ candidates: [LauncherCandidate]) -> [LauncherCandidate] {
         candidates.sorted { lhs, rhs in
-            let lhsIsMirror = lhs.sectionTitleOverride == LauncherCandidate.mirrorWindowSectionTitle
-            let rhsIsMirror = rhs.sectionTitleOverride == LauncherCandidate.mirrorWindowSectionTitle
+            let lhsIsMirror = lhs.sectionTitleOverride == LauncherCandidate.mirrorTabsSectionTitle
+            let rhsIsMirror = rhs.sectionTitleOverride == LauncherCandidate.mirrorTabsSectionTitle
             if lhsIsMirror != rhsIsMirror { return !lhsIsMirror }
             if lhs.score != rhs.score { return lhs.score > rhs.score }
             if lhs.recency != rhs.recency { return lhs.recency > rhs.recency }

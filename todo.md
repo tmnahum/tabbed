@@ -6,6 +6,13 @@
 
 - 
 
+- move mirror tabs down
+features:
+- terminal command in directory feature (that way you can run cursor ~/dir)
+- later: raycast integration
+
+
+
 
 - do a pass on default settings and clean install
 
