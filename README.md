@@ -9,7 +9,7 @@ Tabbed is a macos utility which lets you make your application windows tabs in a
 - windows in a group are synced to be in the same spot behind each other, and the tab bar is rendered on top. does not take over your system much beyond that
 
 ## Features:
-- Supports maximization and window snapping, should work in tandem with other window managers
+- Supports maximization and window snapping, works in tandem with other window managers (tested with macos snapping & raycast)
 - AltTab inspired quick switching functionality, which switches between and within window groups (by default replacing the macos model of switching between / within individual apps)
 - quick app launcher with hyper+t (default) shortcut
 - name your window groups and rename your tabs
