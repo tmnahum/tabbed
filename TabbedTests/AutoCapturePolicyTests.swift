@@ -156,6 +156,108 @@ final class AutoCapturePolicyTests: XCTestCase {
         XCTAssertEqual(selected, groupB)
     }
 
+    func testSelectCaptureGroupPrefersMatchingScreenOverLastActive() {
+        let groupA = UUID()
+        let groupB = UUID()
+        let candidates = [
+            AutoCaptureWindowRoutingCandidate(
+                groupID: groupA,
+                groupSpaceID: 1,
+                screenVisibleFrame: CGRect(x: 0, y: 0, width: 1000, height: 800)
+            ),
+            AutoCaptureWindowRoutingCandidate(
+                groupID: groupB,
+                groupSpaceID: 1,
+                screenVisibleFrame: CGRect(x: 1000, y: 0, width: 1000, height: 800)
+            )
+        ]
+
+        let selected = AutoCapturePolicy.selectCaptureGroupID(
+            candidates: candidates,
+            windowFrame: CGRect(x: 1200, y: 120, width: 700, height: 500),
+            windowSpaceID: 1,
+            lastActiveGroupID: groupA,
+            mruEntries: [.group(groupA), .group(groupB)]
+        )
+
+        XCTAssertEqual(selected, groupB)
+    }
+
+    func testSelectCaptureGroupRejectsSpaceMismatch() {
+        let groupA = UUID()
+        let groupB = UUID()
+        let candidates = [
+            AutoCaptureWindowRoutingCandidate(
+                groupID: groupA,
+                groupSpaceID: 11,
+                screenVisibleFrame: CGRect(x: 0, y: 0, width: 1200, height: 800)
+            ),
+            AutoCaptureWindowRoutingCandidate(
+                groupID: groupB,
+                groupSpaceID: 12,
+                screenVisibleFrame: CGRect(x: 0, y: 0, width: 1200, height: 800)
+            )
+        ]
+
+        let selected = AutoCapturePolicy.selectCaptureGroupID(
+            candidates: candidates,
+            windowFrame: CGRect(x: 400, y: 160, width: 600, height: 500),
+            windowSpaceID: 12,
+            lastActiveGroupID: groupA,
+            mruEntries: [.group(groupA), .group(groupB)]
+        )
+
+        XCTAssertEqual(selected, groupB)
+    }
+
+    func testSelectCaptureGroupUsesMRUAmongMatchingCandidates() {
+        let groupA = UUID()
+        let groupB = UUID()
+        let candidates = [
+            AutoCaptureWindowRoutingCandidate(
+                groupID: groupA,
+                groupSpaceID: 0,
+                screenVisibleFrame: CGRect(x: 0, y: 0, width: 1200, height: 800)
+            ),
+            AutoCaptureWindowRoutingCandidate(
+                groupID: groupB,
+                groupSpaceID: 0,
+                screenVisibleFrame: CGRect(x: 0, y: 0, width: 1200, height: 800)
+            )
+        ]
+
+        let selected = AutoCapturePolicy.selectCaptureGroupID(
+            candidates: candidates,
+            windowFrame: CGRect(x: 200, y: 200, width: 400, height: 300),
+            windowSpaceID: nil,
+            lastActiveGroupID: nil,
+            mruEntries: [.group(groupB), .group(groupA)]
+        )
+
+        XCTAssertEqual(selected, groupB)
+    }
+
+    func testSelectCaptureGroupReturnsNilWhenNoScreenMatch() {
+        let groupA = UUID()
+        let candidates = [
+            AutoCaptureWindowRoutingCandidate(
+                groupID: groupA,
+                groupSpaceID: 0,
+                screenVisibleFrame: CGRect(x: 0, y: 0, width: 800, height: 600)
+            )
+        ]
+
+        let selected = AutoCapturePolicy.selectCaptureGroupID(
+            candidates: candidates,
+            windowFrame: CGRect(x: 1200, y: 100, width: 500, height: 400),
+            windowSpaceID: nil,
+            lastActiveGroupID: groupA,
+            mruEntries: [.group(groupA)]
+        )
+
+        XCTAssertNil(selected)
+    }
+
     func testShouldSeedKnownWindowsWhenRequestedForFreshObserver() {
         XCTAssertTrue(
             AutoCapturePolicy.shouldSeedKnownWindows(

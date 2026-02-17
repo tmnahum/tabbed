@@ -78,6 +78,35 @@ enum AutoCapturePolicy {
         return candidates.first
     }
 
+    static func selectCaptureGroupID(
+        candidates: [AutoCaptureWindowRoutingCandidate],
+        windowFrame: CGRect,
+        windowSpaceID: UInt64?,
+        lastActiveGroupID: UUID?,
+        mruEntries: [MRUEntry]
+    ) -> UUID? {
+        var matchingGroupIDs: [UUID] = []
+        var seen: Set<UUID> = []
+
+        for candidate in candidates {
+            guard candidate.screenVisibleFrame.intersects(windowFrame) else { continue }
+            if let windowSpaceID,
+               candidate.groupSpaceID != 0,
+               candidate.groupSpaceID != windowSpaceID {
+                continue
+            }
+            if seen.insert(candidate.groupID).inserted {
+                matchingGroupIDs.append(candidate.groupID)
+            }
+        }
+
+        return selectMostRecentGroupID(
+            candidates: matchingGroupIDs,
+            lastActiveGroupID: lastActiveGroupID,
+            mruEntries: mruEntries
+        )
+    }
+
     /// Seed known-window snapshots only when creating a fresh observer.
     /// Re-seeding on every evaluation is expensive and can stall the app,
     /// especially right after wake when AX is slow to respond.
@@ -92,6 +121,12 @@ enum AutoCapturePolicy {
 struct AutoCaptureRetryKey: Hashable {
     let pid: pid_t
     let windowID: CGWindowID
+}
+
+struct AutoCaptureWindowRoutingCandidate {
+    let groupID: UUID
+    let groupSpaceID: UInt64
+    let screenVisibleFrame: CGRect
 }
 
 // MARK: - Auto-Capture
@@ -168,18 +203,23 @@ extension AppDelegate {
     }
 
     private func selectedAutoCaptureGroup(for mode: AutoCaptureMode) -> (group: TabGroup, screen: NSScreen)? {
+        mostRecentCandidate(from: eligibleAutoCaptureGroups(for: mode))
+    }
+
+    private func eligibleAutoCaptureGroups(
+        for mode: AutoCaptureMode
+    ) -> [(group: TabGroup, screen: NSScreen)] {
         switch mode {
         case .never:
-            return nil
+            return []
         case .always:
-            let candidates = groupManager.groups.compactMap { group -> (group: TabGroup, screen: NSScreen)? in
+            return groupManager.groups.compactMap { group -> (group: TabGroup, screen: NSScreen)? in
                 guard isGroupOnCurrentSpace(group),
                       let screen = screenForGroup(group) else { return nil }
                 return (group: group, screen: screen)
             }
-            return mostRecentCandidate(from: candidates)
         case .whenMaximized:
-            let candidates = groupManager.groups.compactMap { group -> (group: TabGroup, screen: NSScreen)? in
+            return groupManager.groups.compactMap { group -> (group: TabGroup, screen: NSScreen)? in
                 let onSpace = isGroupOnCurrentSpace(group)
                 let (maximized, screen) = isGroupMaximized(group)
                 Logger.log("[AutoCapture] evaluate: group \(group.id) — onSpace=\(onSpace), maximized=\(maximized)")
@@ -188,19 +228,18 @@ extension AppDelegate {
                       let screen else { return nil }
                 return (group: group, screen: screen)
             }
-            return mostRecentCandidate(from: candidates)
         case .whenOnly:
             let groupsOnSpace = groupManager.groups.filter { isGroupOnCurrentSpace($0) }
             guard groupsOnSpace.count == 1,
                   let group = groupsOnSpace.first,
-                  let screen = screenForGroup(group) else { return nil }
+                  let screen = screenForGroup(group) else { return [] }
             Logger.log("[AutoCapture] evaluate: only group on space — \(group.id)")
-            return (group: group, screen: screen)
+            return [(group: group, screen: screen)]
         case .whenMaximizedOrOnly:
             let groupsOnSpace = groupManager.groups.filter { isGroupOnCurrentSpace($0) }
             let onlyGroupID = groupsOnSpace.count == 1 ? groupsOnSpace.first?.id : nil
 
-            let candidates = groupsOnSpace.compactMap { group -> (group: TabGroup, screen: NSScreen)? in
+            return groupsOnSpace.compactMap { group -> (group: TabGroup, screen: NSScreen)? in
                 let (maximized, maximizedScreen) = isGroupMaximized(group)
                 let onlyGroupOnSpace = group.id == onlyGroupID
                 Logger.log("[AutoCapture] evaluate: group \(group.id) — maximized=\(maximized), only=\(onlyGroupOnSpace)")
@@ -212,9 +251,51 @@ extension AppDelegate {
                 guard let screen = maximizedScreen ?? screenForGroup(group) else { return nil }
                 return (group: group, screen: screen)
             }
-
-            return mostRecentCandidate(from: candidates)
         }
+    }
+
+    private func targetAutoCaptureGroup(
+        for windowID: CGWindowID,
+        frame: CGRect,
+        source: String
+    ) -> (group: TabGroup, screen: NSScreen)? {
+        let mode = sessionConfig.autoCaptureMode
+        guard mode != .never else { return nil }
+
+        let candidates = eligibleAutoCaptureGroups(for: mode)
+        guard !candidates.isEmpty else { return nil }
+
+        let routingCandidates = candidates.map { candidate in
+            AutoCaptureWindowRoutingCandidate(
+                groupID: candidate.group.id,
+                groupSpaceID: candidate.group.spaceID,
+                screenVisibleFrame: CoordinateConverter.visibleFrameInAX(for: candidate.screen)
+            )
+        }
+
+        let windowSpaceID = SpaceUtils.spaceID(for: windowID)
+        guard let selectedID = AutoCapturePolicy.selectCaptureGroupID(
+            candidates: routingCandidates,
+            windowFrame: frame,
+            windowSpaceID: windowSpaceID,
+            lastActiveGroupID: lastActiveGroupID,
+            mruEntries: mruTracker.entries
+        ) else {
+            Logger.log(
+                "[AutoCapture] captureIfEligible[\(source)]: no matching eligible group for frame=\(frame) space=\(windowSpaceID.map(String.init) ?? "unknown")"
+            )
+            return nil
+        }
+
+        guard let selected = candidates.first(where: { $0.group.id == selectedID }) else {
+            return nil
+        }
+
+        if autoCaptureGroup?.id != selected.group.id || autoCaptureScreen != selected.screen {
+            Logger.log("[AutoCapture] captureIfEligible[\(source)]: rerouting target group to \(selected.group.id)")
+            activateAutoCapture(for: selected.group, on: selected.screen)
+        }
+        return selected
     }
 
     private func mostRecentCandidate(
@@ -625,8 +706,9 @@ extension AppDelegate {
         }
         let shouldCreateUnmatchedGroup = sessionConfig.autoCaptureUnmatchedToNewGroup
 
-        if let group = autoCaptureGroup,
-           let screen = autoCaptureScreen {
+        if let target = targetAutoCaptureGroup(for: window.id, frame: frame, source: source) {
+            let group = target.group
+            let screen = target.screen
             let visibleFrame = CoordinateConverter.visibleFrameInAX(for: screen)
             guard visibleFrame.intersects(frame) else {
                 Logger.log("[AutoCapture] captureIfEligible[\(source)]: not on screen — \(window.appName): \(window.title) frame=\(frame) visible=\(visibleFrame)")
