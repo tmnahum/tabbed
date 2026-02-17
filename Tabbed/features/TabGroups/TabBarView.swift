@@ -375,7 +375,12 @@ struct TabBarView: View {
     enum TabHoverControl: Equatable {
         case close
         case release
+        case unlink
     }
+
+    private static let unlinkAssetName = "TabUnlinkIcon"
+    private static let hasBundledUnlinkAsset = NSImage(named: NSImage.Name(unlinkAssetName)) != nil
+    private static let unlinkControlIconSize: CGFloat = 9
 
     static func tabHoverControl(
         at index: Int,
@@ -385,7 +390,7 @@ struct TabBarView: View {
         isShared: Bool
     ) -> TabHoverControl {
         if isShared {
-            return isShiftPressed ? .close : .release
+            return isShiftPressed ? .close : .unlink
         }
         let base: TabHoverControl
         switch mode {
@@ -406,6 +411,27 @@ struct TabBarView: View {
             return isConfirmingClose ? "questionmark" : "xmark"
         case .release:
             return "minus"
+        case .unlink:
+            return "link"
+        }
+    }
+
+    @ViewBuilder
+    private func tabHoverControlIcon(control: TabHoverControl, isConfirmingClose: Bool) -> some View {
+        switch control {
+        case .unlink:
+            if Self.hasBundledUnlinkAsset {
+                Image(Self.unlinkAssetName)
+                    .renderingMode(.template)
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: Self.unlinkControlIconSize, height: Self.unlinkControlIconSize)
+            } else {
+                Image(systemName: "link.slash")
+                    .font(.system(size: Self.unlinkControlIconSize, weight: .bold))
+            }
+        case .close, .release:
+            Image(systemName: Self.tabHoverControlSymbol(control: control, isConfirmingClose: isConfirmingClose))
         }
     }
 
@@ -1117,7 +1143,7 @@ struct TabBarView: View {
 
     private func handleTabControlTap(at index: Int, windowID: CGWindowID, control: TabHoverControl) {
         switch control {
-        case .release:
+        case .release, .unlink:
             confirmingCloseID = nil
             onReleaseTab(index)
         case .close:
@@ -1204,7 +1230,7 @@ struct TabBarView: View {
                 let isConfirmingClose = tabBarConfig.showCloseConfirmation
                     && control == .close
                     && confirmingCloseID == window.id
-                Image(systemName: Self.tabHoverControlSymbol(control: control, isConfirmingClose: isConfirmingClose))
+                tabHoverControlIcon(control: control, isConfirmingClose: isConfirmingClose)
                     .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(isConfirmingClose ? .primary : .secondary)
                     .frame(width: 16, height: 16)

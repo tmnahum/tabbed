@@ -74,7 +74,7 @@ final class TabCloseControlTests: XCTestCase {
         )
     }
 
-    func testSharedWindowUsesReleaseByDefaultAndCloseOnShift() {
+    func testSharedWindowUsesUnlinkByDefaultAndCloseOnShift() {
         XCTAssertEqual(
             TabBarView.tabHoverControl(
                 at: 0,
@@ -83,7 +83,7 @@ final class TabCloseControlTests: XCTestCase {
                 isShiftPressed: false,
                 isShared: true
             ),
-            .release
+            .unlink
         )
         XCTAssertEqual(
             TabBarView.tabHoverControl(
@@ -109,6 +109,11 @@ final class TabCloseControlTests: XCTestCase {
         XCTAssertEqual(
             TabBarView.tabHoverControlSymbol(control: .release, isConfirmingClose: true),
             "minus"
+        )
+        XCTAssertTrue(
+            ["link.slash", "link.badge.minus", "link"].contains(
+                TabBarView.tabHoverControlSymbol(control: .unlink, isConfirmingClose: false)
+            )
         )
     }
 }

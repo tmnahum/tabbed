@@ -1021,21 +1021,24 @@ extension AppDelegate {
             evaluateAutoCapture()
             return
         }
-        suppressAutoJoin(windowIDs: [window.id])
+        let wasSharedAcrossGroups = groupManager.membershipCount(for: window.id) > 1
 
-        expectedFrames.removeValue(forKey: window.id)
+        if !wasSharedAcrossGroups {
+            suppressAutoJoin(windowIDs: [window.id])
+            expectedFrames.removeValue(forKey: window.id)
 
-        // Fullscreened windows: skip frame expansion (macOS manages their frame)
-        if !window.isFullscreened {
-            if let frame = AccessibilityHelper.getFrame(of: window.element) {
-                let delta = max(group.tabBarSqueezeDelta, ScreenCompensation.tabBarHeight)
-                let expanded = ScreenCompensation.expandFrame(frame, undoingSqueezeDelta: delta)
-                let element = window.element
-                AccessibilityHelper.setSize(of: element, to: expanded.size)
-                AccessibilityHelper.setPosition(of: element, to: expanded.origin)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    AccessibilityHelper.setPosition(of: element, to: expanded.origin)
+            // Fullscreened windows: skip frame expansion (macOS manages their frame)
+            if !window.isFullscreened {
+                if let frame = AccessibilityHelper.getFrame(of: window.element) {
+                    let delta = max(group.tabBarSqueezeDelta, ScreenCompensation.tabBarHeight)
+                    let expanded = ScreenCompensation.expandFrame(frame, undoingSqueezeDelta: delta)
+                    let element = window.element
                     AccessibilityHelper.setSize(of: element, to: expanded.size)
+                    AccessibilityHelper.setPosition(of: element, to: expanded.origin)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                        AccessibilityHelper.setPosition(of: element, to: expanded.origin)
+                        AccessibilityHelper.setSize(of: element, to: expanded.size)
+                    }
                 }
             }
         }
@@ -1043,6 +1046,9 @@ extension AppDelegate {
         _ = groupManager.releaseWindow(withID: window.id, from: group)
         removeSuperpinMirrors(windowIDs: [window.id], from: group.id)
         stopObservingWindowIfUnused(window)
+        if wasSharedAcrossGroups {
+            normalizeSingleMembershipAfterUnlink(windowID: window.id)
+        }
 
         if !groupManager.groups.contains(where: { $0.id == group.id }) {
             handleGroupDissolution(group: group, panel: panel)
@@ -1373,6 +1379,22 @@ extension AppDelegate {
                 superpinMirroredWindowIDsByGroupID[groupID] = valid
             }
         }
+    }
+
+    private func normalizeSingleMembershipAfterUnlink(windowID: CGWindowID) {
+        guard groupManager.membershipCount(for: windowID) == 1,
+              let remainingGroup = groupManager.groups(for: windowID).first,
+              let remainingWindow = remainingGroup.windows.first(where: { $0.id == windowID }) else { return }
+
+        removeSuperpinTracking(forWindowID: windowID)
+
+        guard !remainingWindow.isSeparator, remainingWindow.pinState == .super else { return }
+        remainingGroup.setSuperPinned(
+            false,
+            forWindowIDs: [windowID],
+            downgradeToNormalWhenUnset: false
+        )
+        groupManager.objectWillChange.send()
     }
 
     @discardableResult
@@ -1920,9 +1942,11 @@ extension AppDelegate {
         // Capture windows before removal so we can raise one afterward
         let releasedWindows = group.managedWindows.filter { ids.contains($0.id) }
         let separatorIDs = Set(group.windows.filter { ids.contains($0.id) && $0.isSeparator }.map(\.id))
-        suppressAutoJoin(windowIDs: releasedWindows.map(\.id))
+        let sharedWindowIDs = Set(releasedWindows.filter { groupManager.membershipCount(for: $0.id) > 1 }.map(\.id))
+        let fullyReleasedWindows = releasedWindows.filter { !sharedWindowIDs.contains($0.id) }
+        suppressAutoJoin(windowIDs: fullyReleasedWindows.map(\.id))
 
-        for window in releasedWindows {
+        for window in fullyReleasedWindows {
             expectedFrames.removeValue(forKey: window.id)
 
             if !window.isFullscreened, let frame = AccessibilityHelper.getFrame(of: window.element) {
@@ -1943,9 +1967,12 @@ extension AppDelegate {
         for window in releasedWindows {
             stopObservingWindowIfUnused(window)
         }
+        for windowID in sharedWindowIDs {
+            normalizeSingleMembershipAfterUnlink(windowID: windowID)
+        }
 
         // Raise the first released window so it becomes focused
-        if let first = releasedWindows.first {
+        if let first = fullyReleasedWindows.first {
             _ = AccessibilityHelper.raiseWindow(first)
         }
 

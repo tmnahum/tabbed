@@ -158,6 +158,60 @@ final class SuperpinUnpinTests: XCTestCase {
         XCTAssertTrue(third.contains(windowID: thirdWindow.id))
     }
 
+    func testReleaseTabOnMirroredWindowDemotesRemainingSingleMembershipToRegularTab() {
+        let app = makeAppDelegateWithSuperpinEnabled()
+        let sourceWindow = makeWindow(id: 611)
+        let targetWindow = makeWindow(id: 612)
+
+        guard let source = app.groupManager.createGroup(with: [sourceWindow], frame: .zero),
+              let target = app.groupManager.createGroup(with: [targetWindow], frame: .zero) else {
+            XCTFail("Expected group creation")
+            return
+        }
+        configureSuperpinCounters(source: source, target: target)
+
+        app.setSuperPinned(true, forWindowIDs: [sourceWindow.id], in: source)
+        XCTAssertTrue(target.contains(windowID: sourceWindow.id))
+        XCTAssertEqual(source.windows.first(where: { $0.id == sourceWindow.id })?.pinState, .super)
+
+        guard let mirroredIndex = target.windows.firstIndex(where: { $0.id == sourceWindow.id }) else {
+            XCTFail("Expected mirrored window in target group")
+            return
+        }
+        app.releaseTab(at: mirroredIndex, from: target, panel: StubTabBarPanel())
+
+        XCTAssertFalse(target.contains(windowID: sourceWindow.id))
+        XCTAssertTrue(source.contains(windowID: sourceWindow.id))
+        XCTAssertEqual(app.groupManager.membershipCount(for: sourceWindow.id), 1)
+        XCTAssertEqual(source.windows.first(where: { $0.id == sourceWindow.id })?.pinState, WindowPinState.none)
+        XCTAssertFalse(app.superpinMirroredWindowIDsByGroupID.values.contains(where: { $0.contains(sourceWindow.id) }))
+    }
+
+    func testReleaseTabsOnMirroredWindowDemotesRemainingSingleMembershipToRegularTab() {
+        let app = makeAppDelegateWithSuperpinEnabled()
+        let sourceWindow = makeWindow(id: 621)
+        let targetWindow = makeWindow(id: 622)
+
+        guard let source = app.groupManager.createGroup(with: [sourceWindow], frame: .zero),
+              let target = app.groupManager.createGroup(with: [targetWindow], frame: .zero) else {
+            XCTFail("Expected group creation")
+            return
+        }
+        configureSuperpinCounters(source: source, target: target)
+
+        app.setSuperPinned(true, forWindowIDs: [sourceWindow.id], in: source)
+        XCTAssertTrue(target.contains(windowID: sourceWindow.id))
+        XCTAssertEqual(source.windows.first(where: { $0.id == sourceWindow.id })?.pinState, .super)
+
+        app.releaseTabs(withIDs: [sourceWindow.id], from: target, panel: StubTabBarPanel())
+
+        XCTAssertFalse(target.contains(windowID: sourceWindow.id))
+        XCTAssertTrue(source.contains(windowID: sourceWindow.id))
+        XCTAssertEqual(app.groupManager.membershipCount(for: sourceWindow.id), 1)
+        XCTAssertEqual(source.windows.first(where: { $0.id == sourceWindow.id })?.pinState, WindowPinState.none)
+        XCTAssertFalse(app.superpinMirroredWindowIDsByGroupID.values.contains(where: { $0.contains(sourceWindow.id) }))
+    }
+
     func testCloseTabDissolvesGroupThatBecomesMirrorsOnly() {
         let app = makeAppDelegateWithSuperpinEnabled()
         let sourceWindow = makeWindow(id: 701)
