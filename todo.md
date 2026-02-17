@@ -1,13 +1,14 @@
 - hyper k or some other shortcut searches active tabs
 - fix up maximized + superpins behavior (in progress)
     - should gracefully transition to regular pins on last window unmaximizes, to nothing on not-last window unmaximizes, and remove any maximized window with just superpins
-- move mirror tabs down below newly named merge groups
 - improve tab dragging behavior
+
+- mirror tabs open confuse which group they are in, either make the other group not in mirror tab or something
+- windows opened with quick switcher do not resize on open, this is bad for mirror tabs
+
 
 - 
 
-- move mirror tabs down
-features:
 - terminal command in directory feature (that way you can run cursor ~/dir)
 - later: raycast integration
 

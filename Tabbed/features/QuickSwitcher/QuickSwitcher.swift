@@ -132,6 +132,10 @@ extension AppDelegate {
             recordGlobalActivation(.groupWindow(groupID: group.id, windowID: activeWindow.id))
             promoteWindowOwnership(windowID: activeWindow.id, group: group)
             group.recordFocus(windowID: activeWindow.id)
+            if !activeWindow.isFullscreened {
+                setExpectedFrame(group.frame, for: [activeWindow.id])
+                AccessibilityHelper.setFrame(of: activeWindow.element, to: group.frame)
+            }
             focusWindow(activeWindow)
             if !activeWindow.isFullscreened, let panel = tabBarPanels[group.id] {
                 panel.orderAbove(windowID: activeWindow.id)
@@ -153,6 +157,10 @@ extension AppDelegate {
             recordGlobalActivation(.groupWindow(groupID: group.id, windowID: activeWindow.id))
             promoteWindowOwnership(windowID: activeWindow.id, group: group)
             group.recordFocus(windowID: activeWindow.id)
+            if !activeWindow.isFullscreened {
+                setExpectedFrame(group.frame, for: [activeWindow.id])
+                AccessibilityHelper.setFrame(of: activeWindow.element, to: group.frame)
+            }
             focusWindow(activeWindow)
             if !activeWindow.isFullscreened, let panel = tabBarPanels[group.id] {
                 panel.orderAbove(windowID: activeWindow.id)
