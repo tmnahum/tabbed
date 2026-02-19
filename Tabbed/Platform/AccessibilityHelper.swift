@@ -174,7 +174,11 @@ enum AccessibilityHelper {
     }
 
     static func focusedWindowID(for pid: pid_t) -> CGWindowID? {
-        let app = appElement(for: pid)
+        guard let focusedElement = focusedWindowElement(forAppPID: pid) else { return nil }
+        return windowID(for: focusedElement)
+    }
+
+    static func focusedWindowElement(for app: AXUIElement) -> AXUIElement? {
         setMessagingTimeout(app)
         var focusedValue: AnyObject?
         let result = AXUIElementCopyAttributeValue(
@@ -184,7 +188,21 @@ enum AccessibilityHelper {
         )
         guard result == .success,
               let focusedRef = focusedValue else { return nil }
-        let focusedElement = focusedRef as! AXUIElement // swiftlint:disable:this force_cast
+        return focusedRef as! AXUIElement // swiftlint:disable:this force_cast
+    }
+
+    static func focusedWindowElement(forAppPID pid: pid_t) -> AXUIElement? {
+        let app = appElement(for: pid)
+        return focusedWindowElement(for: app)
+    }
+
+    static func frontmostFocusedWindowID(
+        frontmostAppProvider: () -> NSRunningApplication? = { NSWorkspace.shared.frontmostApplication }
+    ) -> CGWindowID? {
+        guard let frontApp = frontmostAppProvider(),
+              let focusedElement = focusedWindowElement(forAppPID: frontApp.processIdentifier) else {
+            return nil
+        }
         return windowID(for: focusedElement)
     }
 

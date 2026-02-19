@@ -165,15 +165,8 @@ class WindowObserver {
             if AccessibilityHelper.windowID(for: element) != nil {
                 onWindowFocused?(pid, element)
             } else {
-                // Element is the app — query for the focused window
-                var focusedWindow: AnyObject?
-                let result = AXUIElementCopyAttributeValue(
-                    element, kAXFocusedWindowAttribute as CFString, &focusedWindow
-                )
-                if result == .success, let focusedRef = focusedWindow {
-                    // CF types always succeed in conditional downcasts;
-                    // use a force cast after the nil check instead.
-                    let windowElement = focusedRef as! AXUIElement // swiftlint:disable:this force_cast
+                // Element is the app — query for the focused window.
+                if let windowElement = AccessibilityHelper.focusedWindowElement(for: element) {
                     onWindowFocused?(pid, windowElement)
                 }
             }

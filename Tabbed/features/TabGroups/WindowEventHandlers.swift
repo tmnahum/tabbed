@@ -390,15 +390,7 @@ extension AppDelegate {
         guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
         let pid = app.processIdentifier
 
-        let appElement = AccessibilityHelper.appElement(for: pid)
-        AXUIElementSetMessagingTimeout(appElement, 0.5 as Float)
-        var focusedValue: AnyObject?
-        let result = AXUIElementCopyAttributeValue(
-            appElement, kAXFocusedWindowAttribute as CFString, &focusedValue
-        )
-        guard result == .success,
-              let focusedRef = focusedValue else { return }
-        let windowElement = focusedRef as! AXUIElement // swiftlint:disable:this force_cast
+        guard let windowElement = AccessibilityHelper.focusedWindowElement(forAppPID: pid) else { return }
         guard let windowID = AccessibilityHelper.windowID(for: windowElement) else { return }
         windowInventory.refreshAsync()
         let eventID = nextFocusDiagnosticSequence()

@@ -8,6 +8,11 @@ enum WindowDiscovery {
 
     // MARK: - Entry Points
 
+    /// Raw CoreGraphics window list passthrough for diagnostics and platform-level tooling.
+    static func rawWindowList(options: CGWindowListOption = [.excludeDesktopElements]) -> [[String: Any]] {
+        CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []
+    }
+
     /// Returns on-screen windows on the current Space, ordered by z-index (front-most first).
     /// CG-first: walks the CoreGraphics window list and matches each to its AX element.
     ///

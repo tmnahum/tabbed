@@ -569,12 +569,8 @@ extension AppDelegate {
         if AccessibilityHelper.windowID(for: element) != nil {
             windowElement = element
         } else {
-            var focusedWindow: AnyObject?
-            let result = AXUIElementCopyAttributeValue(
-                element, kAXFocusedWindowAttribute as CFString, &focusedWindow
-            )
-            guard result == .success, let ref = focusedWindow else { return }
-            windowElement = ref as! AXUIElement // swiftlint:disable:this force_cast
+            guard let focusedElement = AccessibilityHelper.focusedWindowElement(for: element) else { return }
+            windowElement = focusedElement
         }
 
         guard let windowID = AccessibilityHelper.windowID(for: windowElement) else { return }
@@ -667,10 +663,7 @@ extension AppDelegate {
         let subrole = AccessibilityHelper.getSubrole(of: element)
         let isModal = AccessibilityHelper.isModal(element)
         let size = AccessibilityHelper.getSize(of: element)
-        let cgsConn = CGSMainConnectionID()
-        var rawLevel: Int32 = 0
-        let hasLevel = CGSGetWindowLevel(cgsConn, window.id, &rawLevel) == 0
-        let windowLevel = hasLevel ? Int(rawLevel) : nil
+        let windowLevel = SpaceUtils.windowLevel(for: window.id)
 
         Logger.log("[AutoCapture] captureIfEligible[\(source)]: \(window.appName): \(window.title) — subrole=\(subrole ?? "nil") modal=\(isModal) level=\(windowLevel.map(String.init) ?? "unknown") size=\(size.map { "\(Int($0.width))x\(Int($0.height))" } ?? "unknown")")
 

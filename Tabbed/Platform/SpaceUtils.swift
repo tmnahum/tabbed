@@ -22,4 +22,18 @@ enum SpaceUtils {
         }
         return result
     }
+
+    /// Returns the CGS window level for a window, or nil on lookup failure.
+    static func windowLevel(for windowID: CGWindowID) -> Int? {
+        let conn = CGSMainConnectionID()
+        var rawLevel: Int32 = 0
+        guard CGSGetWindowLevel(conn, windowID, &rawLevel) == 0 else { return nil }
+        return Int(rawLevel)
+    }
+
+    /// Move a window to a specific managed Space.
+    static func moveWindow(_ windowID: CGWindowID, toSpace spaceID: UInt64) {
+        let conn = CGSMainConnectionID()
+        CGSMoveWindowsToManagedSpace(conn, [windowID] as CFArray, spaceID)
+    }
 }

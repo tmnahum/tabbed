@@ -319,15 +319,7 @@ extension AppDelegate {
     }
 
     private func focusedWindowID() -> CGWindowID? {
-        guard let frontApp = NSWorkspace.shared.frontmostApplication else { return nil }
-        let appElement = AccessibilityHelper.appElement(for: frontApp.processIdentifier)
-        var focusedValue: AnyObject?
-        let result = AXUIElementCopyAttributeValue(
-            appElement, kAXFocusedWindowAttribute as CFString, &focusedValue
-        )
-        guard result == .success, let focusedValue else { return nil }
-        let windowElement = focusedValue as! AXUIElement // swiftlint:disable:this force_cast
-        return AccessibilityHelper.windowID(for: windowElement)
+        AccessibilityHelper.frontmostFocusedWindowID()
     }
 
     private func executeLauncherAction(
@@ -1111,8 +1103,7 @@ extension AppDelegate {
         guard let targetSpace = SpaceUtils.spaceID(for: windowID) else { return }
         let panelWID = CGWindowID(panel.windowNumber)
         guard SpaceUtils.spaceID(for: panelWID) != targetSpace else { return }
-        let conn = CGSMainConnectionID()
-        CGSMoveWindowsToManagedSpace(conn, [panelWID] as CFArray, targetSpace)
+        SpaceUtils.moveWindow(panelWID, toSpace: targetSpace)
     }
 
     func switchTab(in group: TabGroup, to index: Int, panel: TabBarPanel) {
@@ -1738,15 +1729,7 @@ extension AppDelegate {
            let panel = tabBarPanels[id] {
             return (group, panel)
         }
-        guard let frontApp = NSWorkspace.shared.frontmostApplication else { return nil }
-        let appElement = AccessibilityHelper.appElement(for: frontApp.processIdentifier)
-        var focusedValue: AnyObject?
-        let result = AXUIElementCopyAttributeValue(
-            appElement, kAXFocusedWindowAttribute as CFString, &focusedValue
-        )
-        guard result == .success, let ref = focusedValue else { return nil }
-        let element = ref as! AXUIElement // swiftlint:disable:this force_cast
-        guard let windowID = AccessibilityHelper.windowID(for: element),
+        guard let windowID = AccessibilityHelper.frontmostFocusedWindowID(),
               let group = ownerGroup(for: windowID),
               let panel = tabBarPanels[group.id] else { return nil }
         return (group, panel)
@@ -1822,15 +1805,7 @@ extension AppDelegate {
     /// Returns the group that the currently focused window belongs to,
     /// without falling back to `lastActiveGroupID`.
     func focusedWindowGroup() -> (TabGroup, TabBarPanel)? {
-        guard let frontApp = NSWorkspace.shared.frontmostApplication else { return nil }
-        let appElement = AccessibilityHelper.appElement(for: frontApp.processIdentifier)
-        var focusedValue: AnyObject?
-        let result = AXUIElementCopyAttributeValue(
-            appElement, kAXFocusedWindowAttribute as CFString, &focusedValue
-        )
-        guard result == .success, let ref = focusedValue else { return nil }
-        let element = ref as! AXUIElement // swiftlint:disable:this force_cast
-        guard let windowID = AccessibilityHelper.windowID(for: element),
+        guard let windowID = AccessibilityHelper.frontmostFocusedWindowID(),
               let group = ownerGroup(for: windowID),
               let panel = tabBarPanels[group.id] else { return nil }
         return (group, panel)

@@ -18,4 +18,9 @@ final class SpaceUtilsTests: XCTestCase {
         // Both invalid, so they should be omitted from the result
         XCTAssertTrue(result.isEmpty)
     }
+
+    func testWindowLevelReturnsNilForInvalidWindow() {
+        let result = SpaceUtils.windowLevel(for: 0)
+        XCTAssertNil(result)
+    }
 }

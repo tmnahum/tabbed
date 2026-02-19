@@ -82,4 +82,9 @@ final class AccessibilityHelperFocusTests: XCTestCase {
             )
         )
     }
+
+    func testFrontmostFocusedWindowIDReturnsNilWhenNoFrontmostApp() {
+        let windowID = AccessibilityHelper.frontmostFocusedWindowID(frontmostAppProvider: { nil })
+        XCTAssertNil(windowID)
+    }
 }

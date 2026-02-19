@@ -70,7 +70,7 @@ extension AppDelegate {
             if diagnosticsEnabled {
                 // Check raw CG list to see if these windows exist at the CG level.
                 // This can be expensive, so keep it behind an explicit diagnostics flag.
-                let cgList = CGWindowListCopyWindowInfo([.excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+                let cgList = WindowDiscovery.rawWindowList(options: [.excludeDesktopElements])
                 for wid in missingIDs {
                     if let info = cgList.first(where: { ($0[kCGWindowNumber as String] as? CGWindowID) == wid }) {
                         let layer = info[kCGWindowLayer as String] as? Int ?? -999
@@ -167,23 +167,13 @@ extension AppDelegate {
         // The frontmostIndex heuristic above uses z-order which can diverge from
         // real focus (e.g. macOS ordering quirks, stale z-order from frame expansion).
         // This corrects it by querying the accessibility-level focused window.
-        if let frontApp = NSWorkspace.shared.frontmostApplication {
-            let appElement = AccessibilityHelper.appElement(for: frontApp.processIdentifier)
-            var focusedValue: AnyObject?
-            let result = AXUIElementCopyAttributeValue(
-                appElement, kAXFocusedWindowAttribute as CFString, &focusedValue
-            )
-            if result == .success, let focusedRef = focusedValue {
-                let windowElement = focusedRef as! AXUIElement // swiftlint:disable:this force_cast
-                if let windowID = AccessibilityHelper.windowID(for: windowElement),
-                   let group = groupManager.group(for: windowID) {
-                   group.switchTo(windowID: windowID)
-                    group.recordFocus(windowID: windowID)
-                    promoteWindowOwnership(windowID: windowID, group: group)
-                    recordGlobalActivation(.groupWindow(groupID: group.id, windowID: windowID))
-                    Logger.log("[SessionRestore] synced active tab to focused window wid=\(windowID) in group=\(group.id)")
-                }
-            }
+        if let windowID = AccessibilityHelper.frontmostFocusedWindowID(),
+           let group = groupManager.group(for: windowID) {
+            group.switchTo(windowID: windowID)
+            group.recordFocus(windowID: windowID)
+            promoteWindowOwnership(windowID: windowID, group: group)
+            recordGlobalActivation(.groupWindow(groupID: group.id, windowID: windowID))
+            Logger.log("[SessionRestore] synced active tab to focused window wid=\(windowID) in group=\(group.id)")
         }
     }
 
