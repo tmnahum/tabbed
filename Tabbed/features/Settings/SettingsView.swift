@@ -6,7 +6,7 @@ enum SettingsTab: Int {
 
     var contentHeight: CGFloat {
         switch self {
-        case .general:   return 390
+        case .general:   return 450
         case .launcher:  return 420
         case .tabBar:    return 360
         case .shortcuts: return 520
@@ -85,6 +85,9 @@ struct SettingsView: View {
             onSessionConfigChanged(sessionConfig)
         }
         .onChange(of: sessionConfig.autoCaptureUnmatchedToNewGroup) { _ in
+            onSessionConfigChanged(sessionConfig)
+        }
+        .onChange(of: sessionConfig.autoCaptureRequireResizableToMatchGroup) { _ in
             onSessionConfigChanged(sessionConfig)
         }
         .onChange(of: switcherConfig.globalStyle) { _ in
@@ -230,6 +233,20 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Create One-Tab Group for Unmatched Windows")
                     Text("If a new window can’t join an existing group, create a new group containing only that window.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .toggleStyle(.checkbox)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 12)
+            .disabled(sessionConfig.autoCaptureMode == .never)
+
+            Toggle(isOn: $sessionConfig.autoCaptureRequireResizableToMatchGroup) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Require Resizable Windows for Group Capture")
+                    Text("Skip auto-capture into existing groups when a window cannot be resized to match the group size.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

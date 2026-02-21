@@ -284,4 +284,40 @@ final class AutoCapturePolicyTests: XCTestCase {
             )
         )
     }
+
+    func testCanAutoCaptureIntoGroupAllowsAllWindowsWhenRequirementDisabled() {
+        XCTAssertTrue(
+            AutoCapturePolicy.canAutoCaptureIntoGroup(
+                requireResizableToMatchGroup: false,
+                isWindowResizable: false,
+                currentWindowSize: CGSize(width: 700, height: 500),
+                targetGroupSize: CGSize(width: 1000, height: 700),
+                tolerance: 1
+            )
+        )
+    }
+
+    func testCanAutoCaptureIntoGroupAllowsWhenWindowAlreadyMatchesGroupSize() {
+        XCTAssertTrue(
+            AutoCapturePolicy.canAutoCaptureIntoGroup(
+                requireResizableToMatchGroup: true,
+                isWindowResizable: false,
+                currentWindowSize: CGSize(width: 1000.5, height: 700.5),
+                targetGroupSize: CGSize(width: 1000, height: 700),
+                tolerance: 1
+            )
+        )
+    }
+
+    func testCanAutoCaptureIntoGroupRejectsUnresizableWindowWhenSizeMismatch() {
+        XCTAssertFalse(
+            AutoCapturePolicy.canAutoCaptureIntoGroup(
+                requireResizableToMatchGroup: true,
+                isWindowResizable: false,
+                currentWindowSize: CGSize(width: 700, height: 500),
+                targetGroupSize: CGSize(width: 1000, height: 700),
+                tolerance: 1
+            )
+        )
+    }
 }

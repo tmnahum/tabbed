@@ -18,23 +18,27 @@ struct SessionConfig: Codable, Equatable {
     var restoreMode: RestoreMode
     var autoCaptureMode: AutoCaptureMode
     var autoCaptureUnmatchedToNewGroup: Bool
+    var autoCaptureRequireResizableToMatchGroup: Bool
 
     var autoCaptureEnabled: Bool { autoCaptureMode != .never }
 
     static let `default` = SessionConfig(
         restoreMode: .smart,
         autoCaptureMode: .whenMaximized,
-        autoCaptureUnmatchedToNewGroup: false
+        autoCaptureUnmatchedToNewGroup: false,
+        autoCaptureRequireResizableToMatchGroup: true
     )
 
     init(
         restoreMode: RestoreMode = .smart,
         autoCaptureMode: AutoCaptureMode = .whenMaximized,
-        autoCaptureUnmatchedToNewGroup: Bool = false
+        autoCaptureUnmatchedToNewGroup: Bool = false,
+        autoCaptureRequireResizableToMatchGroup: Bool = true
     ) {
         self.restoreMode = restoreMode
         self.autoCaptureMode = autoCaptureMode
         self.autoCaptureUnmatchedToNewGroup = autoCaptureUnmatchedToNewGroup
+        self.autoCaptureRequireResizableToMatchGroup = autoCaptureRequireResizableToMatchGroup
     }
 
     init(from decoder: Decoder) throws {
@@ -51,6 +55,10 @@ struct SessionConfig: Codable, Equatable {
             Bool.self,
             forKey: .autoCaptureUnmatchedToNewGroup
         ) ?? false
+        autoCaptureRequireResizableToMatchGroup = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .autoCaptureRequireResizableToMatchGroup
+        ) ?? true
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -58,6 +66,7 @@ struct SessionConfig: Codable, Equatable {
         case autoCaptureMode
         case autoCaptureEnabled // legacy key for migration
         case autoCaptureUnmatchedToNewGroup
+        case autoCaptureRequireResizableToMatchGroup
     }
 
     func encode(to encoder: Encoder) throws {
@@ -65,6 +74,7 @@ struct SessionConfig: Codable, Equatable {
         try container.encode(restoreMode, forKey: .restoreMode)
         try container.encode(autoCaptureMode, forKey: .autoCaptureMode)
         try container.encode(autoCaptureUnmatchedToNewGroup, forKey: .autoCaptureUnmatchedToNewGroup)
+        try container.encode(autoCaptureRequireResizableToMatchGroup, forKey: .autoCaptureRequireResizableToMatchGroup)
     }
 
     // MARK: - Persistence

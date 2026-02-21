@@ -116,6 +116,31 @@ enum AutoCapturePolicy {
     ) -> Bool {
         requestedSeed && !observerAlreadyExists
     }
+
+    static func canAutoCaptureIntoGroup(
+        requireResizableToMatchGroup: Bool,
+        isWindowResizable: Bool?,
+        currentWindowSize: CGSize?,
+        targetGroupSize: CGSize,
+        tolerance: CGFloat
+    ) -> Bool {
+        guard requireResizableToMatchGroup else { return true }
+
+        let matchesTargetSize: Bool
+        if let currentWindowSize {
+            matchesTargetSize =
+                abs(currentWindowSize.width - targetGroupSize.width) <= tolerance &&
+                abs(currentWindowSize.height - targetGroupSize.height) <= tolerance
+        } else {
+            matchesTargetSize = false
+        }
+
+        if matchesTargetSize {
+            return true
+        }
+
+        return isWindowResizable == true
+    }
 }
 
 struct AutoCaptureRetryKey: Hashable {
@@ -724,6 +749,29 @@ extension AppDelegate {
                     pid: pid,
                     source: source,
                     reason: "different-space",
+                    shouldCreateUnmatchedGroup: shouldCreateUnmatchedGroup
+                )
+            }
+
+            let isWindowResizable = AccessibilityHelper.isResizable(element)
+            let canAutoCaptureIntoGroup = AutoCapturePolicy.canAutoCaptureIntoGroup(
+                requireResizableToMatchGroup: sessionConfig.autoCaptureRequireResizableToMatchGroup,
+                isWindowResizable: isWindowResizable,
+                currentWindowSize: size,
+                targetGroupSize: group.frame.size,
+                tolerance: Self.frameTolerance
+            )
+            guard canAutoCaptureIntoGroup else {
+                let currentSizeDescription = size.map { "\(Int($0.width))x\(Int($0.height))" } ?? "unknown"
+                Logger.log(
+                    "[AutoCapture] captureIfEligible[\(source)]: rejected non-resizable window for group-size match " +
+                    "wid=\(window.id) targetSize=\(group.frame.size) currentSize=\(currentSizeDescription)"
+                )
+                return captureAsStandaloneGroupIfEnabled(
+                    window: window,
+                    pid: pid,
+                    source: source,
+                    reason: "not-resizable-to-group-size",
                     shouldCreateUnmatchedGroup: shouldCreateUnmatchedGroup
                 )
             }

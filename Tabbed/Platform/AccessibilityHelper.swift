@@ -125,6 +125,22 @@ enum AccessibilityHelper {
         return CGRect(origin: position, size: size)
     }
 
+    static func isSizeSettable(of element: AXUIElement) -> Bool? {
+        isAttributeSettable(kAXSizeAttribute as String, of: element)
+    }
+
+    static func isResizable(_ element: AXUIElement) -> Bool? {
+        if let isSizeSettable = isSizeSettable(of: element) {
+            return isSizeSettable
+        }
+
+        setMessagingTimeout(element)
+        var value: AnyObject?
+        let result = AXUIElementCopyAttributeValue(element, "AXResizable" as CFString, &value)
+        guard result == .success, let boolValue = value as? Bool else { return nil }
+        return boolValue
+    }
+
     static func getTitle(of element: AXUIElement) -> String? {
         setMessagingTimeout(element)
         var value: AnyObject?
@@ -207,6 +223,14 @@ enum AccessibilityHelper {
     }
 
     // MARK: - Write Attributes
+
+    private static func isAttributeSettable(_ attribute: String, of element: AXUIElement) -> Bool? {
+        setMessagingTimeout(element)
+        var isSettable = DarwinBoolean(false)
+        let result = AXUIElementIsAttributeSettable(element, attribute as CFString, &isSettable)
+        guard result == .success else { return nil }
+        return isSettable.boolValue
+    }
 
     @discardableResult
     private static func setPosition(of element: AXUIElement, to point: CGPoint) -> AXError {
