@@ -746,8 +746,13 @@ extension AppDelegate {
             }
         )
 
-        panel.onBarDragged = { [weak self] totalDx, totalDy in
-            self?.handleBarDrag(group: group, totalDx: totalDx, totalDy: totalDy)
+        panel.onBarDragged = { [weak self] totalDx, totalDy, isShiftPressed in
+            self?.handleBarDrag(
+                group: group,
+                totalDx: totalDx,
+                totalDy: totalDy,
+                isShiftPressed: isShiftPressed
+            )
         }
         panel.onBarDragEnded = { [weak self, weak panel] in
             guard let panel else { return }

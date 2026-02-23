@@ -15,7 +15,7 @@ class TabBarPanel: NSPanel {
 
     // MARK: - Bar drag & double-click callbacks
 
-    var onBarDragged: ((_ dx: CGFloat, _ dy: CGFloat) -> Void)?
+    var onBarDragged: ((_ dx: CGFloat, _ dy: CGFloat, _ isShiftPressed: Bool) -> Void)?
     var onBarDragEnded: (() -> Void)?
     var onBarDoubleClicked: (() -> Void)?
 
@@ -283,7 +283,7 @@ class TabBarPanel: NSPanel {
                 f.origin.x = startOrigin.x + totalDx
                 f.origin.y = startOrigin.y + totalDy
                 self.setFrame(f, display: true)
-                onBarDragged?(totalDx, totalDy)
+                onBarDragged?(totalDx, totalDy, Self.isShiftPressed(in: event.modifierFlags))
                 return
             }
 
@@ -304,7 +304,7 @@ class TabBarPanel: NSPanel {
                 f.origin.x = startOrigin.x + totalDx
                 f.origin.y = startOrigin.y + totalDy
                 self.setFrame(f, display: true)
-                onBarDragged?(totalDx, totalDy)
+                onBarDragged?(totalDx, totalDy, Self.isShiftPressed(in: event.modifierFlags))
             } else {
                 isTabDrag = true
                 super.sendEvent(event)
@@ -480,6 +480,10 @@ class TabBarPanel: NSPanel {
         )
         let maxX = minX + groupCounterWidth
         return pointX >= minX && pointX <= maxX
+    }
+
+    static func isShiftPressed(in modifierFlags: NSEvent.ModifierFlags) -> Bool {
+        modifierFlags.intersection(.deviceIndependentFlagsMask).contains(.shift)
     }
 
     private var isInlineTextEditing: Bool {

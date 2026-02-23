@@ -1,4 +1,5 @@
 import XCTest
+import AppKit
 @testable import Tabbed
 
 final class TabBarPanelHitTestingTests: XCTestCase {
@@ -222,5 +223,15 @@ final class TabBarPanelHitTestingTests: XCTestCase {
                 groupCounterWidth: -1
             )
         )
+    }
+
+    func testIsShiftPressedReadsShiftFromDeviceIndependentFlags() {
+        XCTAssertTrue(TabBarPanel.isShiftPressed(in: [.shift]))
+        XCTAssertTrue(TabBarPanel.isShiftPressed(in: [.shift, .option]))
+    }
+
+    func testIsShiftPressedIgnoresNonShiftFlags() {
+        XCTAssertFalse(TabBarPanel.isShiftPressed(in: []))
+        XCTAssertFalse(TabBarPanel.isShiftPressed(in: [.option, .command]))
     }
 }
