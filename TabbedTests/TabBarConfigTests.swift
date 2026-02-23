@@ -23,6 +23,7 @@ final class TabBarConfigTests: XCTestCase {
         let config = TabBarConfig()
         XCTAssertEqual(config.style, .compact)
         XCTAssertTrue(config.showDragHandle)
+        XCTAssertTrue(config.superpinnedTabsBeforeHandle)
         XCTAssertEqual(config.closeButtonMode, .xmarkOnAllTabs)
         XCTAssertTrue(config.showCloseConfirmation)
         XCTAssertTrue(config.showMaximizedGroupCounters)
@@ -56,6 +57,7 @@ final class TabBarConfigTests: XCTestCase {
         let original = TabBarConfig(
             style: .compact,
             showDragHandle: false,
+            superpinnedTabsBeforeHandle: false,
             showTooltip: false,
             closeButtonMode: .minusOnCurrentTab,
             showCloseConfirmation: false,
@@ -65,6 +67,7 @@ final class TabBarConfigTests: XCTestCase {
         let decoded = try JSONDecoder().decode(TabBarConfig.self, from: data)
         XCTAssertEqual(decoded.style, .compact)
         XCTAssertFalse(decoded.showDragHandle)
+        XCTAssertFalse(decoded.superpinnedTabsBeforeHandle)
         XCTAssertFalse(decoded.showTooltip)
         XCTAssertEqual(decoded.closeButtonMode, .minusOnCurrentTab)
         XCTAssertFalse(decoded.showCloseConfirmation)
@@ -77,6 +80,7 @@ final class TabBarConfigTests: XCTestCase {
         let decoded = try JSONDecoder().decode(TabBarConfig.self, from: json)
         XCTAssertEqual(decoded.style, .compact)
         XCTAssertTrue(decoded.showDragHandle)
+        XCTAssertTrue(decoded.superpinnedTabsBeforeHandle)
         XCTAssertTrue(decoded.showTooltip)
         XCTAssertEqual(decoded.closeButtonMode, .xmarkOnAllTabs)
         XCTAssertTrue(decoded.showCloseConfirmation)
@@ -102,6 +106,14 @@ final class TabBarConfigTests: XCTestCase {
         let loaded = TabBarConfig.load()
         XCTAssertEqual(loaded.closeButtonMode, .minusOnAllTabs)
         XCTAssertFalse(loaded.showCloseConfirmation)
+    }
+
+    func testSaveAndLoadSuperpinnedBeforeHandleToggle() {
+        let config = TabBarConfig(style: .compact, superpinnedTabsBeforeHandle: false)
+        config.save()
+
+        let loaded = TabBarConfig.load()
+        XCTAssertFalse(loaded.superpinnedTabsBeforeHandle)
     }
 
     func testSaveAndLoadMaximizedGroupCountersToggle() {

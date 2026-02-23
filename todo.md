@@ -12,6 +12,8 @@
 - autoquit app on 0 windows
 
 
+- eventually/maybe: split tabs / layout tabs
+
 - helium launches two windows if already launched
 - 
 

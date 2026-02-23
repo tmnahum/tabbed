@@ -558,6 +558,21 @@ struct SettingsView: View {
 
             Divider()
 
+            Toggle(isOn: $tabBarConfig.superpinnedTabsBeforeHandle) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Superpinned Before Handle")
+                    Text("Places superpinned tabs to the left of the drag handle.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .toggleStyle(.checkbox)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+
+            Divider()
+
             Toggle(isOn: $tabBarConfig.showTooltip) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Show Title Tooltip")

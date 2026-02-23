@@ -2027,7 +2027,7 @@ extension AppDelegate {
 
             // Convert mouse X to local panel coordinates
             let localX = mouseLocation.x - panel.frame.origin.x
-            let tabContentStartX = leadingPad + groupCounterWidth + handleWidth + superPinnedSectionWidth + groupNameWidth
+            let tabContentStartX = leadingPad + superPinnedSectionWidth + handleWidth + groupCounterWidth + groupNameWidth
             let localTabX = localX - tabContentStartX
             let insertionInMain = TabBarView.insertionIndexForPoint(
                 localTabX: localTabX,

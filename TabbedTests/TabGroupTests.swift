@@ -580,6 +580,10 @@ final class TabGroupTests: XCTestCase {
         XCTAssertGreaterThan(widths.unpinned, widths.pinned)
     }
 
+    func testPinnedTabsUseTighterHorizontalPadding() {
+        XCTAssertLessThan(TabBarView.pinnedTabHorizontalPadding, TabBarView.tabHorizontalPadding)
+    }
+
     func testTabWidthLayoutMakesSeparatorHalfWidthOfRegularUnpinnedTab() {
         let tabs = [makeWindow(id: 1), makeSeparator(id: 99), makeWindow(id: 2)]
         let layout = TabBarView.tabWidthLayout(availableWidth: 450, tabs: tabs, style: .equal)

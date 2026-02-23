@@ -129,4 +129,98 @@ final class TabBarPanelHitTestingTests: XCTestCase {
             )
         )
     }
+
+    func testGroupCounterRegionStartsAfterHandleAndSuperpinSection() {
+        XCTAssertEqual(
+            TabBarPanel.dragHandleRegionMinX(
+                leadingPad: 4,
+                superPinnedSectionWidth: 10
+            ),
+            14,
+            accuracy: 0.01
+        )
+        XCTAssertEqual(
+            TabBarPanel.dragHandleRegionMinX(
+                leadingPad: 4,
+                superPinnedSectionWidth: 10,
+                superPinnedBeforeHandle: false
+            ),
+            4,
+            accuracy: 0.01
+        )
+        XCTAssertEqual(
+            TabBarPanel.groupCounterRegionMinX(
+                leadingPad: 4,
+                handleWidth: 16,
+                superPinnedSectionWidth: 10
+            ),
+            30,
+            accuracy: 0.01
+        )
+        XCTAssertEqual(
+            TabBarPanel.groupCounterRegionMinX(
+                leadingPad: 4,
+                handleWidth: 16,
+                superPinnedSectionWidth: 10,
+                superPinnedBeforeHandle: false
+            ),
+            30,
+            accuracy: 0.01
+        )
+        XCTAssertFalse(
+            TabBarPanel.isGroupCounterRegion(
+                pointX: 29.99,
+                leadingPad: 4,
+                handleWidth: 16,
+                superPinnedSectionWidth: 10,
+                groupCounterWidth: 20
+            )
+        )
+        XCTAssertTrue(
+            TabBarPanel.isGroupCounterRegion(
+                pointX: 30,
+                leadingPad: 4,
+                handleWidth: 16,
+                superPinnedSectionWidth: 10,
+                groupCounterWidth: 20
+            )
+        )
+        XCTAssertTrue(
+            TabBarPanel.isGroupCounterRegion(
+                pointX: 50,
+                leadingPad: 4,
+                handleWidth: 16,
+                superPinnedSectionWidth: 10,
+                groupCounterWidth: 20
+            )
+        )
+        XCTAssertFalse(
+            TabBarPanel.isGroupCounterRegion(
+                pointX: 50.01,
+                leadingPad: 4,
+                handleWidth: 16,
+                superPinnedSectionWidth: 10,
+                groupCounterWidth: 20
+            )
+        )
+    }
+
+    func testGroupCounterRegionIsDisabledWhenWidthIsNonPositive() {
+        XCTAssertFalse(
+            TabBarPanel.isGroupCounterRegion(
+                pointX: 12,
+                leadingPad: 2,
+                handleWidth: 0,
+                groupCounterWidth: 0
+            )
+        )
+        XCTAssertFalse(
+            TabBarPanel.isGroupCounterRegion(
+                pointX: 12,
+                leadingPad: 2,
+                handleWidth: 0,
+                groupCounterWidth: -1
+            )
+        )
+    }
 }

@@ -44,14 +44,16 @@ struct TabBarView: View {
     static let dragHandleWidth: CGFloat = 16
     static let tabSpacing: CGFloat = 1
     static let pinnedSectionSpacing: CGFloat = 4
-    static let pinnedTabIdealWidth: CGFloat = 40
+    static let pinnedTabIdealWidth: CGFloat = 30
+    static let tabHorizontalPadding: CGFloat = 8
+    static let pinnedTabHorizontalPadding: CGFloat = 4
     static let separatorWidthMultiplier: CGFloat = 0.5
     static let groupNameMaxWidth: CGFloat = 180
     static let groupNameHorizontalPadding: CGFloat = 8
     static let groupNameFontSize: CGFloat = 11
     static let groupNameEmptyHitWidth: CGFloat = 3
     static let groupNamePlaceholder = "Group name"
-    static let groupCounterFontSize: CGFloat = 11
+    static let groupCounterFontSize: CGFloat = 11.5
     static let groupCounterHorizontalPadding: CGFloat = 2
     static let groupCounterItemSpacing: CGFloat = 4
     static let groupCounterBaseLeadingSpacing: CGFloat = 4
@@ -141,7 +143,7 @@ struct TabBarView: View {
     }
 
     static func groupCounterLeadingSpacing(showDragHandle: Bool) -> CGFloat {
-        // Keep the visual left margin stable even though leadingPad changes with handle visibility.
+        // Keep a consistent gap before the counter strip as the leading padding changes.
         showDragHandle ? groupCounterBaseLeadingSpacing : groupCounterBaseLeadingSpacing + 2
     }
 
@@ -514,10 +516,19 @@ struct TabBarView: View {
             let dragTabStep = dragStep(tabWidths: widthLayout.widths)
             let targetIndex = computeTargetIndex(tabWidths: widthLayout.widths, fallbackStep: dragTabStep)
             let showPinDropZone = shouldShowPinDropZone(targetIndex: targetIndex)
-            let tabContentStartX = leadingPad + groupCounterWidth + handleWidth + superPinnedSectionWidth + groupNameWidth
+            let tabContentStartX = leadingPad + superPinnedSectionWidth + handleWidth + groupCounterWidth + groupNameWidth
 
             ZStack(alignment: .leading) {
                 HStack(spacing: Self.tabSpacing) {
+                    if tabBarConfig.superpinnedTabsBeforeHandle {
+                        superPinnedTabsContent(tabWidths: widthLayout.widths, targetIndex: targetIndex, dragTabStep: dragTabStep)
+                    }
+                    if tabBarConfig.showDragHandle {
+                        dragHandle
+                    }
+                    if !tabBarConfig.superpinnedTabsBeforeHandle {
+                        superPinnedTabsContent(tabWidths: widthLayout.widths, targetIndex: targetIndex, dragTabStep: dragTabStep)
+                    }
                     groupCounterControl(
                         groupCounterWidth: groupCounterWidth,
                         showDragHandle: tabBarConfig.showDragHandle,
@@ -525,68 +536,6 @@ struct TabBarView: View {
                         counterItemWidths: counterItemWidths,
                         targetIndex: counterTargetIndex
                     )
-                    if tabBarConfig.showDragHandle {
-                        dragHandle
-                    }
-                    ForEach(Array(group.windows.enumerated().prefix(superPinnedCount)), id: \.element.id) { index, window in
-                        let isDragging = draggingIDs.contains(window.id)
-                        let tabWidth = widthLayout.widths[safe: index] ?? 0
-                        tabItem(for: window, at: index, tabWidth: tabWidth)
-                            .offset(x: isDragging
-                                ? dragTranslation
-                                : shiftOffset(for: index, targetIndex: targetIndex, tabStep: dragTabStep))
-                            .offset(x: snapIDs.contains(window.id) ? snapOffset : 0)
-                            .zIndex(isDragging ? 1 : 0)
-                            .scaleEffect(isDragging ? 1.03 : 1.0, anchor: .center)
-                            .shadow(
-                                color: isDragging ? .black.opacity(0.3) : .clear,
-                                radius: isDragging ? 6 : 0,
-                                y: isDragging ? 1 : 0
-                            )
-                            .animation(isDragging ? nil : .easeOut(duration: 0.15), value: targetIndex)
-                            .transition(Self.tabExpandTransition)
-                            .gesture(
-                                DragGesture(minimumDistance: 3)
-                                    .onChanged { value in
-                                        if draggingID == nil {
-                                            draggingID = window.id
-                                            dragStartIndex = index
-                                            snapIDs = []
-                                            snapOffset = 0
-                                            if selectedIDs.contains(window.id) {
-                                                draggingIDs = selectedIDs
-                                            } else {
-                                                selectedIDs = []
-                                                draggingIDs = [window.id]
-                                            }
-                                        }
-                                        dragTranslation = value.translation.width
-                                        if abs(value.translation.height) > 15 {
-                                            draggedOffBar = true
-                                        }
-                                        if draggedOffBar {
-                                            currentDropTarget = onDragOverPanels(NSEvent.mouseLocation)
-                                        }
-                                    }
-                                    .onEnded { _ in
-                                        if draggedOffBar, let target = currentDropTarget {
-                                            let ids = Set(draggingIDs.filter { id in
-                                                guard let window = group.windows.first(where: { $0.id == id }) else { return false }
-                                                return !window.isSeparator
-                                            })
-                                            resetDragState()
-                                            selectedIDs = []
-                                            if !ids.isEmpty {
-                                                onCrossPanelDrop(ids, target.groupID, target.insertionIndex)
-                                            }
-                                        } else if draggedOffBar {
-                                            handleDragDetach()
-                                        } else {
-                                            handleDragEnded(tabStep: dragTabStep, tabWidths: widthLayout.widths)
-                                        }
-                                    }
-                            )
-                    }
                     groupNameControl(groupNameWidth: groupNameWidth)
                     ForEach(Array(group.windows.enumerated().dropFirst(superPinnedCount)), id: \.element.id) { index, window in
                         let isDragging = draggingIDs.contains(window.id)
@@ -790,6 +739,69 @@ struct TabBarView: View {
             guard let window = group.windows.first(where: { $0.id == windowID }),
                   !window.isSeparator else { return }
             beginTabNameEditing(for: window, fromContextMenu: true)
+        }
+    }
+
+    @ViewBuilder
+    private func superPinnedTabsContent(tabWidths: [CGFloat], targetIndex: Int?, dragTabStep: CGFloat) -> some View {
+        ForEach(Array(group.windows.enumerated().prefix(group.superPinnedCount)), id: \.element.id) { index, window in
+            let isDragging = draggingIDs.contains(window.id)
+            let tabWidth = tabWidths[safe: index] ?? 0
+            tabItem(for: window, at: index, tabWidth: tabWidth)
+                .offset(x: isDragging
+                    ? dragTranslation
+                    : shiftOffset(for: index, targetIndex: targetIndex, tabStep: dragTabStep))
+                .offset(x: snapIDs.contains(window.id) ? snapOffset : 0)
+                .zIndex(isDragging ? 1 : 0)
+                .scaleEffect(isDragging ? 1.03 : 1.0, anchor: .center)
+                .shadow(
+                    color: isDragging ? .black.opacity(0.3) : .clear,
+                    radius: isDragging ? 6 : 0,
+                    y: isDragging ? 1 : 0
+                )
+                .animation(isDragging ? nil : .easeOut(duration: 0.15), value: targetIndex)
+                .transition(Self.tabExpandTransition)
+                .gesture(
+                    DragGesture(minimumDistance: 3)
+                        .onChanged { value in
+                            if draggingID == nil {
+                                draggingID = window.id
+                                dragStartIndex = index
+                                snapIDs = []
+                                snapOffset = 0
+                                if selectedIDs.contains(window.id) {
+                                    draggingIDs = selectedIDs
+                                } else {
+                                    selectedIDs = []
+                                    draggingIDs = [window.id]
+                                }
+                            }
+                            dragTranslation = value.translation.width
+                            if abs(value.translation.height) > 15 {
+                                draggedOffBar = true
+                            }
+                            if draggedOffBar {
+                                currentDropTarget = onDragOverPanels(NSEvent.mouseLocation)
+                            }
+                        }
+                        .onEnded { _ in
+                            if draggedOffBar, let target = currentDropTarget {
+                                let ids = Set(draggingIDs.filter { id in
+                                    guard let window = group.windows.first(where: { $0.id == id }) else { return false }
+                                    return !window.isSeparator
+                                })
+                                resetDragState()
+                                selectedIDs = []
+                                if !ids.isEmpty {
+                                    onCrossPanelDrop(ids, target.groupID, target.insertionIndex)
+                                }
+                            } else if draggedOffBar {
+                                handleDragDetach()
+                            } else {
+                                handleDragEnded(tabStep: dragTabStep, tabWidths: tabWidths)
+                            }
+                        }
+                )
         }
     }
 
@@ -1255,7 +1267,7 @@ struct TabBarView: View {
                     })
             }
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, isPinned ? Self.pinnedTabHorizontalPadding : Self.tabHorizontalPadding)
         .padding(.vertical, 4)
         .frame(width: tabWidth, alignment: isPinned ? .center : .leading)
         .background(

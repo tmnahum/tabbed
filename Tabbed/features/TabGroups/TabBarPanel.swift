@@ -352,6 +352,7 @@ class TabBarPanel: NSPanel {
         )
         let tabs = group?.windows ?? []
         let superPinnedCount = group?.superPinnedCount ?? 0
+        let superPinnedBeforeHandle = tabBarConfig?.superpinnedTabsBeforeHandle ?? true
 
         // Top/bottom padding is always background
         if point.y < verticalPad || point.y > panelHeight - verticalPad {
@@ -370,10 +371,19 @@ class TabBarPanel: NSPanel {
         let superPinnedSectionWidth = TabBarView.superPinnedSectionWidth(tabs: tabs, tabWidths: layout.widths)
         let mainTabs = Array(tabs.dropFirst(superPinnedCount))
         let mainTabWidths = Array(layout.widths.dropFirst(superPinnedCount))
-        let groupCounterStartX = leadingPad
+        let dragHandleStartX = Self.dragHandleRegionMinX(
+            leadingPad: leadingPad,
+            superPinnedSectionWidth: superPinnedSectionWidth,
+            superPinnedBeforeHandle: superPinnedBeforeHandle
+        )
+        let groupCounterStartX = Self.groupCounterRegionMinX(
+            leadingPad: leadingPad,
+            handleWidth: handleWidth,
+            superPinnedSectionWidth: superPinnedSectionWidth,
+            superPinnedBeforeHandle: superPinnedBeforeHandle
+        )
         let groupCounterEndX = groupCounterStartX + groupCounterWidth
-        let dragHandleStartX = groupCounterEndX
-        let groupNameStartX = dragHandleStartX + handleWidth + superPinnedSectionWidth
+        let groupNameStartX = groupCounterEndX
         if point.x < leadingPad {
             return true
         }
@@ -388,7 +398,8 @@ class TabBarPanel: NSPanel {
                groupCounterWidth: groupCounterWidth,
                handleWidth: handleWidth,
                groupNameWidth: groupNameWidth,
-               superPinnedSectionWidth: superPinnedSectionWidth
+               superPinnedSectionWidth: superPinnedSectionWidth,
+               superPinnedBeforeHandle: superPinnedBeforeHandle
            ) {
             return true
         }
@@ -418,11 +429,56 @@ class TabBarPanel: NSPanel {
         groupCounterWidth: CGFloat,
         handleWidth: CGFloat,
         groupNameWidth: CGFloat,
-        superPinnedSectionWidth: CGFloat = 0
+        superPinnedSectionWidth: CGFloat = 0,
+        superPinnedBeforeHandle: Bool = true
     ) -> Bool {
         guard groupNameWidth > 0 else { return false }
-        let minX = leadingPad + groupCounterWidth + handleWidth + superPinnedSectionWidth
+        let minX = groupCounterRegionMinX(
+            leadingPad: leadingPad,
+            handleWidth: handleWidth,
+            superPinnedSectionWidth: superPinnedSectionWidth,
+            superPinnedBeforeHandle: superPinnedBeforeHandle
+        ) + groupCounterWidth
         let maxX = minX + groupNameWidth
+        return pointX >= minX && pointX <= maxX
+    }
+
+    static func groupCounterRegionMinX(
+        leadingPad: CGFloat,
+        handleWidth: CGFloat,
+        superPinnedSectionWidth: CGFloat = 0,
+        superPinnedBeforeHandle: Bool = true
+    ) -> CGFloat {
+        if superPinnedBeforeHandle {
+            return leadingPad + superPinnedSectionWidth + handleWidth
+        }
+        return leadingPad + handleWidth + superPinnedSectionWidth
+    }
+
+    static func dragHandleRegionMinX(
+        leadingPad: CGFloat,
+        superPinnedSectionWidth: CGFloat = 0,
+        superPinnedBeforeHandle: Bool = true
+    ) -> CGFloat {
+        leadingPad + (superPinnedBeforeHandle ? superPinnedSectionWidth : 0)
+    }
+
+    static func isGroupCounterRegion(
+        pointX: CGFloat,
+        leadingPad: CGFloat,
+        handleWidth: CGFloat,
+        superPinnedSectionWidth: CGFloat = 0,
+        superPinnedBeforeHandle: Bool = true,
+        groupCounterWidth: CGFloat
+    ) -> Bool {
+        guard groupCounterWidth > 0 else { return false }
+        let minX = groupCounterRegionMinX(
+            leadingPad: leadingPad,
+            handleWidth: handleWidth,
+            superPinnedSectionWidth: superPinnedSectionWidth,
+            superPinnedBeforeHandle: superPinnedBeforeHandle
+        )
+        let maxX = minX + groupCounterWidth
         return pointX >= minX && pointX <= maxX
     }
 
@@ -463,12 +519,7 @@ class TabBarPanel: NSPanel {
         let tabs = group.windows
         let superPinnedCount = group.superPinnedCount
         let groupNameWidth = TabBarView.groupNameReservedWidth(for: group.name)
-        let groupCounterStartX = leadingPad
-        let groupCounterEndX = groupCounterStartX + groupCounterWidth
-
-        if groupCounterWidth > 0 && point.x >= groupCounterStartX && point.x <= groupCounterEndX {
-            return true
-        }
+        let superPinnedBeforeHandle = tabBarConfig.superpinnedTabsBeforeHandle
 
         // Points in top/bottom padding are not on controls
         if point.y < verticalPad || point.y > panelHeight - verticalPad {
@@ -482,10 +533,20 @@ class TabBarPanel: NSPanel {
             style: tabBarConfig.style
         )
         let superPinnedSectionWidth = TabBarView.superPinnedSectionWidth(tabs: tabs, tabWidths: layout.widths)
+        if Self.isGroupCounterRegion(
+            pointX: point.x,
+            leadingPad: leadingPad,
+            handleWidth: handleWidth,
+            superPinnedSectionWidth: superPinnedSectionWidth,
+            superPinnedBeforeHandle: superPinnedBeforeHandle,
+            groupCounterWidth: groupCounterWidth
+        ) {
+            return true
+        }
         let mainTabs = Array(tabs.dropFirst(superPinnedCount))
         let mainTabWidths = Array(layout.widths.dropFirst(superPinnedCount))
 
-        let tabContentStartX = leadingPad + groupCounterWidth + handleWidth + superPinnedSectionWidth + groupNameWidth
+        let tabContentStartX = leadingPad + superPinnedSectionWidth + handleWidth + groupCounterWidth + groupNameWidth
 
         // Approximate the trailing control hit area as the last 22pt of each tab.
         // The actual close/confirm button is a 16×16 square with horizontal padding,
