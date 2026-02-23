@@ -696,6 +696,72 @@ final class TabGroupTests: XCTestCase {
         )
     }
 
+    func testDragEndActionPrefersCrossPanelDropWhenTargetExists() {
+        XCTAssertEqual(
+            TabBarView.dragEndAction(hasDropTarget: true, draggedOffBar: false),
+            .crossPanelDrop
+        )
+        XCTAssertEqual(
+            TabBarView.dragEndAction(hasDropTarget: true, draggedOffBar: true),
+            .crossPanelDrop
+        )
+    }
+
+    func testDragEndActionDetachesWhenDraggedOffBarWithoutTarget() {
+        XCTAssertEqual(
+            TabBarView.dragEndAction(hasDropTarget: false, draggedOffBar: true),
+            .detachToNewGroup
+        )
+    }
+
+    func testDragEndActionReordersWhenNotDetachedAndNoTarget() {
+        XCTAssertEqual(
+            TabBarView.dragEndAction(hasDropTarget: false, draggedOffBar: false),
+            .reorderInGroup
+        )
+    }
+
+    func testCrossPanelDropSpacesMatchRequiresEqualityWhenBothKnown() {
+        XCTAssertTrue(
+            AppDelegate.crossPanelDropSpacesMatch(sourceSpaceID: 42, targetSpaceID: 42)
+        )
+        XCTAssertFalse(
+            AppDelegate.crossPanelDropSpacesMatch(sourceSpaceID: 42, targetSpaceID: 7)
+        )
+    }
+
+    func testCrossPanelDropSpacesMatchAllowsUnknownSpace() {
+        XCTAssertTrue(
+            AppDelegate.crossPanelDropSpacesMatch(sourceSpaceID: nil, targetSpaceID: 7)
+        )
+        XCTAssertTrue(
+            AppDelegate.crossPanelDropSpacesMatch(sourceSpaceID: 42, targetSpaceID: nil)
+        )
+        XCTAssertTrue(
+            AppDelegate.crossPanelDropSpacesMatch(sourceSpaceID: nil, targetSpaceID: nil)
+        )
+    }
+
+    func testPointDistanceFromRectIsZeroInsideAndPositiveOutside() {
+        let rect = CGRect(x: 100, y: 100, width: 200, height: 50)
+
+        XCTAssertEqual(
+            AppDelegate.pointDistance(from: NSPoint(x: 150, y: 120), to: rect),
+            0,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            AppDelegate.pointDistance(from: NSPoint(x: 80, y: 120), to: rect),
+            20,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            AppDelegate.pointDistance(from: NSPoint(x: 80, y: 70), to: rect),
+            hypot(20, 30),
+            accuracy: 0.001
+        )
+    }
+
     func testWindowInfoIsFullscreenedDefaultsFalse() {
         let window = makeWindow(id: 1)
         XCTAssertFalse(window.isFullscreened)

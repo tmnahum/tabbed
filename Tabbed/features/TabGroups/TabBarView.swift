@@ -60,6 +60,13 @@ struct TabBarView: View {
     static let groupCounterTrailingSpacing: CGFloat = 4
     static let inlineGroupNameEditGroupIDKey = "groupID"
     static let inlineTabNameEditWindowIDKey = "windowID"
+    static let crossPanelDetachVerticalThreshold: CGFloat = 15
+
+    enum DragEndAction: Equatable {
+        case crossPanelDrop
+        case detachToNewGroup
+        case reorderInGroup
+    }
 
     static func displayedGroupName(from rawName: String?) -> String? {
         guard let rawName else { return nil }
@@ -367,6 +374,16 @@ struct TabBarView: View {
         return tabWidths.count
     }
 
+    static func dragEndAction(hasDropTarget: Bool, draggedOffBar: Bool) -> DragEndAction {
+        if hasDropTarget {
+            return .crossPanelDrop
+        }
+        if draggedOffBar {
+            return .detachToNewGroup
+        }
+        return .reorderInGroup
+    }
+
     // Chrome/Firefox-style horizontal expand transition for new tabs
     private struct HorizontalScale: ViewModifier {
         let fraction: CGFloat
@@ -569,33 +586,13 @@ struct TabBarView: View {
                                                 draggingIDs = [window.id]
                                             }
                                         }
-                                        dragTranslation = value.translation.width
-                                        // Track if cursor has left the tab bar vertically.
-                                        // Latch true so even if the gesture stops tracking
-                                        // outside the panel, we still detach on end.
-                                        if abs(value.translation.height) > 15 {
-                                            draggedOffBar = true
-                                        }
-                                        if draggedOffBar {
-                                            currentDropTarget = onDragOverPanels(NSEvent.mouseLocation)
-                                        }
+                                        handleDragChanged(translation: value.translation)
                                     }
                                     .onEnded { _ in
-                                        if draggedOffBar, let target = currentDropTarget {
-                                            let ids = Set(draggingIDs.filter { id in
-                                                guard let window = group.windows.first(where: { $0.id == id }) else { return false }
-                                                return !window.isSeparator
-                                            })
-                                            resetDragState()
-                                            selectedIDs = []
-                                            if !ids.isEmpty {
-                                                onCrossPanelDrop(ids, target.groupID, target.insertionIndex)
-                                            }
-                                        } else if draggedOffBar {
-                                            handleDragDetach()
-                                        } else {
-                                            handleDragEnded(tabStep: dragTabStep, tabWidths: widthLayout.widths)
-                                        }
+                                        handleGestureDragEnded(
+                                            tabStep: dragTabStep,
+                                            tabWidths: widthLayout.widths
+                                        )
                                     }
                             )
                         if index == pinnedCount - 1 && pinnedCount > 0 && pinnedCount < tabCount {
@@ -776,30 +773,10 @@ struct TabBarView: View {
                                     draggingIDs = [window.id]
                                 }
                             }
-                            dragTranslation = value.translation.width
-                            if abs(value.translation.height) > 15 {
-                                draggedOffBar = true
-                            }
-                            if draggedOffBar {
-                                currentDropTarget = onDragOverPanels(NSEvent.mouseLocation)
-                            }
+                            handleDragChanged(translation: value.translation)
                         }
                         .onEnded { _ in
-                            if draggedOffBar, let target = currentDropTarget {
-                                let ids = Set(draggingIDs.filter { id in
-                                    guard let window = group.windows.first(where: { $0.id == id }) else { return false }
-                                    return !window.isSeparator
-                                })
-                                resetDragState()
-                                selectedIDs = []
-                                if !ids.isEmpty {
-                                    onCrossPanelDrop(ids, target.groupID, target.insertionIndex)
-                                }
-                            } else if draggedOffBar {
-                                handleDragDetach()
-                            } else {
-                                handleDragEnded(tabStep: dragTabStep, tabWidths: tabWidths)
-                            }
+                            handleGestureDragEnded(tabStep: dragTabStep, tabWidths: tabWidths)
                         }
                 )
         }
@@ -857,6 +834,42 @@ struct TabBarView: View {
     }
 
     // MARK: - Drag Logic
+
+    private func draggedManagedWindowIDs() -> Set<CGWindowID> {
+        Set(draggingIDs.filter { id in
+            guard let window = group.windows.first(where: { $0.id == id }) else { return false }
+            return !window.isSeparator
+        })
+    }
+
+    private func handleDragChanged(translation: CGSize) {
+        dragTranslation = translation.width
+        if abs(translation.height) > Self.crossPanelDetachVerticalThreshold {
+            draggedOffBar = true
+        }
+        // Always poll so cross-panel drops work even when the cursor doesn't move far vertically.
+        currentDropTarget = onDragOverPanels(NSEvent.mouseLocation)
+    }
+
+    private func handleGestureDragEnded(tabStep: CGFloat, tabWidths: [CGFloat]) {
+        switch Self.dragEndAction(
+            hasDropTarget: currentDropTarget != nil,
+            draggedOffBar: draggedOffBar
+        ) {
+        case .crossPanelDrop:
+            guard let target = currentDropTarget else { return }
+            let ids = draggedManagedWindowIDs()
+            resetDragState()
+            selectedIDs = []
+            if !ids.isEmpty {
+                onCrossPanelDrop(ids, target.groupID, target.insertionIndex)
+            }
+        case .detachToNewGroup:
+            handleDragDetach()
+        case .reorderInGroup:
+            handleDragEnded(tabStep: tabStep, tabWidths: tabWidths)
+        }
+    }
 
     private func dragStep(tabWidths: [CGFloat]) -> CGFloat {
         guard let draggingID,
@@ -1077,10 +1090,7 @@ struct TabBarView: View {
 
     /// Drag ended with vertical movement — detach dragged tabs to a new group.
     private func handleDragDetach() {
-        let ids = Set(draggingIDs.filter { id in
-            guard let window = group.windows.first(where: { $0.id == id }) else { return false }
-            return !window.isSeparator
-        })
+        let ids = draggedManagedWindowIDs()
         resetDragState()
         selectedIDs = []
         guard !ids.isEmpty else { return }

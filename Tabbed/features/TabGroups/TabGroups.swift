@@ -6,6 +6,17 @@ import SwiftUI
 extension AppDelegate {
     private static let barDragSnapTolerance: CGFloat = 30
 
+    static func crossPanelDropSpacesMatch(sourceSpaceID: UInt64?, targetSpaceID: UInt64?) -> Bool {
+        guard let sourceSpaceID, let targetSpaceID else { return true }
+        return sourceSpaceID == targetSpaceID
+    }
+
+    static func pointDistance(from point: NSPoint, to rect: CGRect) -> CGFloat {
+        let dx = max(rect.minX - point.x, 0, point.x - rect.maxX)
+        let dy = max(rect.minY - point.y, 0, point.y - rect.maxY)
+        return hypot(dx, dy)
+    }
+
 
     func focusWindow(_ window: WindowInfo, completion: (() -> Void)? = nil) {
         Logger.log("[FOCUSDBG] focusWindow begin window=\(window.id) pid=\(window.ownerPID) memberships=\(groupManager.membershipCount(for: window.id))")
@@ -2070,9 +2081,16 @@ extension AppDelegate {
     /// Find which panel (if any) the cursor is over, excluding the source group.
     /// Returns insertion index based on cursor X position.
     func findDropTarget(from sourceGroup: TabGroup, at mouseLocation: NSPoint) -> CrossPanelDropTarget? {
+        let sourceSpaceID = resolvedSpaceID(for: sourceGroup)
+        var bestMatch: (target: CrossPanelDropTarget, hitDistance: CGFloat, centerDistance: CGFloat)?
+
         for (groupID, panel) in tabBarPanels {
             guard groupID != sourceGroup.id,
                   let group = groupManager.groups.first(where: { $0.id == groupID }) else { continue }
+            let candidateSpaceID = resolvedSpaceID(for: group)
+            guard Self.crossPanelDropSpacesMatch(sourceSpaceID: sourceSpaceID, targetSpaceID: candidateSpaceID) else {
+                continue
+            }
 
             // Expand hit area vertically for easier targeting (30px padding above and below the 28px bar)
             var hitRect = panel.frame
@@ -2116,10 +2134,21 @@ extension AppDelegate {
                 tabs: mainTabs
             )
             let insertionIndex = group.superPinnedCount + insertionInMain
+            let target = CrossPanelDropTarget(groupID: groupID, insertionIndex: insertionIndex)
+            let hitDistance = Self.pointDistance(from: mouseLocation, to: panel.frame)
+            let centerDistance = hypot(mouseLocation.x - panel.frame.midX, mouseLocation.y - panel.frame.midY)
 
-            return CrossPanelDropTarget(groupID: groupID, insertionIndex: insertionIndex)
+            if let current = bestMatch {
+                let isBetter = hitDistance < current.hitDistance
+                    || (hitDistance == current.hitDistance && centerDistance < current.centerDistance)
+                if !isBetter {
+                    continue
+                }
+            }
+
+            bestMatch = (target: target, hitDistance: hitDistance, centerDistance: centerDistance)
         }
-        return nil
+        return bestMatch?.target
     }
 
     /// Poll during drag to update drop indicators. Returns the target if cursor is over another panel.
