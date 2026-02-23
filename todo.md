@@ -3,6 +3,8 @@
     - should gracefully transition to regular pins on last window unmaximizes, to nothing on not-last window unmaximizes, and remove any maximized window with just superpins
 - improve tab dragging behavior
 
+- superpin undo restore better more intentional behavior
+
 - mirror tabs open confuse which group they are in, either make the other group not in mirror tab or something
 - windows opened with quick switcher do not resize on open, this is bad for mirror tabs
 

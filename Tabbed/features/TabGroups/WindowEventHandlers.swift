@@ -122,7 +122,7 @@ extension AppDelegate {
         guard let group = group,
               let panel = tabBarPanels[group.id] else { return }
 
-        if barDraggingGroupID == group.id { return }
+        if barDraggingGroupID == group.id || barDraggingGroupIDs.contains(group.id) { return }
         if shouldSuppress(windowID: windowID, currentFrame: frame) { return }
 
         let existingSqueeze = ScreenCompensation.existingSqueezeForReclamp(
@@ -197,7 +197,7 @@ extension AppDelegate {
         guard let group = group,
               let panel = tabBarPanels[group.id] else { return }
 
-        if barDraggingGroupID == group.id { return }
+        if barDraggingGroupID == group.id || barDraggingGroupIDs.contains(group.id) { return }
         if shouldSuppress(windowID: windowID, currentFrame: frame) { return }
 
         if AccessibilityHelper.isFullScreen(windowInfo.element) {

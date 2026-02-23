@@ -70,8 +70,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var recentExternalActivationAt: Date?
     /// Set during tab bar drag to suppress window move/resize handlers for the dragged group.
     var barDraggingGroupID: UUID?
+    /// All groups currently being moved by a bar drag (source + optional Shift-drag peers).
+    var barDraggingGroupIDs: Set<UUID> = []
     /// Group frame at bar drag start, for absolute positioning.
     var barDragInitialFrame: CGRect?
+    /// Peer-group frames captured at the moment Shift grouped-drag begins.
+    var barDragInitialFramesByGroupedGroupID: [UUID: CGRect] = [:]
+    /// Translation offset captured when grouped-drag starts to avoid jumpy mid-drag Shift toggles.
+    var barDragGroupedStartTranslation: CGPoint?
     /// Debounce token for space-change handling — lets the animation settle before querying.
     var spaceChangeWorkItem: DispatchWorkItem?
     /// Deferred wake recovery to let WindowServer/AX settle before rebuilding observers.

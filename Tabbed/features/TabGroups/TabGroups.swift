@@ -5,6 +5,7 @@ import SwiftUI
 
 extension AppDelegate {
     private static let barDragSnapTolerance: CGFloat = 30
+    private static let crossPanelSourceExitTolerance: CGFloat = 8
 
     static func crossPanelDropSpacesMatch(sourceSpaceID: UInt64?, targetSpaceID: UInt64?) -> Bool {
         guard let sourceSpaceID, let targetSpaceID else { return true }
@@ -15,6 +16,64 @@ extension AppDelegate {
         let dx = max(rect.minX - point.x, 0, point.x - rect.maxX)
         let dy = max(rect.minY - point.y, 0, point.y - rect.maxY)
         return hypot(dx, dy)
+    }
+
+    static func shouldSkipOverlappingPanelDropTarget(
+        mouseLocation: NSPoint,
+        sourcePanelFrame: CGRect?,
+        targetPanelFrame: CGRect
+    ) -> Bool {
+        guard let sourcePanelFrame else { return false }
+        return NSMouseInRect(mouseLocation, sourcePanelFrame, false)
+            && NSMouseInRect(mouseLocation, targetPanelFrame, false)
+    }
+
+    static func hasExitedSourcePanelForCrossDrop(
+        mouseLocation: NSPoint,
+        sourcePanelFrame: CGRect?,
+        tolerance: CGFloat = crossPanelSourceExitTolerance
+    ) -> Bool {
+        guard let sourcePanelFrame else { return true }
+        let stickySourceFrame = sourcePanelFrame.insetBy(dx: -tolerance, dy: -tolerance)
+        return !NSMouseInRect(mouseLocation, stickySourceFrame, false)
+    }
+
+    static func shouldConsiderPanelForCrossDrop(
+        mouseLocation: NSPoint,
+        sourcePanelFrame: CGRect?,
+        targetPanelFrame: CGRect,
+        targetPanelIsVisible: Bool
+    ) -> Bool {
+        guard targetPanelIsVisible else { return false }
+        guard hasExitedSourcePanelForCrossDrop(
+            mouseLocation: mouseLocation,
+            sourcePanelFrame: sourcePanelFrame
+        ) else { return false }
+        guard !shouldSkipOverlappingPanelDropTarget(
+            mouseLocation: mouseLocation,
+            sourcePanelFrame: sourcePanelFrame,
+            targetPanelFrame: targetPanelFrame
+        ) else { return false }
+        return true
+    }
+
+    static func panelZOrderByWindowNumber(orderedWindows: [NSWindow]) -> [Int: Int] {
+        Dictionary(uniqueKeysWithValues: orderedWindows.enumerated().map { ($0.element.windowNumber, $0.offset) })
+    }
+
+    static func isBetterDropCandidate(
+        zOrderIndex: Int?,
+        hitDistance: CGFloat,
+        centerDistance: CGFloat,
+        currentZOrderIndex: Int?,
+        currentHitDistance: CGFloat,
+        currentCenterDistance: CGFloat
+    ) -> Bool {
+        let z = zOrderIndex ?? Int.max
+        let currentZ = currentZOrderIndex ?? Int.max
+        if z != currentZ { return z < currentZ }
+        if hitDistance != currentHitDistance { return hitDistance < currentHitDistance }
+        return centerDistance < currentCenterDistance
     }
 
 
@@ -1436,7 +1495,7 @@ extension AppDelegate {
                 continue
             }
 
-            if barDraggingGroupID == group.id { barDraggingGroupID = nil }
+            clearBarDragTracking(for: group.id)
             if autoCaptureGroup === group { deactivateAutoCapture() }
             if lastActiveGroupID == group.id { lastActiveGroupID = nil }
             selectedTabIDsByGroupID.removeValue(forKey: group.id)
@@ -1661,7 +1720,7 @@ extension AppDelegate {
     }
 
     func handleGroupDissolution(group: TabGroup, panel: TabBarPanel) {
-        if barDraggingGroupID == group.id { barDraggingGroupID = nil }
+        clearBarDragTracking(for: group.id)
         if autoCaptureGroup === group { deactivateAutoCapture() }
         if lastActiveGroupID == group.id { lastActiveGroupID = nil }
         selectedTabIDsByGroupID.removeValue(forKey: group.id)
@@ -1691,7 +1750,7 @@ extension AppDelegate {
         guard let panel = tabBarPanels[group.id] else { return }
         suppressAutoJoin(windowIDs: group.managedWindows.map(\.id))
 
-        if barDraggingGroupID == group.id { barDraggingGroupID = nil }
+        clearBarDragTracking(for: group.id)
         if autoCaptureGroup === group { deactivateAutoCapture() }
         if lastActiveGroupID == group.id { lastActiveGroupID = nil }
         selectedTabIDsByGroupID.removeValue(forKey: group.id)
@@ -1725,7 +1784,7 @@ extension AppDelegate {
     func quitGroup(_ group: TabGroup) {
         guard let panel = tabBarPanels[group.id] else { return }
 
-        if barDraggingGroupID == group.id { barDraggingGroupID = nil }
+        clearBarDragTracking(for: group.id)
         if autoCaptureGroup === group { deactivateAutoCapture() }
         if lastActiveGroupID == group.id { lastActiveGroupID = nil }
         selectedTabIDsByGroupID.removeValue(forKey: group.id)
@@ -1911,12 +1970,63 @@ extension AppDelegate {
 
     // MARK: - Bar Drag & Zoom
 
-    func handleBarDrag(group: TabGroup, totalDx: CGFloat, totalDy: CGFloat) {
+    private func clearBarDragTracking(for groupID: UUID) {
+        if barDraggingGroupID == groupID {
+            barDraggingGroupID = nil
+            barDragInitialFrame = nil
+        }
+        barDraggingGroupIDs.remove(groupID)
+        barDragInitialFramesByGroupedGroupID.removeValue(forKey: groupID)
+        if barDragInitialFramesByGroupedGroupID.isEmpty {
+            barDragGroupedStartTranslation = nil
+        }
+    }
+
+    private func resetBarDragTracking() {
+        barDraggingGroupID = nil
+        barDraggingGroupIDs.removeAll()
+        barDragInitialFrame = nil
+        barDragInitialFramesByGroupedGroupID.removeAll()
+        barDragGroupedStartTranslation = nil
+    }
+
+    private func shouldDragCounterGroupedPeers(for group: TabGroup, isShiftPressed: Bool) -> Bool {
+        guard isShiftPressed else { return false }
+        let counterIDs = group.maximizedGroupCounterIDs
+        return counterIDs.count >= 2 && counterIDs.contains(group.id)
+    }
+
+    private func counterPeerGroups(for sourceGroup: TabGroup) -> [TabGroup] {
+        let groupsByID = Dictionary(uniqueKeysWithValues: groupManager.groups.map { ($0.id, $0) })
+        return sourceGroup.maximizedGroupCounterIDs.compactMap { groupID in
+            guard groupID != sourceGroup.id else { return nil }
+            return groupsByID[groupID]
+        }
+    }
+
+    private func applyBarDragFrame(_ frame: CGRect, to group: TabGroup, updatePanelPosition: Bool) {
+        group.frame = frame
+
+        let allIDs = group.visibleWindows.map(\.id)
+        setExpectedFrame(frame, for: allIDs)
+        for window in group.visibleWindows {
+            AccessibilityHelper.setPositionAsync(of: window.element, to: frame.origin)
+        }
+
+        if updatePanelPosition,
+           let panel = tabBarPanels[group.id] {
+            panel.positionAbove(windowFrame: frame, isMaximized: isGroupMaximized(group).0)
+        }
+    }
+
+    func handleBarDrag(group: TabGroup, totalDx: CGFloat, totalDy: CGFloat, isShiftPressed explicitShiftPressed: Bool? = nil) {
         if barDraggingGroupID == nil {
             barDraggingGroupID = group.id
             barDragInitialFrame = group.frame
+            barDraggingGroupIDs = [group.id]
         }
         guard let initial = barDragInitialFrame else { return }
+        let sourceMovedBeforeThisUpdate = group.frame != initial
 
         // AppKit Y increases upward, AX Y increases downward — negate dy
         let newFrame = CGRect(
@@ -1925,12 +2035,45 @@ extension AppDelegate {
             width: initial.width,
             height: initial.height
         )
-        group.frame = newFrame
+        applyBarDragFrame(newFrame, to: group, updatePanelPosition: false)
 
-        let allIDs = group.visibleWindows.map(\.id)
-        setExpectedFrame(newFrame, for: allIDs)
-        for window in group.visibleWindows {
-            AccessibilityHelper.setPositionAsync(of: window.element, to: newFrame.origin)
+        let shiftPressed = explicitShiftPressed ?? CGEventSource.flagsState(.combinedSessionState).contains(.maskShift)
+        if shouldDragCounterGroupedPeers(for: group, isShiftPressed: shiftPressed) {
+            if barDragInitialFramesByGroupedGroupID.isEmpty || barDragGroupedStartTranslation == nil {
+                var peerFrames: [UUID: CGRect] = [:]
+                for peerGroup in counterPeerGroups(for: group) {
+                    peerFrames[peerGroup.id] = peerGroup.frame
+                }
+                barDragInitialFramesByGroupedGroupID = peerFrames
+                barDragGroupedStartTranslation = sourceMovedBeforeThisUpdate
+                    ? CGPoint(x: totalDx, y: totalDy)
+                    : .zero
+            }
+
+            let baseline = barDragGroupedStartTranslation ?? .zero
+            let groupedDx = totalDx - baseline.x
+            let groupedDy = totalDy - baseline.y
+
+            var movedGroupIDs: Set<UUID> = [group.id]
+            for (peerGroupID, peerInitialFrame) in barDragInitialFramesByGroupedGroupID {
+                guard let peerGroup = groupManager.groups.first(where: { $0.id == peerGroupID }) else {
+                    continue
+                }
+
+                let peerFrame = CGRect(
+                    x: peerInitialFrame.origin.x + groupedDx,
+                    y: peerInitialFrame.origin.y - groupedDy,
+                    width: peerInitialFrame.width,
+                    height: peerInitialFrame.height
+                )
+                applyBarDragFrame(peerFrame, to: peerGroup, updatePanelPosition: true)
+                movedGroupIDs.insert(peerGroupID)
+            }
+            barDraggingGroupIDs = movedGroupIDs
+        } else {
+            barDragInitialFramesByGroupedGroupID.removeAll()
+            barDragGroupedStartTranslation = nil
+            barDraggingGroupIDs = [group.id]
         }
 
         // Live preview counters while dragging so users can see join candidates
@@ -1938,10 +2081,7 @@ extension AppDelegate {
         refreshMaximizedGroupCounters(applySuperpinTransitions: false)
     }
 
-    func handleBarDragEnded(group: TabGroup, panel: TabBarPanel) {
-        barDraggingGroupID = nil
-        barDragInitialFrame = nil
-
+    private func finalizeBarDrag(for group: TabGroup, panel: TabBarPanel?, allowSnap: Bool) {
         var finalFrame = group.frame
         var finalSqueezeDelta = group.tabBarSqueezeDelta
 
@@ -1956,9 +2096,8 @@ extension AppDelegate {
         finalFrame = adjustedFrame
         finalSqueezeDelta = squeezeDelta
 
-        // If the dragged tab bar lands near another group's tab bar top-left,
-        // snap the moved group's frame to exactly match that group's frame.
-        if let snappedTarget = snappedGroupFrameForBarDrag(of: group, frame: finalFrame) {
+        if allowSnap,
+           let snappedTarget = snappedGroupFrameForBarDrag(of: group, frame: finalFrame) {
             finalFrame = snappedTarget.frame
             finalSqueezeDelta = snappedTarget.squeezeDelta
             Logger.log(
@@ -1977,8 +2116,24 @@ extension AppDelegate {
             AccessibilityHelper.setFrameAsync(of: window.element, to: finalFrame)
         }
 
-        panel.positionAbove(windowFrame: finalFrame, isMaximized: isGroupMaximized(group).0)
-        panel.orderAbove(windowID: activeWindow.id)
+        if let panel {
+            panel.positionAbove(windowFrame: finalFrame, isMaximized: isGroupMaximized(group).0)
+            panel.orderAbove(windowID: activeWindow.id)
+        }
+    }
+
+    func handleBarDragEnded(group: TabGroup, panel: TabBarPanel) {
+        let groupedPeerIDs = Array(barDragInitialFramesByGroupedGroupID.keys)
+        defer { resetBarDragTracking() }
+
+        finalizeBarDrag(for: group, panel: panel, allowSnap: groupedPeerIDs.isEmpty)
+        if !groupedPeerIDs.isEmpty {
+            for peerGroupID in groupedPeerIDs {
+                guard let peerGroup = groupManager.groups.first(where: { $0.id == peerGroupID }) else { continue }
+                let peerPanel = tabBarPanels[peerGroupID]
+                finalizeBarDrag(for: peerGroup, panel: peerPanel, allowSnap: false)
+            }
+        }
         evaluateAutoCapture()
     }
 
@@ -2082,7 +2237,9 @@ extension AppDelegate {
     /// Returns insertion index based on cursor X position.
     func findDropTarget(from sourceGroup: TabGroup, at mouseLocation: NSPoint) -> CrossPanelDropTarget? {
         let sourceSpaceID = resolvedSpaceID(for: sourceGroup)
-        var bestMatch: (target: CrossPanelDropTarget, hitDistance: CGFloat, centerDistance: CGFloat)?
+        let sourcePanelFrame = tabBarPanels[sourceGroup.id]?.frame
+        let zOrderByWindowNumber = Self.panelZOrderByWindowNumber(orderedWindows: NSApp.orderedWindows)
+        var bestMatch: (target: CrossPanelDropTarget, zOrderIndex: Int?, hitDistance: CGFloat, centerDistance: CGFloat)?
 
         for (groupID, panel) in tabBarPanels {
             guard groupID != sourceGroup.id,
@@ -2091,6 +2248,12 @@ extension AppDelegate {
             guard Self.crossPanelDropSpacesMatch(sourceSpaceID: sourceSpaceID, targetSpaceID: candidateSpaceID) else {
                 continue
             }
+            guard Self.shouldConsiderPanelForCrossDrop(
+                mouseLocation: mouseLocation,
+                sourcePanelFrame: sourcePanelFrame,
+                targetPanelFrame: panel.frame,
+                targetPanelIsVisible: panel.isVisible
+            ) else { continue }
 
             // Expand hit area vertically for easier targeting (30px padding above and below the 28px bar)
             var hitRect = panel.frame
@@ -2135,18 +2298,30 @@ extension AppDelegate {
             )
             let insertionIndex = group.superPinnedCount + insertionInMain
             let target = CrossPanelDropTarget(groupID: groupID, insertionIndex: insertionIndex)
+            let zOrderIndex = zOrderByWindowNumber[panel.windowNumber]
             let hitDistance = Self.pointDistance(from: mouseLocation, to: panel.frame)
             let centerDistance = hypot(mouseLocation.x - panel.frame.midX, mouseLocation.y - panel.frame.midY)
 
             if let current = bestMatch {
-                let isBetter = hitDistance < current.hitDistance
-                    || (hitDistance == current.hitDistance && centerDistance < current.centerDistance)
+                let isBetter = Self.isBetterDropCandidate(
+                    zOrderIndex: zOrderIndex,
+                    hitDistance: hitDistance,
+                    centerDistance: centerDistance,
+                    currentZOrderIndex: current.zOrderIndex,
+                    currentHitDistance: current.hitDistance,
+                    currentCenterDistance: current.centerDistance
+                )
                 if !isBetter {
                     continue
                 }
             }
 
-            bestMatch = (target: target, hitDistance: hitDistance, centerDistance: centerDistance)
+            bestMatch = (
+                target: target,
+                zOrderIndex: zOrderIndex,
+                hitDistance: hitDistance,
+                centerDistance: centerDistance
+            )
         }
         return bestMatch?.target
     }

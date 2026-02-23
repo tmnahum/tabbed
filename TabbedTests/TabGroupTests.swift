@@ -721,6 +721,41 @@ final class TabGroupTests: XCTestCase {
         )
     }
 
+    func testShouldDetachForTranslationRequiresExceedingVerticalThreshold() {
+        let threshold = TabBarView.crossPanelDetachVerticalThreshold
+        XCTAssertFalse(
+            TabBarView.shouldDetachForTranslation(
+                CGSize(width: 0, height: threshold)
+            )
+        )
+        XCTAssertTrue(
+            TabBarView.shouldDetachForTranslation(
+                CGSize(width: 0, height: threshold + 0.01)
+            )
+        )
+    }
+
+    func testShouldDetachForTranslationSuppressesStrongHorizontalIntent() {
+        XCTAssertFalse(
+            TabBarView.shouldDetachForTranslation(
+                CGSize(
+                    width: TabBarView.horizontalIntentSuppressDetachThreshold,
+                    height: TabBarView.crossPanelDetachVerticalThreshold + 50
+                )
+            )
+        )
+        XCTAssertFalse(
+            TabBarView.shouldDetachForTranslation(
+                CGSize(width: 40, height: 42)
+            )
+        )
+        XCTAssertTrue(
+            TabBarView.shouldDetachForTranslation(
+                CGSize(width: 6, height: 40)
+            )
+        )
+    }
+
     func testCrossPanelDropSpacesMatchRequiresEqualityWhenBothKnown() {
         XCTAssertTrue(
             AppDelegate.crossPanelDropSpacesMatch(sourceSpaceID: 42, targetSpaceID: 42)
@@ -759,6 +794,111 @@ final class TabGroupTests: XCTestCase {
             AppDelegate.pointDistance(from: NSPoint(x: 80, y: 70), to: rect),
             hypot(20, 30),
             accuracy: 0.001
+        )
+    }
+
+    func testShouldSkipOverlappingPanelDropTargetRequiresCursorInsideBothPanels() {
+        let source = CGRect(x: 100, y: 100, width: 200, height: 28)
+        let target = CGRect(x: 100, y: 100, width: 200, height: 28)
+
+        XCTAssertTrue(
+            AppDelegate.shouldSkipOverlappingPanelDropTarget(
+                mouseLocation: NSPoint(x: 150, y: 110),
+                sourcePanelFrame: source,
+                targetPanelFrame: target
+            )
+        )
+        XCTAssertFalse(
+            AppDelegate.shouldSkipOverlappingPanelDropTarget(
+                mouseLocation: NSPoint(x: 350, y: 110),
+                sourcePanelFrame: source,
+                targetPanelFrame: target
+            )
+        )
+    }
+
+    func testShouldSkipOverlappingPanelDropTargetFalseWhenSourceFrameUnknown() {
+        let target = CGRect(x: 100, y: 100, width: 200, height: 28)
+
+        XCTAssertFalse(
+            AppDelegate.shouldSkipOverlappingPanelDropTarget(
+                mouseLocation: NSPoint(x: 150, y: 110),
+                sourcePanelFrame: nil,
+                targetPanelFrame: target
+            )
+        )
+    }
+
+    func testHasExitedSourcePanelForCrossDropUsesTolerance() {
+        let source = CGRect(x: 100, y: 100, width: 200, height: 28)
+
+        XCTAssertFalse(
+            AppDelegate.hasExitedSourcePanelForCrossDrop(
+                mouseLocation: NSPoint(x: 305, y: 110),
+                sourcePanelFrame: source
+            )
+        )
+        XCTAssertTrue(
+            AppDelegate.hasExitedSourcePanelForCrossDrop(
+                mouseLocation: NSPoint(x: 309, y: 110),
+                sourcePanelFrame: source
+            )
+        )
+    }
+
+    func testShouldConsiderPanelForCrossDropRequiresVisibleTargetAndSourceExit() {
+        let source = CGRect(x: 100, y: 100, width: 200, height: 28)
+        let target = CGRect(x: 330, y: 100, width: 200, height: 28)
+
+        XCTAssertFalse(
+            AppDelegate.shouldConsiderPanelForCrossDrop(
+                mouseLocation: NSPoint(x: 120, y: 110),
+                sourcePanelFrame: source,
+                targetPanelFrame: target,
+                targetPanelIsVisible: true
+            )
+        )
+        XCTAssertFalse(
+            AppDelegate.shouldConsiderPanelForCrossDrop(
+                mouseLocation: NSPoint(x: 340, y: 110),
+                sourcePanelFrame: source,
+                targetPanelFrame: target,
+                targetPanelIsVisible: false
+            )
+        )
+        XCTAssertTrue(
+            AppDelegate.shouldConsiderPanelForCrossDrop(
+                mouseLocation: NSPoint(x: 340, y: 110),
+                sourcePanelFrame: source,
+                targetPanelFrame: target,
+                targetPanelIsVisible: true
+            )
+        )
+    }
+
+    func testIsBetterDropCandidatePrefersFrontmostPanelBeforeDistance() {
+        XCTAssertTrue(
+            AppDelegate.isBetterDropCandidate(
+                zOrderIndex: 0,
+                hitDistance: 200,
+                centerDistance: 200,
+                currentZOrderIndex: 3,
+                currentHitDistance: 0,
+                currentCenterDistance: 0
+            )
+        )
+    }
+
+    func testIsBetterDropCandidateFallsBackToDistanceWhenZOrderUnknown() {
+        XCTAssertTrue(
+            AppDelegate.isBetterDropCandidate(
+                zOrderIndex: nil,
+                hitDistance: 1,
+                centerDistance: 5,
+                currentZOrderIndex: nil,
+                currentHitDistance: 4,
+                currentCenterDistance: 1
+            )
         )
     }
 

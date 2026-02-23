@@ -60,7 +60,7 @@ struct TabBarView: View {
     static let groupCounterTrailingSpacing: CGFloat = 4
     static let inlineGroupNameEditGroupIDKey = "groupID"
     static let inlineTabNameEditWindowIDKey = "windowID"
-    static let crossPanelDetachVerticalThreshold: CGFloat = 15
+    static let crossPanelDetachVerticalThreshold: CGFloat = 36
 
     enum DragEndAction: Equatable {
         case crossPanelDrop
@@ -382,6 +382,20 @@ struct TabBarView: View {
             return .detachToNewGroup
         }
         return .reorderInGroup
+    }
+
+    static let horizontalIntentSuppressDetachThreshold: CGFloat = 26
+    static let verticalIntentRatio: CGFloat = 1.2
+
+    static func shouldDetachForTranslation(_ translation: CGSize) -> Bool {
+        let absX = abs(translation.width)
+        let absY = abs(translation.height)
+        guard absY > crossPanelDetachVerticalThreshold else { return false }
+        // Strong horizontal movement indicates reordering/cross-bar targeting intent, not detach intent.
+        if absX >= horizontalIntentSuppressDetachThreshold {
+            return false
+        }
+        return absY >= absX * verticalIntentRatio
     }
 
     // Chrome/Firefox-style horizontal expand transition for new tabs
@@ -844,7 +858,7 @@ struct TabBarView: View {
 
     private func handleDragChanged(translation: CGSize) {
         dragTranslation = translation.width
-        if abs(translation.height) > Self.crossPanelDetachVerticalThreshold {
+        if Self.shouldDetachForTranslation(translation) {
             draggedOffBar = true
         }
         // Always poll so cross-panel drops work even when the cursor doesn't move far vertically.
