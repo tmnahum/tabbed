@@ -1,4 +1,5 @@
 import XCTest
+import CoreGraphics
 @testable import Tabbed
 
 final class MaximizedGroupCounterPolicyTests: XCTestCase {
@@ -118,5 +119,159 @@ final class MaximizedGroupCounterPolicyTests: XCTestCase {
         XCTAssertEqual(result[maximized], [])
         XCTAssertEqual(result[unknownSpace], [])
         XCTAssertEqual(result[notMaximized], [])
+    }
+
+    func testDisabledModeReturnsNoCounters() {
+        let first = UUID()
+        let second = UUID()
+
+        let result = MaximizedGroupCounterPolicy.counterGroupIDsByGroupID(
+            candidates: [
+                .init(groupID: first, spaceID: 1, isMaximized: true),
+                .init(groupID: second, spaceID: 1, isMaximized: true)
+            ],
+            mode: .disabled
+        )
+
+        XCTAssertEqual(result[first], [])
+        XCTAssertEqual(result[second], [])
+    }
+
+    func testPositionAlignedModeIncludesAlignedNonMaximizedGroups() {
+        let maximized = UUID()
+        let aligned = UUID()
+        let farAway = UUID()
+
+        let result = MaximizedGroupCounterPolicy.counterGroupIDsByGroupID(
+            candidates: [
+                .init(
+                    groupID: maximized,
+                    spaceID: 1,
+                    isMaximized: true,
+                    frame: CGRect(x: 0, y: 0, width: 1600, height: 900)
+                ),
+                .init(
+                    groupID: aligned,
+                    spaceID: 1,
+                    isMaximized: false,
+                    frame: CGRect(x: 20, y: 20, width: 1560, height: 860)
+                ),
+                .init(
+                    groupID: farAway,
+                    spaceID: 1,
+                    isMaximized: false,
+                    frame: CGRect(x: 500, y: 400, width: 900, height: 600)
+                )
+            ],
+            mode: .maximizedAndPositionAligned
+        )
+
+        XCTAssertEqual(result[maximized], [maximized, aligned])
+        XCTAssertEqual(result[aligned], [maximized, aligned])
+        XCTAssertEqual(result[farAway], [])
+    }
+
+    func testPositionAlignedModeWorksWithoutMaximizedGroup() {
+        let first = UUID()
+        let second = UUID()
+
+        let result = MaximizedGroupCounterPolicy.counterGroupIDsByGroupID(
+            candidates: [
+                .init(
+                    groupID: first,
+                    spaceID: 2,
+                    isMaximized: false,
+                    frame: CGRect(x: 0, y: 0, width: 1200, height: 800)
+                ),
+                .init(
+                    groupID: second,
+                    spaceID: 2,
+                    isMaximized: false,
+                    frame: CGRect(x: 10, y: 10, width: 1190, height: 790)
+                )
+            ],
+            mode: .maximizedAndPositionAligned
+        )
+
+        XCTAssertEqual(result[first], [first, second])
+        XCTAssertEqual(result[second], [first, second])
+    }
+
+    func testPositionAlignedModeWithoutMaximizedRequiresAlignedPeer() {
+        let first = UUID()
+        let second = UUID()
+
+        let result = MaximizedGroupCounterPolicy.counterGroupIDsByGroupID(
+            candidates: [
+                .init(
+                    groupID: first,
+                    spaceID: 2,
+                    isMaximized: false,
+                    frame: CGRect(x: 0, y: 0, width: 1200, height: 800)
+                ),
+                .init(
+                    groupID: second,
+                    spaceID: 2,
+                    isMaximized: false,
+                    frame: CGRect(x: 300, y: 300, width: 1190, height: 790)
+                )
+            ],
+            mode: .maximizedAndPositionAligned
+        )
+
+        XCTAssertEqual(result[first], [])
+        XCTAssertEqual(result[second], [])
+    }
+
+    func testPositionAlignedModeUsesTabBarTopLeftEvenWhenSizesDiffer() {
+        let maximized = UUID()
+        let smallButAligned = UUID()
+
+        let result = MaximizedGroupCounterPolicy.counterGroupIDsByGroupID(
+            candidates: [
+                .init(
+                    groupID: maximized,
+                    spaceID: 3,
+                    isMaximized: true,
+                    frame: CGRect(x: 100, y: 100, width: 1600, height: 900)
+                ),
+                .init(
+                    groupID: smallButAligned,
+                    spaceID: 3,
+                    isMaximized: false,
+                    frame: CGRect(x: 120, y: 120, width: 520, height: 300)
+                )
+            ],
+            mode: .maximizedAndPositionAligned
+        )
+
+        XCTAssertEqual(result[maximized], [maximized, smallButAligned])
+        XCTAssertEqual(result[smallButAligned], [maximized, smallButAligned])
+    }
+
+    func testPositionAlignedModeDoesNotUseOverlapWhenTopLeftDiffers() {
+        let maximized = UUID()
+        let overlappingButDifferentTopLeft = UUID()
+
+        let result = MaximizedGroupCounterPolicy.counterGroupIDsByGroupID(
+            candidates: [
+                .init(
+                    groupID: maximized,
+                    spaceID: 4,
+                    isMaximized: true,
+                    frame: CGRect(x: 0, y: 0, width: 1600, height: 900)
+                ),
+                .init(
+                    groupID: overlappingButDifferentTopLeft,
+                    spaceID: 4,
+                    isMaximized: false,
+                    frame: CGRect(x: 220, y: 180, width: 1300, height: 680)
+                )
+            ],
+            mode: .maximizedAndPositionAligned
+        )
+
+        XCTAssertEqual(result[maximized], [])
+        XCTAssertEqual(result[overlappingButDifferentTopLeft], [])
     }
 }

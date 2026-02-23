@@ -420,6 +420,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             onLauncherConfigChanged: { [weak self] newConfig in
                 newConfig.save()
                 self?.addWindowLauncherConfig = newConfig
+            },
+            onTabBarConfigChanged: { [weak self] in
+                self?.refreshMaximizedGroupCounters()
             }
         )
         window.contentView = NSHostingView(rootView: settingsView)

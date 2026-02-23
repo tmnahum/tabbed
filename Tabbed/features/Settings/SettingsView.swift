@@ -33,6 +33,7 @@ struct SettingsView: View {
     var onSessionConfigChanged: (SessionConfig) -> Void
     var onSwitcherConfigChanged: (SwitcherConfig) -> Void
     var onLauncherConfigChanged: (AddWindowLauncherConfig) -> Void
+    var onTabBarConfigChanged: () -> Void
 
     init(
         config: ShortcutConfig,
@@ -43,7 +44,8 @@ struct SettingsView: View {
         onConfigChanged: @escaping (ShortcutConfig) -> Void,
         onSessionConfigChanged: @escaping (SessionConfig) -> Void,
         onSwitcherConfigChanged: @escaping (SwitcherConfig) -> Void,
-        onLauncherConfigChanged: @escaping (AddWindowLauncherConfig) -> Void
+        onLauncherConfigChanged: @escaping (AddWindowLauncherConfig) -> Void,
+        onTabBarConfigChanged: @escaping () -> Void = {}
     ) {
         self._config = State(initialValue: config)
         self._sessionConfig = State(initialValue: sessionConfig)
@@ -54,6 +56,7 @@ struct SettingsView: View {
         self.onSessionConfigChanged = onSessionConfigChanged
         self.onSwitcherConfigChanged = onSwitcherConfigChanged
         self.onLauncherConfigChanged = onLauncherConfigChanged
+        self.onTabBarConfigChanged = onTabBarConfigChanged
     }
 
     var body: some View {
@@ -137,6 +140,9 @@ struct SettingsView: View {
         }
         .onChange(of: launcherConfig.searchProviderSelection.engine) { _ in
             onLauncherConfigChanged(launcherConfig)
+        }
+        .onChange(of: tabBarConfig.groupCounterMode) { _ in
+            onTabBarConfigChanged()
         }
         // tabBarConfig auto-saves via didSet on its properties
         .background(ShortcutRecorderBridge(
@@ -588,15 +594,21 @@ struct SettingsView: View {
 
             Divider()
 
-            Toggle(isOn: $tabBarConfig.showMaximizedGroupCounters) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Show Maximized Group Counters")
-                    Text("Shows clickable `1 2 3...` group counters on maximized groups in the same space.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Multi-Group Counter Mode")
+                    .font(.headline)
+
+                Picker("Mode", selection: $tabBarConfig.groupCounterMode) {
+                    Text("Disabled").tag(GroupCounterMode.disabled)
+                    Text("Maximized Only").tag(GroupCounterMode.maximizedOnly)
+                    Text("Maximized + Same Position").tag(GroupCounterMode.maximizedAndPositionAligned)
                 }
+                .pickerStyle(.menu)
+
+                Text(groupCounterModeDescription)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            .toggleStyle(.checkbox)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -704,6 +716,17 @@ struct SettingsView: View {
             return "Current tab shows -, other tabs show X."
         case .minusOnAllTabs:
             return "All tabs show - on hover."
+        }
+    }
+
+    private var groupCounterModeDescription: String {
+        switch tabBarConfig.groupCounterMode {
+        case .disabled:
+            return "Turns off multi-group counters and superpin sharing."
+        case .maximizedOnly:
+            return "Shows clickable `1 2 3...` counters only for maximized groups in the same space."
+        case .maximizedAndPositionAligned:
+            return "Also includes non-maximized groups in the same space when they are roughly in the same position as a maximized group."
         }
     }
 

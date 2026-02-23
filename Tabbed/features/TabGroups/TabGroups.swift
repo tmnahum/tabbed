@@ -748,17 +748,23 @@ extension AppDelegate {
         let previousCounterIDsByGroupID = Dictionary(
             uniqueKeysWithValues: groupManager.groups.map { ($0.id, $0.maximizedGroupCounterIDs) }
         )
+        let counterMode = tabBarConfig.groupCounterMode
         let candidates = groupManager.groups.map { group in
             MaximizedGroupCounterPolicy.Candidate(
                 groupID: group.id,
                 spaceID: resolvedSpaceID(for: group),
-                isMaximized: isGroupMaximized(group).0
+                isMaximized: isGroupMaximized(group).0,
+                frame: group.frame
             )
         }
+
+        let participantsBySpaceID = MaximizedGroupCounterPolicy.participatingGroupIDsBySpaceID(
+            candidates: candidates,
+            mode: counterMode
+        )
         var validIDsBySpaceID: [UInt64: Set<UUID>] = [:]
-        for candidate in candidates where candidate.isMaximized {
-            guard let spaceID = candidate.spaceID else { continue }
-            validIDsBySpaceID[spaceID, default: []].insert(candidate.groupID)
+        for (spaceID, participantIDs) in participantsBySpaceID where participantIDs.count >= 2 {
+            validIDsBySpaceID[spaceID] = Set(participantIDs)
         }
         for (spaceID, order) in maximizedCounterOrderBySpaceID {
             guard let validIDs = validIDsBySpaceID[spaceID], !validIDs.isEmpty else {
@@ -774,7 +780,8 @@ extension AppDelegate {
         }
         let countersByGroupID = MaximizedGroupCounterPolicy.counterGroupIDsByGroupID(
             candidates: candidates,
-            preferredOrderBySpaceID: maximizedCounterOrderBySpaceID
+            preferredOrderBySpaceID: maximizedCounterOrderBySpaceID,
+            mode: counterMode
         )
         for group in groupManager.groups {
             let next = countersByGroupID[group.id] ?? []
@@ -805,28 +812,12 @@ extension AppDelegate {
         defer { isApplyingSuperpinMaximizeTransitions = false }
 
         let previousStates = lastKnownMaximizedStateByGroupID
-        let candidatesByGroupID = Dictionary(uniqueKeysWithValues: candidates.map { ($0.groupID, $0) })
         var didMutate = false
         for candidate in candidates {
             let wasMaximized = previousStates[candidate.groupID] ?? false
             let previousCounterIDs = previousCounterIDsByGroupID[candidate.groupID] ?? []
             guard (wasMaximized != candidate.isMaximized) || previousCounterIDs != (groupManager.groups.first(where: { $0.id == candidate.groupID })?.maximizedGroupCounterIDs ?? []),
                   let group = groupManager.groups.first(where: { $0.id == candidate.groupID }) else { continue }
-
-            var alreadySynchronized = false
-            var alreadyHandledSupportLoss = false
-            if wasMaximized != candidate.isMaximized {
-                if candidate.isMaximized {
-                    didMutate = handleGroupDidMaximize(group) || didMutate
-                    alreadySynchronized = true
-                } else {
-                    let remainingPeerCount = previousCounterIDs
-                        .filter { $0 != group.id && (candidatesByGroupID[$0]?.isMaximized ?? false) }
-                        .count
-                    didMutate = handleGroupDidUnmaximize(group, remainingPeerCount: remainingPeerCount) || didMutate
-                    alreadyHandledSupportLoss = true
-                }
-            }
 
             let previousSupportsSuperpin = supportsSuperpin(
                 counterGroupIDs: previousCounterIDs,
@@ -837,12 +828,22 @@ extension AppDelegate {
                 counterGroupIDs: nextCounterIDs,
                 currentGroupID: group.id
             )
+            let remainingPeerCount = max(0, nextCounterIDs.filter { $0 != group.id }.count)
+
+            var alreadySynchronized = false
+            var alreadyHandledSupportLoss = false
+            if wasMaximized != candidate.isMaximized {
+                if candidate.isMaximized {
+                    didMutate = handleGroupDidMaximize(group) || didMutate
+                    alreadySynchronized = true
+                } else if previousSupportsSuperpin && !nextSupportsSuperpin {
+                    didMutate = handleGroupDidUnmaximize(group, remainingPeerCount: remainingPeerCount) || didMutate
+                    alreadyHandledSupportLoss = true
+                }
+            }
 
             if previousSupportsSuperpin && !nextSupportsSuperpin {
                 if !alreadyHandledSupportLoss {
-                    let remainingPeerCount = previousCounterIDs
-                        .filter { $0 != group.id && (candidatesByGroupID[$0]?.isMaximized ?? false) }
-                        .count
                     didMutate = handleGroupLostSuperpinSupport(group, remainingPeerCount: remainingPeerCount) || didMutate
                 }
             } else if nextSupportsSuperpin && !alreadySynchronized {
@@ -1057,19 +1058,29 @@ extension AppDelegate {
     func reorderMaximizedGroupCounters(from sourceGroupID: UUID, orderedGroupIDs: [UUID]) {
         guard let sourceGroup = groupManager.groups.first(where: { $0.id == sourceGroupID }),
               let spaceID = resolvedSpaceID(for: sourceGroup) else { return }
-        let maximizedGroupIDs = groupManager.groups.compactMap { group -> UUID? in
-            guard resolvedSpaceID(for: group) == spaceID, isGroupMaximized(group).0 else { return nil }
-            return group.id
-        }
-        guard maximizedGroupIDs.count >= 2 else { return }
 
-        let validSet = Set(maximizedGroupIDs)
+        let candidates = groupManager.groups.map { group in
+            MaximizedGroupCounterPolicy.Candidate(
+                groupID: group.id,
+                spaceID: resolvedSpaceID(for: group),
+                isMaximized: isGroupMaximized(group).0,
+                frame: group.frame
+            )
+        }
+        let participantsBySpaceID = MaximizedGroupCounterPolicy.participatingGroupIDsBySpaceID(
+            candidates: candidates,
+            mode: tabBarConfig.groupCounterMode
+        )
+        guard let participantGroupIDs = participantsBySpaceID[spaceID],
+              participantGroupIDs.count >= 2 else { return }
+
+        let validSet = Set(participantGroupIDs)
         var preferred: [UUID] = []
-        preferred.reserveCapacity(maximizedGroupIDs.count)
+        preferred.reserveCapacity(participantGroupIDs.count)
         for id in orderedGroupIDs where validSet.contains(id) && !preferred.contains(id) {
             preferred.append(id)
         }
-        for id in maximizedGroupIDs where !preferred.contains(id) {
+        for id in participantGroupIDs where !preferred.contains(id) {
             preferred.append(id)
         }
         maximizedCounterOrderBySpaceID[spaceID] = preferred

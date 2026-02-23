@@ -11,6 +11,12 @@ enum TabCloseButtonMode: String, Codable, CaseIterable {
     case minusOnAllTabs
 }
 
+enum GroupCounterMode: String, Codable, CaseIterable {
+    case disabled
+    case maximizedOnly
+    case maximizedAndPositionAligned
+}
+
 class TabBarConfig: ObservableObject, Codable {
     @Published var style: TabBarStyle {
         didSet {
@@ -42,9 +48,18 @@ class TabBarConfig: ObservableObject, Codable {
             if showCloseConfirmation != oldValue { save() }
         }
     }
-    @Published var showMaximizedGroupCounters: Bool {
+    @Published var groupCounterMode: GroupCounterMode {
         didSet {
-            if showMaximizedGroupCounters != oldValue { save() }
+            if groupCounterMode != oldValue { save() }
+        }
+    }
+
+    var showMaximizedGroupCounters: Bool {
+        get {
+            groupCounterMode != .disabled
+        }
+        set {
+            groupCounterMode = newValue ? .maximizedOnly : .disabled
         }
     }
 
@@ -57,7 +72,8 @@ class TabBarConfig: ObservableObject, Codable {
         showTooltip: Bool = true,
         closeButtonMode: TabCloseButtonMode = .xmarkOnAllTabs,
         showCloseConfirmation: Bool = true,
-        showMaximizedGroupCounters: Bool = true
+        showMaximizedGroupCounters: Bool = true,
+        groupCounterMode: GroupCounterMode? = nil
     ) {
         self.style = style
         self.showDragHandle = showDragHandle
@@ -65,7 +81,7 @@ class TabBarConfig: ObservableObject, Codable {
         self.showTooltip = showTooltip
         self.closeButtonMode = closeButtonMode
         self.showCloseConfirmation = showCloseConfirmation
-        self.showMaximizedGroupCounters = showMaximizedGroupCounters
+        self.groupCounterMode = groupCounterMode ?? (showMaximizedGroupCounters ? .maximizedOnly : .disabled)
     }
 
     // MARK: - Codable
@@ -77,6 +93,7 @@ class TabBarConfig: ObservableObject, Codable {
         case showTooltip
         case closeButtonMode
         case showCloseConfirmation
+        case groupCounterMode
         case showMaximizedGroupCounters
     }
 
@@ -88,7 +105,12 @@ class TabBarConfig: ObservableObject, Codable {
         showTooltip = try container.decodeIfPresent(Bool.self, forKey: .showTooltip) ?? true
         closeButtonMode = try container.decodeIfPresent(TabCloseButtonMode.self, forKey: .closeButtonMode) ?? .xmarkOnAllTabs
         showCloseConfirmation = try container.decodeIfPresent(Bool.self, forKey: .showCloseConfirmation) ?? true
-        showMaximizedGroupCounters = try container.decodeIfPresent(Bool.self, forKey: .showMaximizedGroupCounters) ?? true
+        if let decodedMode = try container.decodeIfPresent(GroupCounterMode.self, forKey: .groupCounterMode) {
+            groupCounterMode = decodedMode
+        } else {
+            let showCounters = try container.decodeIfPresent(Bool.self, forKey: .showMaximizedGroupCounters) ?? true
+            groupCounterMode = showCounters ? .maximizedOnly : .disabled
+        }
     }
 
     func encode(to encoder: Encoder) throws {
@@ -99,6 +121,7 @@ class TabBarConfig: ObservableObject, Codable {
         try container.encode(showTooltip, forKey: .showTooltip)
         try container.encode(closeButtonMode, forKey: .closeButtonMode)
         try container.encode(showCloseConfirmation, forKey: .showCloseConfirmation)
+        try container.encode(groupCounterMode, forKey: .groupCounterMode)
         try container.encode(showMaximizedGroupCounters, forKey: .showMaximizedGroupCounters)
     }
 

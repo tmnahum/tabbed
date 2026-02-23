@@ -26,6 +26,7 @@ final class TabBarConfigTests: XCTestCase {
         XCTAssertTrue(config.superpinnedTabsBeforeHandle)
         XCTAssertEqual(config.closeButtonMode, .xmarkOnAllTabs)
         XCTAssertTrue(config.showCloseConfirmation)
+        XCTAssertEqual(config.groupCounterMode, .maximizedOnly)
         XCTAssertTrue(config.showMaximizedGroupCounters)
     }
 
@@ -61,7 +62,7 @@ final class TabBarConfigTests: XCTestCase {
             showTooltip: false,
             closeButtonMode: .minusOnCurrentTab,
             showCloseConfirmation: false,
-            showMaximizedGroupCounters: false
+            groupCounterMode: .disabled
         )
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(TabBarConfig.self, from: data)
@@ -71,6 +72,7 @@ final class TabBarConfigTests: XCTestCase {
         XCTAssertFalse(decoded.showTooltip)
         XCTAssertEqual(decoded.closeButtonMode, .minusOnCurrentTab)
         XCTAssertFalse(decoded.showCloseConfirmation)
+        XCTAssertEqual(decoded.groupCounterMode, .disabled)
         XCTAssertFalse(decoded.showMaximizedGroupCounters)
     }
 
@@ -84,6 +86,7 @@ final class TabBarConfigTests: XCTestCase {
         XCTAssertTrue(decoded.showTooltip)
         XCTAssertEqual(decoded.closeButtonMode, .xmarkOnAllTabs)
         XCTAssertTrue(decoded.showCloseConfirmation)
+        XCTAssertEqual(decoded.groupCounterMode, .maximizedOnly)
         XCTAssertTrue(decoded.showMaximizedGroupCounters)
     }
 
@@ -121,6 +124,23 @@ final class TabBarConfigTests: XCTestCase {
         config.save()
 
         let loaded = TabBarConfig.load()
+        XCTAssertEqual(loaded.groupCounterMode, .disabled)
         XCTAssertFalse(loaded.showMaximizedGroupCounters)
+    }
+
+    func testSaveAndLoadGroupCounterMode() {
+        let config = TabBarConfig(style: .compact, groupCounterMode: .maximizedAndPositionAligned)
+        config.save()
+
+        let loaded = TabBarConfig.load()
+        XCTAssertEqual(loaded.groupCounterMode, .maximizedAndPositionAligned)
+        XCTAssertTrue(loaded.showMaximizedGroupCounters)
+    }
+
+    func testLegacyBoolDecodesIntoGroupCounterMode() throws {
+        let json = #"{"showMaximizedGroupCounters":false}"#.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(TabBarConfig.self, from: json)
+        XCTAssertEqual(decoded.groupCounterMode, .disabled)
+        XCTAssertFalse(decoded.showMaximizedGroupCounters)
     }
 }
