@@ -4,6 +4,8 @@ import SwiftUI
 // MARK: - Group Lifecycle
 
 extension AppDelegate {
+    private static let barDragSnapTolerance: CGFloat = 30
+
 
     func focusWindow(_ window: WindowInfo, completion: (() -> Void)? = nil) {
         Logger.log("[FOCUSDBG] focusWindow begin window=\(window.id) pid=\(window.ownerPID) memberships=\(groupManager.membershipCount(for: window.id))")
@@ -745,6 +747,10 @@ extension AppDelegate {
     }
 
     func refreshMaximizedGroupCounters() {
+        refreshMaximizedGroupCounters(applySuperpinTransitions: true)
+    }
+
+    func refreshMaximizedGroupCounters(applySuperpinTransitions: Bool) {
         let previousCounterIDsByGroupID = Dictionary(
             uniqueKeysWithValues: groupManager.groups.map { ($0.id, $0.maximizedGroupCounterIDs) }
         )
@@ -790,15 +796,17 @@ extension AppDelegate {
             }
         }
 
-        applySuperpinMaximizeTransitions(
-            candidates: candidates,
-            previousCounterIDsByGroupID: previousCounterIDsByGroupID
-        )
-        var nextKnownStates: [UUID: Bool] = [:]
-        for candidate in candidates {
-            nextKnownStates[candidate.groupID] = candidate.isMaximized
+        if applySuperpinTransitions {
+            applySuperpinMaximizeTransitions(
+                candidates: candidates,
+                previousCounterIDsByGroupID: previousCounterIDsByGroupID
+            )
+            var nextKnownStates: [UUID: Bool] = [:]
+            for candidate in candidates {
+                nextKnownStates[candidate.groupID] = candidate.isMaximized
+            }
+            lastKnownMaximizedStateByGroupID = nextKnownStates
         }
-        lastKnownMaximizedStateByGroupID = nextKnownStates
     }
 
     private func applySuperpinMaximizeTransitions(
@@ -1913,40 +1921,102 @@ extension AppDelegate {
         for window in group.visibleWindows {
             AccessibilityHelper.setPositionAsync(of: window.element, to: newFrame.origin)
         }
+
+        // Live preview counters while dragging so users can see join candidates
+        // and back out before release; no superpin transitions are applied here.
+        refreshMaximizedGroupCounters(applySuperpinTransitions: false)
     }
 
     func handleBarDragEnded(group: TabGroup, panel: TabBarPanel) {
         barDraggingGroupID = nil
         barDragInitialFrame = nil
 
-        // Sync all windows to the final position
-        let allIDs = group.visibleWindows.map(\.id)
-        setExpectedFrame(group.frame, for: allIDs)
-        for window in group.visibleWindows {
-            AccessibilityHelper.setFrameAsync(of: window.element, to: group.frame)
-        }
+        var finalFrame = group.frame
+        var finalSqueezeDelta = group.tabBarSqueezeDelta
 
-        // Apply clamping in case group was dragged near top of screen
+        // Apply clamping in case group was dragged near top of screen.
         guard let activeWindow = group.activeWindow else { return }
-        let visibleFrame = CoordinateConverter.visibleFrameInAX(at: group.frame.origin)
+        let visibleFrame = CoordinateConverter.visibleFrameInAX(at: finalFrame.origin)
         let (adjustedFrame, squeezeDelta) = applyClamp(
             element: activeWindow.element, windowID: activeWindow.id,
-            frame: group.frame, visibleFrame: visibleFrame,
+            frame: finalFrame, visibleFrame: visibleFrame,
             existingSqueezeDelta: group.tabBarSqueezeDelta
         )
-        if adjustedFrame != group.frame {
-            group.frame = adjustedFrame
-            group.tabBarSqueezeDelta = squeezeDelta
-            let others = group.visibleWindows.filter { $0.id != activeWindow.id }
-            setExpectedFrame(adjustedFrame, for: others.map(\.id))
-            for window in others {
-                AccessibilityHelper.setFrameAsync(of: window.element, to: adjustedFrame)
-            }
+        finalFrame = adjustedFrame
+        finalSqueezeDelta = squeezeDelta
+
+        // If the dragged tab bar lands near another group's tab bar top-left,
+        // snap the moved group's frame to exactly match that group's frame.
+        if let snappedTarget = snappedGroupFrameForBarDrag(of: group, frame: finalFrame) {
+            finalFrame = snappedTarget.frame
+            finalSqueezeDelta = snappedTarget.squeezeDelta
+            Logger.log(
+                "[BARDRAG] snapped group \(group.id) to group \(snappedTarget.groupID) frame=\(finalFrame)"
+            )
         }
 
-        panel.positionAbove(windowFrame: group.frame, isMaximized: isGroupMaximized(group).0)
+        if finalFrame != group.frame || finalSqueezeDelta != group.tabBarSqueezeDelta {
+            group.frame = finalFrame
+            group.tabBarSqueezeDelta = finalSqueezeDelta
+        }
+
+        let allIDs = group.visibleWindows.map(\.id)
+        setExpectedFrame(finalFrame, for: allIDs)
+        for window in group.visibleWindows {
+            AccessibilityHelper.setFrameAsync(of: window.element, to: finalFrame)
+        }
+
+        panel.positionAbove(windowFrame: finalFrame, isMaximized: isGroupMaximized(group).0)
         panel.orderAbove(windowID: activeWindow.id)
         evaluateAutoCapture()
+    }
+
+    private func snappedGroupFrameForBarDrag(
+        of sourceGroup: TabGroup,
+        frame sourceFrame: CGRect
+    ) -> (groupID: UUID, frame: CGRect, squeezeDelta: CGFloat)? {
+        let sourceSpaceID = resolvedSpaceID(for: sourceGroup)
+        let sourceTopLeft = tabBarTopLeft(for: sourceFrame)
+
+        var bestMatch: (groupID: UUID, frame: CGRect, squeezeDelta: CGFloat, distance: CGFloat)?
+        for candidate in groupManager.groups where candidate.id != sourceGroup.id {
+            if let sourceSpaceID,
+               let candidateSpaceID = resolvedSpaceID(for: candidate),
+               sourceSpaceID != candidateSpaceID {
+                continue
+            }
+
+            let candidateTopLeft = tabBarTopLeft(for: candidate.frame)
+            let dx = abs(sourceTopLeft.x - candidateTopLeft.x)
+            let dy = abs(sourceTopLeft.y - candidateTopLeft.y)
+            guard dx <= Self.barDragSnapTolerance,
+                  dy <= Self.barDragSnapTolerance else { continue }
+
+            let distance = hypot(dx, dy)
+            if let currentBest = bestMatch, distance >= currentBest.distance {
+                continue
+            }
+            bestMatch = (
+                groupID: candidate.id,
+                frame: candidate.frame,
+                squeezeDelta: candidate.tabBarSqueezeDelta,
+                distance: distance
+            )
+        }
+
+        guard let bestMatch else { return nil }
+        return (
+            groupID: bestMatch.groupID,
+            frame: bestMatch.frame,
+            squeezeDelta: bestMatch.squeezeDelta
+        )
+    }
+
+    private func tabBarTopLeft(for frame: CGRect) -> CGPoint {
+        CGPoint(
+            x: frame.origin.x,
+            y: frame.origin.y - ScreenCompensation.tabBarHeight
+        )
     }
 
     func toggleZoom(group: TabGroup, panel: TabBarPanel) {

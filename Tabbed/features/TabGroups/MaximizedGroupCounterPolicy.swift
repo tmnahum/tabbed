@@ -16,7 +16,7 @@ enum MaximizedGroupCounterPolicy {
         }
     }
 
-    private static let tabBarTopLeftTolerance: CGFloat = 60
+    private static let tabBarTopLeftTolerance: CGFloat = 30
 
     /// Build per-group counter lists using creation-order input.
     /// Participation is based on the selected mode, and only spaces with 2+ participants get counters.
