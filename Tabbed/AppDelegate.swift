@@ -70,7 +70,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var recentExternalActivationAt: Date?
     /// Set during tab bar drag to suppress window move/resize handlers for the dragged group.
     var barDraggingGroupID: UUID?
-    /// All groups currently being moved by a bar drag (source + optional Shift-drag peers).
+    /// All groups currently being moved by a bar drag (source + default counter peers; Shift isolates source).
     var barDraggingGroupIDs: Set<UUID> = []
     /// Group frame at bar drag start, for absolute positioning.
     var barDragInitialFrame: CGRect?

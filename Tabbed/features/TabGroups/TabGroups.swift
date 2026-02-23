@@ -1996,7 +1996,7 @@ extension AppDelegate {
     }
 
     private func shouldDragCounterGroupedPeers(for group: TabGroup, isShiftPressed: Bool) -> Bool {
-        guard isShiftPressed else { return false }
+        guard !isShiftPressed else { return false }
         let counterIDs = group.maximizedGroupCounterIDs
         return counterIDs.count >= 2 && counterIDs.contains(group.id)
     }
@@ -2190,29 +2190,74 @@ extension AppDelegate {
         )
     }
 
+    enum GroupZoomAction: Equatable {
+        case maximize
+        case restore
+    }
+
+    static func shouldToggleZoomAcrossCounterGroups(sourceGroupID: UUID, counterGroupIDs: [UUID]) -> Bool {
+        counterGroupIDs.count >= 2 && counterGroupIDs.contains(sourceGroupID)
+    }
+
+    static func groupedZoomAction(allGroupsMaximized: Bool, allGroupsHavePreZoom: Bool) -> GroupZoomAction {
+        (allGroupsMaximized && allGroupsHavePreZoom) ? .restore : .maximize
+    }
+
     func toggleZoom(group: TabGroup, panel: TabBarPanel) {
-        let visibleFrame = CoordinateConverter.visibleFrameInAX(at: group.frame.origin)
-        let isMaxed = ScreenCompensation.isMaximized(
-            groupFrame: group.frame,
-            squeezeDelta: group.tabBarSqueezeDelta,
-            visibleFrame: visibleFrame
+        let targetGroupIDs: [UUID]
+        if Self.shouldToggleZoomAcrossCounterGroups(
+            sourceGroupID: group.id,
+            counterGroupIDs: group.maximizedGroupCounterIDs
+        ) {
+            targetGroupIDs = group.maximizedGroupCounterIDs
+        } else {
+            targetGroupIDs = [group.id]
+        }
+
+        let groupsByID = Dictionary(uniqueKeysWithValues: groupManager.groups.map { ($0.id, $0) })
+        let targetGroups = targetGroupIDs.compactMap { groupsByID[$0] }
+        guard !targetGroups.isEmpty else { return }
+
+        let allGroupsMaximized = targetGroups.allSatisfy { candidate in
+            let visibleFrame = CoordinateConverter.visibleFrameInAX(at: candidate.frame.origin)
+            return ScreenCompensation.isMaximized(
+                groupFrame: candidate.frame,
+                squeezeDelta: candidate.tabBarSqueezeDelta,
+                visibleFrame: visibleFrame
+            )
+        }
+        let allGroupsHavePreZoom = targetGroups.allSatisfy { $0.preZoomFrame != nil }
+        let action = Self.groupedZoomAction(
+            allGroupsMaximized: allGroupsMaximized,
+            allGroupsHavePreZoom: allGroupsHavePreZoom
         )
 
-        if isMaxed, let preZoom = group.preZoomFrame {
-            // Restore pre-zoom frame
-            group.preZoomFrame = nil
-            setGroupFrame(group, to: preZoom, panel: panel)
-        } else {
-            // Save current frame and zoom to fill screen
-            group.preZoomFrame = group.frame
-            let zoomedFrame = CGRect(
-                x: visibleFrame.origin.x,
-                y: visibleFrame.origin.y + ScreenCompensation.tabBarHeight,
-                width: visibleFrame.width,
-                height: visibleFrame.height - ScreenCompensation.tabBarHeight
-            )
-            group.tabBarSqueezeDelta = ScreenCompensation.tabBarHeight
-            setGroupFrame(group, to: zoomedFrame, panel: panel)
+        for targetGroup in targetGroups {
+            let targetPanel: TabBarPanel?
+            if targetGroup.id == group.id {
+                targetPanel = tabBarPanels[targetGroup.id] ?? panel
+            } else {
+                targetPanel = tabBarPanels[targetGroup.id]
+            }
+            guard let targetPanel else { continue }
+
+            let visibleFrame = CoordinateConverter.visibleFrameInAX(at: targetGroup.frame.origin)
+            switch action {
+            case .restore:
+                guard let preZoom = targetGroup.preZoomFrame else { continue }
+                targetGroup.preZoomFrame = nil
+                setGroupFrame(targetGroup, to: preZoom, panel: targetPanel)
+            case .maximize:
+                targetGroup.preZoomFrame = targetGroup.frame
+                let zoomedFrame = CGRect(
+                    x: visibleFrame.origin.x,
+                    y: visibleFrame.origin.y + ScreenCompensation.tabBarHeight,
+                    width: visibleFrame.width,
+                    height: visibleFrame.height - ScreenCompensation.tabBarHeight
+                )
+                targetGroup.tabBarSqueezeDelta = ScreenCompensation.tabBarHeight
+                setGroupFrame(targetGroup, to: zoomedFrame, panel: targetPanel)
+            }
         }
     }
 
