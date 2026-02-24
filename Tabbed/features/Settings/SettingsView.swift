@@ -8,7 +8,7 @@ enum SettingsTab: Int {
         switch self {
         case .general:   return 450
         case .launcher:  return 420
-        case .tabBar:    return 360
+        case .tabBar:    return 400
         case .shortcuts: return 520
         case .switcher:  return 640
         }
@@ -606,6 +606,13 @@ struct SettingsView: View {
                 .pickerStyle(.menu)
 
                 Text(groupCounterModeDescription)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Toggle("Start Counter at 0", isOn: $tabBarConfig.multiGroupCounterStartsAtZero)
+                    .toggleStyle(.checkbox)
+
+                Text("When enabled, multi-group counters show `0 1 2...` instead of `1 2 3...`.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

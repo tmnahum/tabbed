@@ -348,7 +348,8 @@ class TabBarPanel: NSPanel {
             counterGroupIDs: counterIDs,
             currentGroupID: currentGroupID,
             enabled: countersEnabled,
-            showDragHandle: showHandle
+            showDragHandle: showHandle,
+            startAtZero: tabBarConfig?.multiGroupCounterStartsAtZero ?? false
         )
         let tabs = group?.windows ?? []
         let superPinnedCount = group?.superPinnedCount ?? 0
@@ -518,7 +519,8 @@ class TabBarPanel: NSPanel {
             counterGroupIDs: group.maximizedGroupCounterIDs,
             currentGroupID: group.id,
             enabled: tabBarConfig.showMaximizedGroupCounters,
-            showDragHandle: showHandle
+            showDragHandle: showHandle,
+            startAtZero: tabBarConfig.multiGroupCounterStartsAtZero
         )
         let tabs = group.windows
         let superPinnedCount = group.superPinnedCount

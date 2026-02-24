@@ -76,6 +76,34 @@ extension AppDelegate {
         return centerDistance < currentCenterDistance
     }
 
+    static func groupedBarDragSnapExcludedGroupIDs(sourceGroupID: UUID, peerGroupIDs: [UUID]) -> Set<UUID> {
+        var ids = Set(peerGroupIDs)
+        ids.insert(sourceGroupID)
+        return ids
+    }
+
+    static func groupedBarDragSnapTranslation(sourceFrameBeforeFinalize: CGRect, sourceFrameAfterFinalize: CGRect) -> CGPoint {
+        CGPoint(
+            x: sourceFrameAfterFinalize.origin.x - sourceFrameBeforeFinalize.origin.x,
+            y: sourceFrameAfterFinalize.origin.y - sourceFrameBeforeFinalize.origin.y
+        )
+    }
+
+    static func frameByApplyingGroupedBarDragSnapTranslation(_ translation: CGPoint, to frame: CGRect) -> CGRect {
+        CGRect(
+            x: frame.origin.x + translation.x,
+            y: frame.origin.y + translation.y,
+            width: frame.width,
+            height: frame.height
+        )
+    }
+
+    static func shouldSnapGroupedPeerToSourceFrame(sourceFrame: CGRect, peerFrame: CGRect, tolerance: CGFloat = barDragSnapTolerance) -> Bool {
+        let dx = abs(sourceFrame.origin.x - peerFrame.origin.x)
+        let dy = abs(sourceFrame.origin.y - peerFrame.origin.y)
+        return dx <= tolerance && dy <= tolerance
+    }
+
 
     func focusWindow(_ window: WindowInfo, completion: (() -> Void)? = nil) {
         Logger.log("[FOCUSDBG] focusWindow begin window=\(window.id) pid=\(window.ownerPID) memberships=\(groupManager.membershipCount(for: window.id))")
@@ -2086,7 +2114,12 @@ extension AppDelegate {
         refreshMaximizedGroupCounters(applySuperpinTransitions: false)
     }
 
-    private func finalizeBarDrag(for group: TabGroup, panel: TabBarPanel?, allowSnap: Bool) {
+    private func finalizeBarDrag(
+        for group: TabGroup,
+        panel: TabBarPanel?,
+        allowSnap: Bool,
+        snapExcludedGroupIDs: Set<UUID> = []
+    ) {
         var finalFrame = group.frame
         var finalSqueezeDelta = group.tabBarSqueezeDelta
 
@@ -2102,7 +2135,11 @@ extension AppDelegate {
         finalSqueezeDelta = squeezeDelta
 
         if allowSnap,
-           let snappedTarget = snappedGroupFrameForBarDrag(of: group, frame: finalFrame) {
+           let snappedTarget = snappedGroupFrameForBarDrag(
+                of: group,
+                frame: finalFrame,
+                excludingGroupIDs: snapExcludedGroupIDs
+           ) {
             finalFrame = snappedTarget.frame
             finalSqueezeDelta = snappedTarget.squeezeDelta
             Logger.log(
@@ -2131,26 +2168,64 @@ extension AppDelegate {
         let groupedPeerIDs = Array(barDragInitialFramesByGroupedGroupID.keys)
         defer { resetBarDragTracking() }
 
-        finalizeBarDrag(for: group, panel: panel, allowSnap: groupedPeerIDs.isEmpty)
-        if !groupedPeerIDs.isEmpty {
-            for peerGroupID in groupedPeerIDs {
-                guard let peerGroup = groupManager.groups.first(where: { $0.id == peerGroupID }) else { continue }
-                let peerPanel = tabBarPanels[peerGroupID]
-                finalizeBarDrag(for: peerGroup, panel: peerPanel, allowSnap: false)
+        if groupedPeerIDs.isEmpty {
+            finalizeBarDrag(for: group, panel: panel, allowSnap: true)
+            evaluateAutoCapture()
+            return
+        }
+
+        let sourceFrameBeforeFinalize = group.frame
+        let snapExcludedGroupIDs = Self.groupedBarDragSnapExcludedGroupIDs(
+            sourceGroupID: group.id,
+            peerGroupIDs: groupedPeerIDs
+        )
+        finalizeBarDrag(
+            for: group,
+            panel: panel,
+            allowSnap: true,
+            snapExcludedGroupIDs: snapExcludedGroupIDs
+        )
+        let snapTranslation = Self.groupedBarDragSnapTranslation(
+            sourceFrameBeforeFinalize: sourceFrameBeforeFinalize,
+            sourceFrameAfterFinalize: group.frame
+        )
+        let sourceFinalFrame = group.frame
+
+        for peerGroupID in groupedPeerIDs {
+            guard let peerGroup = groupManager.groups.first(where: { $0.id == peerGroupID }) else { continue }
+            let peerShouldSnapToSource = Self.shouldSnapGroupedPeerToSourceFrame(
+                sourceFrame: sourceFinalFrame,
+                peerFrame: peerGroup.frame
+            )
+            if peerShouldSnapToSource {
+                peerGroup.tabBarSqueezeDelta = group.tabBarSqueezeDelta
+                applyBarDragFrame(sourceFinalFrame, to: peerGroup, updatePanelPosition: false)
+            } else if snapTranslation != .zero {
+                let translatedPeerFrame = Self.frameByApplyingGroupedBarDragSnapTranslation(
+                    snapTranslation,
+                    to: peerGroup.frame
+                )
+                applyBarDragFrame(translatedPeerFrame, to: peerGroup, updatePanelPosition: false)
             }
+            let peerPanel = tabBarPanels[peerGroupID]
+            finalizeBarDrag(for: peerGroup, panel: peerPanel, allowSnap: false)
         }
         evaluateAutoCapture()
     }
 
     private func snappedGroupFrameForBarDrag(
         of sourceGroup: TabGroup,
-        frame sourceFrame: CGRect
+        frame sourceFrame: CGRect,
+        excludingGroupIDs: Set<UUID> = []
     ) -> (groupID: UUID, frame: CGRect, squeezeDelta: CGFloat)? {
         let sourceSpaceID = resolvedSpaceID(for: sourceGroup)
         let sourceTopLeft = tabBarTopLeft(for: sourceFrame)
 
         var bestMatch: (groupID: UUID, frame: CGRect, squeezeDelta: CGFloat, distance: CGFloat)?
         for candidate in groupManager.groups where candidate.id != sourceGroup.id {
+            if excludingGroupIDs.contains(candidate.id) {
+                continue
+            }
             if let sourceSpaceID,
                let candidateSpaceID = resolvedSpaceID(for: candidate),
                sourceSpaceID != candidateSpaceID {
@@ -2321,7 +2396,8 @@ extension AppDelegate {
                 counterGroupIDs: group.maximizedGroupCounterIDs,
                 currentGroupID: group.id,
                 enabled: tabBarConfig.showMaximizedGroupCounters,
-                showDragHandle: showHandle
+                showDragHandle: showHandle,
+                startAtZero: tabBarConfig.multiGroupCounterStartsAtZero
             )
             let groupNameWidth = TabBarView.groupNameReservedWidth(for: group.name)
             let availableWidth = panelWidth - leadingPad - trailingPad - TabBarView.addButtonWidth - groupCounterWidth - handleWidth - groupNameWidth

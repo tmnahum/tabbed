@@ -4,6 +4,13 @@ import AppKit
 
 extension AppDelegate {
 
+    func globalSwitcherEligibleWindows(
+        from windows: [WindowInfo],
+        currentProcessID: pid_t = ProcessInfo.processInfo.processIdentifier
+    ) -> [WindowInfo] {
+        windows.filter { $0.ownerPID != currentProcessID }
+    }
+
     func noteRecentExternalActivation(windowID: CGWindowID, at date: Date = Date()) {
         recentExternalActivationWindowID = windowID
         recentExternalActivationAt = date
@@ -84,7 +91,8 @@ extension AppDelegate {
         if shouldForceSynchronousInventoryRefreshForRecentExternalActivation() {
             windowInventory.refreshSync(force: true)
         }
-        let zWindows = windowInventory.allSpacesForSwitcher()
+        let discoveredWindows = windowInventory.allSpacesForSwitcher()
+        let zWindows = globalSwitcherEligibleWindows(from: discoveredWindows)
         clearRecentExternalActivationIfVisible(in: zWindows)
         guard !zWindows.isEmpty else {
             Logger.log("[GS] inventory empty; refresh in progress")
@@ -147,6 +155,7 @@ extension AppDelegate {
     func commitSwitcherSelection(_ item: SwitcherItem, subIndex: Int?) {
         switch item {
         case .singleWindow(let window):
+            guard window.ownerPID != ProcessInfo.processInfo.processIdentifier else { return }
             beginCommitEchoSuppression(targetWindowID: window.id, source: "quick-switcher.single")
             recordGlobalActivation(.window(window.id))
             focusWindow(window)

@@ -82,4 +82,19 @@ final class AppActivationMRUTests: XCTestCase {
         XCTAssertNil(app.recentExternalActivationWindowID)
         XCTAssertNil(app.recentExternalActivationAt)
     }
+
+    func testGlobalSwitcherEligibleWindowsExcludesCurrentProcessWindows() {
+        let app = AppDelegate()
+        let ownPID: pid_t = 9_999
+        let windows = [
+            makeWindow(id: 1, pid: ownPID),
+            makeWindow(id: 2, pid: 2),
+            makeWindow(id: 3, pid: ownPID),
+            makeWindow(id: 4, pid: 4)
+        ]
+
+        let eligible = app.globalSwitcherEligibleWindows(from: windows, currentProcessID: ownPID)
+
+        XCTAssertEqual(eligible.map(\.id), [2, 4])
+    }
 }

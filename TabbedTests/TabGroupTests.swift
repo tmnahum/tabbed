@@ -132,6 +132,34 @@ final class TabGroupTests: XCTestCase {
         XCTAssertGreaterThan(widthThree, widthTwo)
     }
 
+    func testGroupCounterDisplayNumberUsesConfiguredStart() {
+        XCTAssertEqual(TabBarView.groupCounterDisplayNumber(index: 0, startAtZero: false), 1)
+        XCTAssertEqual(TabBarView.groupCounterDisplayNumber(index: 3, startAtZero: false), 4)
+        XCTAssertEqual(TabBarView.groupCounterDisplayNumber(index: 0, startAtZero: true), 0)
+        XCTAssertEqual(TabBarView.groupCounterDisplayNumber(index: 3, startAtZero: true), 3)
+    }
+
+    func testGroupCounterReservedWidthRespectsStartAtZeroForTwoDigitBoundary() {
+        let current = UUID()
+        let ids = (0..<10).map { _ in UUID() }
+        let counterIDs = [current] + Array(ids.dropLast())
+
+        let widthStartAtOne = TabBarView.groupCounterReservedWidth(
+            counterGroupIDs: counterIDs,
+            currentGroupID: current,
+            enabled: true,
+            startAtZero: false
+        )
+        let widthStartAtZero = TabBarView.groupCounterReservedWidth(
+            counterGroupIDs: counterIDs,
+            currentGroupID: current,
+            enabled: true,
+            startAtZero: true
+        )
+
+        XCTAssertGreaterThan(widthStartAtOne, widthStartAtZero)
+    }
+
     func testDisplayedTabTitlePrefersCustomTabName() {
         var window = makeWindow(id: 1)
         window.customTabName = "  Focus  "

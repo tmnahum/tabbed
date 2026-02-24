@@ -53,6 +53,11 @@ class TabBarConfig: ObservableObject, Codable {
             if groupCounterMode != oldValue { save() }
         }
     }
+    @Published var multiGroupCounterStartsAtZero: Bool {
+        didSet {
+            if multiGroupCounterStartsAtZero != oldValue { save() }
+        }
+    }
 
     var showMaximizedGroupCounters: Bool {
         get {
@@ -73,7 +78,8 @@ class TabBarConfig: ObservableObject, Codable {
         closeButtonMode: TabCloseButtonMode = .xmarkOnAllTabs,
         showCloseConfirmation: Bool = true,
         showMaximizedGroupCounters: Bool = true,
-        groupCounterMode: GroupCounterMode? = nil
+        groupCounterMode: GroupCounterMode? = nil,
+        multiGroupCounterStartsAtZero: Bool = false
     ) {
         self.style = style
         self.showDragHandle = showDragHandle
@@ -82,6 +88,7 @@ class TabBarConfig: ObservableObject, Codable {
         self.closeButtonMode = closeButtonMode
         self.showCloseConfirmation = showCloseConfirmation
         self.groupCounterMode = groupCounterMode ?? (showMaximizedGroupCounters ? .maximizedOnly : .disabled)
+        self.multiGroupCounterStartsAtZero = multiGroupCounterStartsAtZero
     }
 
     // MARK: - Codable
@@ -95,6 +102,7 @@ class TabBarConfig: ObservableObject, Codable {
         case showCloseConfirmation
         case groupCounterMode
         case showMaximizedGroupCounters
+        case multiGroupCounterStartsAtZero
     }
 
     required init(from decoder: Decoder) throws {
@@ -111,6 +119,7 @@ class TabBarConfig: ObservableObject, Codable {
             let showCounters = try container.decodeIfPresent(Bool.self, forKey: .showMaximizedGroupCounters) ?? true
             groupCounterMode = showCounters ? .maximizedOnly : .disabled
         }
+        multiGroupCounterStartsAtZero = try container.decodeIfPresent(Bool.self, forKey: .multiGroupCounterStartsAtZero) ?? false
     }
 
     func encode(to encoder: Encoder) throws {
@@ -123,6 +132,7 @@ class TabBarConfig: ObservableObject, Codable {
         try container.encode(showCloseConfirmation, forKey: .showCloseConfirmation)
         try container.encode(groupCounterMode, forKey: .groupCounterMode)
         try container.encode(showMaximizedGroupCounters, forKey: .showMaximizedGroupCounters)
+        try container.encode(multiGroupCounterStartsAtZero, forKey: .multiGroupCounterStartsAtZero)
     }
 
     // MARK: - Persistence

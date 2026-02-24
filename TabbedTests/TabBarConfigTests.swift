@@ -28,6 +28,7 @@ final class TabBarConfigTests: XCTestCase {
         XCTAssertTrue(config.showCloseConfirmation)
         XCTAssertEqual(config.groupCounterMode, .maximizedOnly)
         XCTAssertTrue(config.showMaximizedGroupCounters)
+        XCTAssertFalse(config.multiGroupCounterStartsAtZero)
     }
 
     func testSaveAndLoad() {
@@ -62,7 +63,8 @@ final class TabBarConfigTests: XCTestCase {
             showTooltip: false,
             closeButtonMode: .minusOnCurrentTab,
             showCloseConfirmation: false,
-            groupCounterMode: .disabled
+            groupCounterMode: .disabled,
+            multiGroupCounterStartsAtZero: true
         )
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(TabBarConfig.self, from: data)
@@ -74,6 +76,7 @@ final class TabBarConfigTests: XCTestCase {
         XCTAssertFalse(decoded.showCloseConfirmation)
         XCTAssertEqual(decoded.groupCounterMode, .disabled)
         XCTAssertFalse(decoded.showMaximizedGroupCounters)
+        XCTAssertTrue(decoded.multiGroupCounterStartsAtZero)
     }
 
     func testDecodesWithMissingStyleKey() throws {
@@ -88,6 +91,7 @@ final class TabBarConfigTests: XCTestCase {
         XCTAssertTrue(decoded.showCloseConfirmation)
         XCTAssertEqual(decoded.groupCounterMode, .maximizedOnly)
         XCTAssertTrue(decoded.showMaximizedGroupCounters)
+        XCTAssertFalse(decoded.multiGroupCounterStartsAtZero)
     }
 
     func testSaveAndLoadDragHandle() {
@@ -142,5 +146,14 @@ final class TabBarConfigTests: XCTestCase {
         let decoded = try JSONDecoder().decode(TabBarConfig.self, from: json)
         XCTAssertEqual(decoded.groupCounterMode, .disabled)
         XCTAssertFalse(decoded.showMaximizedGroupCounters)
+        XCTAssertFalse(decoded.multiGroupCounterStartsAtZero)
+    }
+
+    func testSaveAndLoadMultiGroupCounterStartsAtZero() {
+        let config = TabBarConfig(style: .compact, multiGroupCounterStartsAtZero: true)
+        config.save()
+
+        let loaded = TabBarConfig.load()
+        XCTAssertTrue(loaded.multiGroupCounterStartsAtZero)
     }
 }

@@ -171,4 +171,58 @@ final class GroupedBarDragTests: XCTestCase {
         XCTAssertNotNil(source.preZoomFrame)
         XCTAssertNotNil(peer.preZoomFrame)
     }
+
+    func testGroupedBarDragSnapExcludedGroupIDsContainsSourceAndPeers() {
+        let source = UUID()
+        let peerA = UUID()
+        let peerB = UUID()
+
+        let excluded = AppDelegate.groupedBarDragSnapExcludedGroupIDs(
+            sourceGroupID: source,
+            peerGroupIDs: [peerA, peerB]
+        )
+
+        XCTAssertEqual(excluded, Set([source, peerA, peerB]))
+    }
+
+    func testGroupedBarDragSnapTranslationCanBeAppliedToPeerFrame() {
+        let sourceBefore = CGRect(x: 100, y: 200, width: 600, height: 400)
+        let sourceAfter = CGRect(x: 120, y: 180, width: 600, height: 400)
+        let peerBefore = CGRect(x: 400, y: 500, width: 600, height: 400)
+
+        let translation = AppDelegate.groupedBarDragSnapTranslation(
+            sourceFrameBeforeFinalize: sourceBefore,
+            sourceFrameAfterFinalize: sourceAfter
+        )
+        let peerAfter = AppDelegate.frameByApplyingGroupedBarDragSnapTranslation(
+            translation,
+            to: peerBefore
+        )
+
+        XCTAssertEqual(translation.x, 20, accuracy: 0.001)
+        XCTAssertEqual(translation.y, -20, accuracy: 0.001)
+        XCTAssertEqual(peerAfter.origin.x, 420, accuracy: 0.001)
+        XCTAssertEqual(peerAfter.origin.y, 480, accuracy: 0.001)
+    }
+
+    func testShouldSnapGroupedPeerToSourceFrameUsesSnapTolerance() {
+        let source = CGRect(x: 100, y: 200, width: 600, height: 400)
+        let nearPeer = CGRect(x: 124, y: 176, width: 600, height: 400)
+        let farPeer = CGRect(x: 131, y: 200, width: 600, height: 400)
+
+        XCTAssertTrue(
+            AppDelegate.shouldSnapGroupedPeerToSourceFrame(
+                sourceFrame: source,
+                peerFrame: nearPeer,
+                tolerance: 30
+            )
+        )
+        XCTAssertFalse(
+            AppDelegate.shouldSnapGroupedPeerToSourceFrame(
+                sourceFrame: source,
+                peerFrame: farPeer,
+                tolerance: 30
+            )
+        )
+    }
 }

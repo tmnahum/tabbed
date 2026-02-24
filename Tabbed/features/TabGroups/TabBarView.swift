@@ -122,6 +122,10 @@ struct TabBarView: View {
         )
     }
 
+    static func groupCounterDisplayNumber(index: Int, startAtZero: Bool) -> Int {
+        startAtZero ? index : index + 1
+    }
+
     private static func measuredGroupCounterItemWidth(number: Int) -> CGFloat {
         let textWidth = ("\(number)" as NSString).size(
             withAttributes: [.font: NSFont.systemFont(ofSize: groupCounterFontSize, weight: .semibold)]
@@ -133,7 +137,8 @@ struct TabBarView: View {
         counterGroupIDs: [UUID],
         currentGroupID: UUID,
         enabled: Bool,
-        showDragHandle: Bool = true
+        showDragHandle: Bool = true,
+        startAtZero: Bool = false
     ) -> CGFloat {
         guard shouldShowMaximizedGroupCounters(
             counterGroupIDs: counterGroupIDs,
@@ -142,8 +147,9 @@ struct TabBarView: View {
         ) else { return 0 }
 
         let count = counterGroupIDs.count
-        let itemsWidth = (1...count).reduce(CGFloat(0)) { partial, number in
-            partial + measuredGroupCounterItemWidth(number: number)
+        let itemsWidth = (0..<count).reduce(CGFloat(0)) { partial, index in
+            let number = groupCounterDisplayNumber(index: index, startAtZero: startAtZero)
+            return partial + measuredGroupCounterItemWidth(number: number)
         }
         let spacing = CGFloat(max(0, count - 1)) * groupCounterItemSpacing
         return itemsWidth + spacing + groupCounterLeadingSpacing(showDragHandle: showDragHandle) + groupCounterTrailingSpacing
@@ -154,9 +160,11 @@ struct TabBarView: View {
         showDragHandle ? groupCounterBaseLeadingSpacing : groupCounterBaseLeadingSpacing + 2
     }
 
-    static func groupCounterItemWidths(count: Int) -> [CGFloat] {
+    static func groupCounterItemWidths(count: Int, startAtZero: Bool = false) -> [CGFloat] {
         guard count > 0 else { return [] }
-        return (1...count).map { measuredGroupCounterItemWidth(number: $0) }
+        return (0..<count).map { index in
+            measuredGroupCounterItemWidth(number: groupCounterDisplayNumber(index: index, startAtZero: startAtZero))
+        }
     }
 
     static func groupCounterCenters(widths: [CGFloat]) -> [CGFloat] {
@@ -512,7 +520,10 @@ struct TabBarView: View {
             let superPinnedCount = group.superPinnedCount
             let isCompact = tabBarConfig.style == .compact
             let counterGroupIDs = group.maximizedGroupCounterIDs
-            let counterItemWidths = Self.groupCounterItemWidths(count: counterGroupIDs.count)
+            let counterItemWidths = Self.groupCounterItemWidths(
+                count: counterGroupIDs.count,
+                startAtZero: tabBarConfig.multiGroupCounterStartsAtZero
+            )
             let counterTargetIndex = currentCounterTargetIndex(
                 counterGroupIDs: counterGroupIDs,
                 itemWidths: counterItemWidths
@@ -522,7 +533,8 @@ struct TabBarView: View {
                 counterGroupIDs: counterGroupIDs,
                 currentGroupID: group.id,
                 enabled: tabBarConfig.showMaximizedGroupCounters,
-                showDragHandle: tabBarConfig.showDragHandle
+                showDragHandle: tabBarConfig.showDragHandle,
+                startAtZero: tabBarConfig.multiGroupCounterStartsAtZero
             )
             let groupNameLayoutName = isEditingGroupName ? groupNameDraft : group.name
             let groupNameWidth = Self.groupNameReservedWidth(for: groupNameLayoutName, isEditing: isEditingGroupName)
@@ -1490,12 +1502,16 @@ struct TabBarView: View {
                 ForEach(Array(counterGroupIDs.enumerated()), id: \.element) { index, targetGroupID in
                     let isCurrent = targetGroupID == group.id
                     let isDragging = counterDraggingGroupID == targetGroupID
+                    let counterNumber = Self.groupCounterDisplayNumber(
+                        index: index,
+                        startAtZero: tabBarConfig.multiGroupCounterStartsAtZero
+                    )
                     Button {
                         if !isCurrent {
                             onFocusGroup(targetGroupID)
                         }
                     } label: {
-                        Text("\(index + 1)")
+                        Text("\(counterNumber)")
                             .font(.system(size: Self.groupCounterFontSize, weight: isCurrent ? .semibold : .regular))
                             .foregroundStyle(Color.primary.opacity(isCurrent ? 0.95 : 0.45))
                             .padding(.horizontal, Self.groupCounterHorizontalPadding)
