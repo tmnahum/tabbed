@@ -29,12 +29,25 @@ enum AccessibilityHelper {
     }
 
     static func raiseWindowAsync(_ window: WindowInfo, completion: ((AXUIElement) -> Void)? = nil) {
-        axQueue.async {
+        let work = {
             guard let freshElement = raiseWindow(window) else { return }
             if let completion {
                 DispatchQueue.main.async { completion(freshElement) }
             }
         }
+
+        // For in-process windows, AX raise may call into AppKit window ordering.
+        // That must stay on the main thread.
+        if shouldActivateViaNSApp(windowOwnerPID: window.ownerPID) {
+            if Thread.isMainThread {
+                work()
+            } else {
+                DispatchQueue.main.async(execute: work)
+            }
+            return
+        }
+
+        axQueue.async(execute: work)
     }
 
     private static func setMessagingTimeout(_ element: AXUIElement) {

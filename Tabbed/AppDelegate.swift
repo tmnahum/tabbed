@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
@@ -131,6 +132,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         signalSource = source
     }
     private var signalSource: DispatchSourceSignal?
+    private var groupManagerChangeCancellable: AnyCancellable?
+    private var sessionAutosaveWorkItem: DispatchWorkItem?
+
+    static let sessionAutosaveDebounce: TimeInterval = 0.25
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Logger.log("[STARTUP] Tabbed launched — debug build \(Date())")
@@ -247,6 +252,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         hotkeyManager = hkm
 
         setupStatusItem()
+        groupManagerChangeCancellable = groupManager.objectWillChange.sink { [weak self] _ in
+            self?.scheduleSessionAutosave(reason: "group-change")
+        }
         windowInventory.refreshAsync()
 
         // Session restoration
@@ -354,11 +362,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         switcherController.dismiss()
         deactivateAutoCapture()
         windowObserver.stopAll()
-        SessionManager.saveSession(
-            groups: groupManager.groups,
-            mruGroupOrder: mruTracker.mruGroupOrder(),
-            maximizedCounterOrderBySpaceID: maximizedCounterOrderBySpaceID
-        )
+        sessionAutosaveWorkItem?.cancel()
+        sessionAutosaveWorkItem = nil
+        persistSessionSnapshot()
+        groupManagerChangeCancellable = nil
         for group in groupManager.groups {
             let delta = group.tabBarSqueezeDelta
             guard delta > 0 else { continue }
@@ -380,6 +387,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         hotkeyManager?.stop()
         hotkeyManager = nil
         groupManager.dissolveAllGroups()
+    }
+
+    func scheduleSessionAutosave(reason: String = "unspecified") {
+        _ = reason
+        sessionAutosaveWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.persistSessionSnapshot()
+        }
+        sessionAutosaveWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.sessionAutosaveDebounce, execute: workItem)
+    }
+
+    func persistSessionSnapshot() {
+        SessionManager.saveSession(
+            groups: groupManager.groups,
+            mruGroupOrder: mruTracker.mruGroupOrder(),
+            maximizedCounterOrderBySpaceID: maximizedCounterOrderBySpaceID
+        )
     }
 
     // MARK: - Settings

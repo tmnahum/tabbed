@@ -27,6 +27,7 @@ struct TabBarView: View {
     var onCommitGroupName: (String?) -> Void
     var onReleaseTabs: (Set<CGWindowID>) -> Void
     var onMoveToNewGroup: (Set<CGWindowID>) -> Void
+    var onMoveToExistingGroup: (Set<CGWindowID>, UUID) -> Void
     var onCloseTabs: (Set<CGWindowID>) -> Void
     var onSetPinned: (Set<CGWindowID>, Bool) -> Void
     var onSetSuperPinned: (Set<CGWindowID>, Bool) -> Void
@@ -124,6 +125,31 @@ struct TabBarView: View {
 
     static func groupCounterDisplayNumber(index: Int, startAtZero: Bool) -> Int {
         startAtZero ? index : index + 1
+    }
+
+    static func sendToBarDestinations(
+        counterGroupIDs: [UUID],
+        currentGroupID: UUID,
+        countersEnabled: Bool,
+        startAtZero: Bool
+    ) -> [(groupID: UUID, number: Int)] {
+        guard shouldShowMaximizedGroupCounters(
+            counterGroupIDs: counterGroupIDs,
+            currentGroupID: currentGroupID,
+            enabled: countersEnabled
+        ) else { return [] }
+
+        return counterGroupIDs.enumerated().compactMap { index, groupID in
+            guard groupID != currentGroupID else { return nil }
+            return (
+                groupID: groupID,
+                number: groupCounterDisplayNumber(index: index, startAtZero: startAtZero)
+            )
+        }
+    }
+
+    static func shouldUseSendToBarSubmenu(destinationCount: Int) -> Bool {
+        destinationCount > 1
     }
 
     private static func measuredGroupCounterItemWidth(number: Int) -> CGFloat {
@@ -1371,6 +1397,12 @@ struct TabBarView: View {
                     currentGroupID: group.id,
                     enabled: tabBarConfig.showMaximizedGroupCounters
                 )
+                let sendToBarDestinations = Self.sendToBarDestinations(
+                    counterGroupIDs: group.maximizedGroupCounterIDs,
+                    currentGroupID: group.id,
+                    countersEnabled: tabBarConfig.showMaximizedGroupCounters,
+                    startAtZero: tabBarConfig.multiGroupCounterStartsAtZero
+                )
                 Button("New Tab to the Right") {
                     onAddWindowAfterTab(index)
                 }
@@ -1403,6 +1435,25 @@ struct TabBarView: View {
                 Button("Release from Group") {
                     selectedIDs = []
                     onReleaseTabs(targets)
+                }
+                if !sendToBarDestinations.isEmpty {
+                    if Self.shouldUseSendToBarSubmenu(destinationCount: sendToBarDestinations.count) {
+                        Menu(targets.count == 1 ? "Send Tab to" : "Send Tabs to") {
+                            ForEach(sendToBarDestinations, id: \.groupID) { destination in
+                                Button("\(destination.number)") {
+                                    selectedIDs = []
+                                    onMoveToExistingGroup(targets, destination.groupID)
+                                }
+                            }
+                        }
+                    } else if let destination = sendToBarDestinations.first {
+                        Button(
+                            "\(targets.count == 1 ? "Send Tab" : "Send Tabs") to Bar \(destination.number)"
+                        ) {
+                            selectedIDs = []
+                            onMoveToExistingGroup(targets, destination.groupID)
+                        }
+                    }
                 }
                 Button("Move to New Group") {
                     selectedIDs = []

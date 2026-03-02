@@ -150,6 +150,7 @@ enum WindowDiscovery {
             let icon: NSImage?
             let localizedName: String?
             let executableURL: URL?
+            let isActive: Bool
         }
         let appSnapshots = apps.map { AppSnapshot(
             pid: $0.processIdentifier,
@@ -157,7 +158,8 @@ enum WindowDiscovery {
             appName: $0.localizedName ?? "Unknown",
             icon: $0.icon,
             localizedName: $0.localizedName,
-            executableURL: $0.executableURL
+            executableURL: $0.executableURL,
+            isActive: $0.isActive
         )}
 
         // Per-app timing collected in parallel, logged after
@@ -219,7 +221,8 @@ enum WindowDiscovery {
 
                     var bruteForceTime: Double = 0
                     var bruteForceFound = 0
-                    if !plausibleMissing.isEmpty {
+                    let shouldRunBruteForce = !plausibleMissing.isEmpty && (axWindowCount > 0 || snap.isActive)
+                    if shouldRunBruteForce {
                         let bfStart = CFAbsoluteTimeGetCurrent()
                         let targets = Set(plausibleMissing)
                         let bruteForce = discoverWindowsByBruteForce(

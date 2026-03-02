@@ -139,6 +139,66 @@ final class TabGroupTests: XCTestCase {
         XCTAssertEqual(TabBarView.groupCounterDisplayNumber(index: 3, startAtZero: true), 3)
     }
 
+    func testSendToBarDestinationsUsesCounterOrderAndExcludesCurrentGroup() {
+        let first = UUID()
+        let current = UUID()
+        let third = UUID()
+
+        let destinations = TabBarView.sendToBarDestinations(
+            counterGroupIDs: [first, current, third],
+            currentGroupID: current,
+            countersEnabled: true,
+            startAtZero: false
+        )
+
+        XCTAssertEqual(destinations.count, 2)
+        XCTAssertEqual(destinations.map(\.groupID), [first, third])
+        XCTAssertEqual(destinations.map(\.number), [1, 3])
+    }
+
+    func testSendToBarDestinationsRespectsStartAtZero() {
+        let first = UUID()
+        let current = UUID()
+        let third = UUID()
+
+        let destinations = TabBarView.sendToBarDestinations(
+            counterGroupIDs: [first, current, third],
+            currentGroupID: current,
+            countersEnabled: true,
+            startAtZero: true
+        )
+
+        XCTAssertEqual(destinations.map(\.number), [0, 2])
+    }
+
+    func testSendToBarDestinationsEmptyWhenCountersAreDisabledOrNotVisible() {
+        let first = UUID()
+        let current = UUID()
+
+        XCTAssertTrue(
+            TabBarView.sendToBarDestinations(
+                counterGroupIDs: [first, current],
+                currentGroupID: current,
+                countersEnabled: false,
+                startAtZero: false
+            ).isEmpty
+        )
+        XCTAssertTrue(
+            TabBarView.sendToBarDestinations(
+                counterGroupIDs: [current],
+                currentGroupID: current,
+                countersEnabled: true,
+                startAtZero: false
+            ).isEmpty
+        )
+    }
+
+    func testShouldUseSendToBarSubmenuOnlyForMultipleDestinations() {
+        XCTAssertFalse(TabBarView.shouldUseSendToBarSubmenu(destinationCount: 0))
+        XCTAssertFalse(TabBarView.shouldUseSendToBarSubmenu(destinationCount: 1))
+        XCTAssertTrue(TabBarView.shouldUseSendToBarSubmenu(destinationCount: 2))
+    }
+
     func testGroupCounterReservedWidthRespectsStartAtZeroForTwoDigitBoundary() {
         let current = UUID()
         let ids = (0..<10).map { _ in UUID() }

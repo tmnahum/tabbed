@@ -737,6 +737,15 @@ extension AppDelegate {
                 guard let panel else { return }
                 self?.moveTabsToNewGroup(withIDs: ids, from: group, panel: panel)
             },
+            onMoveToExistingGroup: { [weak self, weak panel] ids, targetGroupID in
+                guard let panel else { return }
+                self?.moveTabsToExistingGroupFromContextMenu(
+                    withIDs: ids,
+                    from: group,
+                    sourcePanel: panel,
+                    toGroupID: targetGroupID
+                )
+            },
             onCloseTabs: { [weak self, weak panel] ids in
                 guard let panel else { return }
                 self?.closeTabs(withIDs: ids, from: group, panel: panel)
@@ -2531,6 +2540,22 @@ extension AppDelegate {
         }
 
         evaluateAutoCapture()
+    }
+
+    func moveTabsToExistingGroupFromContextMenu(
+        withIDs ids: Set<CGWindowID>,
+        from sourceGroup: TabGroup,
+        sourcePanel: TabBarPanel,
+        toGroupID targetGroupID: UUID
+    ) {
+        guard let targetGroup = groupManager.groups.first(where: { $0.id == targetGroupID }) else { return }
+        moveTabsToExistingGroup(
+            withIDs: ids,
+            from: sourceGroup,
+            sourcePanel: sourcePanel,
+            toGroupID: targetGroupID,
+            at: targetGroup.windows.count
+        )
     }
 
     // MARK: - Multi-Tab Operations
