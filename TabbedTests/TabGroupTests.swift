@@ -245,6 +245,30 @@ final class TabGroupTests: XCTestCase {
         XCTAssertEqual(TabBarView.displayedTabTitle(for: window), "Finder")
     }
 
+    func testCloseTargetsToRightReturnsAllTabsAfterClickedTab() {
+        let windows = [makeWindow(id: 1), makeSeparator(id: 2), makeWindow(id: 3), makeWindow(id: 4)]
+
+        let result = TabBarView.closeTargetsToRight(of: 1, in: windows)
+
+        XCTAssertEqual(result, [2, 3, 4])
+    }
+
+    func testCloseTargetsToRightIsEmptyForLastTab() {
+        let windows = [makeWindow(id: 1), makeWindow(id: 2)]
+
+        let result = TabBarView.closeTargetsToRight(of: 2, in: windows)
+
+        XCTAssertTrue(result.isEmpty)
+    }
+
+    func testCloseTargetsToRightIsEmptyWhenTabIsMissing() {
+        let windows = [makeWindow(id: 1), makeWindow(id: 2)]
+
+        let result = TabBarView.closeTargetsToRight(of: 99, in: windows)
+
+        XCTAssertTrue(result.isEmpty)
+    }
+
     func testActiveWindow() {
         let w1 = makeWindow(id: 1)
         let w2 = makeWindow(id: 2)
