@@ -152,6 +152,12 @@ struct TabBarView: View {
         destinationCount > 1
     }
 
+    static func closeTargetsToRight(of windowID: CGWindowID, in windows: [WindowInfo]) -> Set<CGWindowID> {
+        guard let index = windows.firstIndex(where: { $0.id == windowID }) else { return [] }
+        guard index + 1 < windows.count else { return [] }
+        return Set(windows[(index + 1)...].map(\.id))
+    }
+
     private static func measuredGroupCounterItemWidth(number: Int) -> CGFloat {
         let textWidth = ("\(number)" as NSString).size(
             withAttributes: [.font: NSFont.systemFont(ofSize: groupCounterFontSize, weight: .semibold)]
@@ -1376,6 +1382,7 @@ struct TabBarView: View {
             }
         }
         .contextMenu {
+            let closeTargetsToRight = Self.closeTargetsToRight(of: window.id, in: group.windows)
             if window.isSeparator {
                 Button("New Tab to the Right") {
                     onAddWindowAfterTab(index)
@@ -1383,6 +1390,11 @@ struct TabBarView: View {
                 Button("Add Separator to the Right") {
                     onAddSeparatorAfterTab(index)
                 }
+                Button("Close Windows to the Right") {
+                    selectedIDs = []
+                    onCloseTabs(closeTargetsToRight)
+                }
+                .disabled(closeTargetsToRight.isEmpty)
                 Divider()
                 Button("Remove Separator") {
                     onCloseTab(index)
@@ -1459,6 +1471,11 @@ struct TabBarView: View {
                     selectedIDs = []
                     onMoveToNewGroup(targets)
                 }
+                Button("Close Windows to the Right") {
+                    selectedIDs = []
+                    onCloseTabs(closeTargetsToRight)
+                }
+                .disabled(closeTargetsToRight.isEmpty)
                 Divider()
                 Button(targets.count == 1 ? "Close Window" : "Close Windows") {
                     selectedIDs = []
