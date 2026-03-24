@@ -469,6 +469,39 @@ final class TabGroupTests: XCTestCase {
         XCTAssertEqual(group.windows[2].pinState, .normal)
     }
 
+    func testLockWindowPlacesTabAfterCompactPins() {
+        var superPinned = makeWindow(id: 1)
+        var compactPinned = makeWindow(id: 2)
+        let unlocked = makeWindow(id: 3)
+        superPinned.pinState = .super
+        compactPinned.pinState = .normal
+        let group = TabGroup(windows: [superPinned, compactPinned, unlocked], frame: .zero)
+
+        group.lockWindow(withID: 3)
+
+        XCTAssertEqual(group.windows.map(\.id), [1, 2, 3])
+        XCTAssertEqual(group.superPinnedCount, 1)
+        XCTAssertEqual(group.lockedCount, 1)
+        XCTAssertEqual(group.compactPinnedCount, 2)
+        XCTAssertEqual(group.windows[2].pinState, .locked)
+    }
+
+    func testUnlockWindowMovesTabToUnpinnedSection() {
+        var locked = makeWindow(id: 1)
+        var compactPinned = makeWindow(id: 2)
+        let unpinned = makeWindow(id: 3)
+        locked.pinState = .locked
+        compactPinned.pinState = .normal
+        let group = TabGroup(windows: [locked, compactPinned, unpinned], frame: .zero)
+
+        group.unlockWindow(withID: 1)
+
+        XCTAssertEqual(group.windows.map(\.id), [2, 1, 3])
+        XCTAssertEqual(group.lockedCount, 0)
+        XCTAssertEqual(group.pinnedCount, 1)
+        XCTAssertEqual(group.windows[1].pinState, .none)
+    }
+
     func testRemoveWindowsWithIDs() {
         let group = TabGroup(windows: [makeWindow(id: 1), makeWindow(id: 2), makeWindow(id: 3), makeWindow(id: 4)], frame: .zero)
         group.switchTo(index: 2) // Window 3 is active
@@ -642,10 +675,17 @@ final class TabGroupTests: XCTestCase {
     }
 
     func testShouldPinOnDropOnlyWhenDroppingUnpinnedIntoPinnedArea() {
-        XCTAssertTrue(TabBarView.shouldPinOnDrop(isPinned: false, pinnedCount: 2, targetIndex: 1))
-        XCTAssertFalse(TabBarView.shouldPinOnDrop(isPinned: false, pinnedCount: 2, targetIndex: 2))
-        XCTAssertFalse(TabBarView.shouldPinOnDrop(isPinned: true, pinnedCount: 2, targetIndex: 0))
-        XCTAssertFalse(TabBarView.shouldPinOnDrop(isPinned: false, pinnedCount: 0, targetIndex: 0))
+        XCTAssertTrue(TabBarView.shouldPinOnDrop(pinState: .none, compactBoundary: 2, pinnedCount: 3, targetIndex: 1))
+        XCTAssertFalse(TabBarView.shouldPinOnDrop(pinState: .none, compactBoundary: 2, pinnedCount: 3, targetIndex: 2))
+        XCTAssertFalse(TabBarView.shouldPinOnDrop(pinState: .locked, compactBoundary: 2, pinnedCount: 3, targetIndex: 0))
+        XCTAssertFalse(TabBarView.shouldPinOnDrop(pinState: .none, compactBoundary: 0, pinnedCount: 0, targetIndex: 0))
+    }
+
+    func testShouldLockOnDropOnlyWhenDroppingIntoLockedArea() {
+        XCTAssertTrue(TabBarView.shouldLockOnDrop(pinState: .none, compactBoundary: 2, pinnedCount: 3, targetIndex: 2))
+        XCTAssertFalse(TabBarView.shouldLockOnDrop(pinState: .none, compactBoundary: 2, pinnedCount: 3, targetIndex: 1))
+        XCTAssertFalse(TabBarView.shouldLockOnDrop(pinState: .super, compactBoundary: 2, pinnedCount: 3, targetIndex: 2))
+        XCTAssertFalse(TabBarView.shouldLockOnDrop(pinState: .none, compactBoundary: 3, pinnedCount: 3, targetIndex: 2))
     }
 
     func testShouldUnpinOnDropOnlyWhenDroppingPinnedOutsidePinnedArea() {
@@ -709,6 +749,38 @@ final class TabGroupTests: XCTestCase {
             accuracy: 0.01
         )
         XCTAssertEqual(TabBarView.tabGap(after: 1, tabs: tabs), TabBarView.tabSpacing, accuracy: 0.01)
+    }
+
+    func testLockedTabsUseRegularGapBeforeCompactPinnedBoundary() {
+        var pinned = makeWindow(id: 1)
+        var locked = makeWindow(id: 2)
+        let unpinned = makeWindow(id: 3)
+        pinned.pinState = .normal
+        locked.pinState = .locked
+        let tabs = [pinned, locked, unpinned]
+
+        XCTAssertEqual(
+            TabBarView.tabGap(after: 0, tabs: tabs),
+            TabBarView.tabSpacing + TabBarView.pinnedSectionSpacing,
+            accuracy: 0.01
+        )
+        XCTAssertEqual(
+            TabBarView.tabGap(after: 1, tabs: tabs),
+            TabBarView.tabSpacing,
+            accuracy: 0.01
+        )
+    }
+
+    func testLockedTabsKeepRegularWidthWhileCompactPinsStayNarrow() {
+        var locked = makeWindow(id: 1)
+        var pinned = makeWindow(id: 2)
+        let unpinned = makeWindow(id: 3)
+        locked.pinState = .locked
+        pinned.pinState = .normal
+        let layout = TabBarView.tabWidthLayout(availableWidth: 300, tabs: [locked, pinned, unpinned], style: .equal)
+
+        XCTAssertGreaterThan(layout.widths[0], layout.widths[1])
+        XCTAssertEqual(layout.widths[1], TabBarView.pinnedTabIdealWidth, accuracy: 0.01)
     }
 
     func testTabContentWidthIncludesPinnedBoundaryGap() {

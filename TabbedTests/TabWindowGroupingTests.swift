@@ -22,6 +22,12 @@ final class TabWindowGroupingTests: XCTestCase {
         return window
     }
 
+    private func makeLockedWindow(id: CGWindowID) -> WindowInfo {
+        var window = makeWindow(id: id, pinned: true)
+        window.pinState = .locked
+        return window
+    }
+
     func testSegmentsWithoutSplitsReturnSingleManagedSegment() {
         let w1 = makeWindow(id: 1, pinned: true)
         let w2 = makeWindow(id: 2)
@@ -52,6 +58,21 @@ final class TabWindowGroupingTests: XCTestCase {
         )
 
         XCTAssertEqual(segments, [[1, 2], [3, 4]])
+    }
+
+    func testSegmentsSplitPinnedTabsTreatsLockedTabsAsPinned() {
+        let locked = makeLockedWindow(id: 1)
+        let pinned = makeWindow(id: 2, pinned: true)
+        let unpinned = makeWindow(id: 3)
+        let group = TabGroup(windows: [locked, pinned, unpinned], frame: .zero)
+
+        let segments = TabWindowGrouping.segments(
+            in: group,
+            splitPinnedTabs: true,
+            splitOnSeparators: false
+        )
+
+        XCTAssertEqual(segments, [[1, 2], [3]])
     }
 
     func testSegmentsSplitPinnedTabsDoesNotTreatSuperPinnedAsRegularPinned() {

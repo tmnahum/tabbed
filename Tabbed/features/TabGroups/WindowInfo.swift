@@ -3,6 +3,7 @@ import ApplicationServices
 
 enum WindowPinState: String, Codable {
     case none
+    case locked
     case normal
     case `super`
 }
@@ -30,6 +31,14 @@ struct WindowInfo: Identifiable, Equatable {
 
     var isSuperPinned: Bool {
         pinState == .super
+    }
+
+    var isLocked: Bool {
+        pinState == .locked
+    }
+
+    var isCompactPinned: Bool {
+        pinState == .normal || pinState == .super
     }
 
     init(

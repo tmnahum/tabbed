@@ -36,7 +36,10 @@ enum TabWindowGrouping {
                 return .superPinned
             }
             if splitPinnedTabs {
-                return window.pinState == .normal ? .pinned : .unpinned
+                if window.isSuperPinned {
+                    return .superPinned
+                }
+                return window.isPinned ? .pinned : .unpinned
             }
             return .all
         }
