@@ -753,6 +753,9 @@ extension AppDelegate {
             onSetPinned: { [weak self] ids, pinned in
                 self?.setPinned(pinned, forWindowIDs: ids, in: group)
             },
+            onSetLocked: { [weak self] ids, locked in
+                self?.setLocked(locked, forWindowIDs: ids, in: group)
+            },
             onSetSuperPinned: { [weak self] ids, superPinned in
                 self?.setSuperPinned(superPinned, forWindowIDs: ids, in: group)
             },
@@ -1471,6 +1474,24 @@ extension AppDelegate {
             collapseSuperpinMembership(forWindowID: windowID, keeping: sourceGroup)
         }
         dissolveFunctionallyEmptySuperpinGroups()
+        groupManager.objectWillChange.send()
+    }
+
+    func setLocked(_ locked: Bool, forWindowIDs ids: Set<CGWindowID>, in sourceGroup: TabGroup) {
+        guard !ids.isEmpty else { return }
+        pruneSuperpinMirrorTracking()
+        if locked {
+            sourceGroup.setLocked(true, forWindowIDs: ids)
+            for windowID in ids {
+                removeSuperpinMirrors(windowIDs: [windowID], from: sourceGroup.id)
+                collapseSuperpinMembership(forWindowID: windowID, keeping: sourceGroup)
+            }
+            dissolveFunctionallyEmptySuperpinGroups()
+            groupManager.objectWillChange.send()
+            return
+        }
+
+        sourceGroup.setLocked(false, forWindowIDs: ids)
         groupManager.objectWillChange.send()
     }
 
@@ -2514,10 +2535,16 @@ extension AppDelegate {
         }
 
         // Add each window to target at insertion index
-        let shouldPinOnInsert = targetGroup.pinnedCount > 0 && insertionIndex < targetGroup.pinnedCount
+        let compactBoundary = targetGroup.compactPinnedCount
+        let shouldPinOnInsert = compactBoundary > 0 && insertionIndex < compactBoundary
+        let shouldLockOnInsert = targetGroup.pinnedCount > compactBoundary
+            && insertionIndex >= compactBoundary
+            && insertionIndex < targetGroup.pinnedCount
         for (offset, window) in windowsToMove.enumerated() {
             var windowToInsert = window
-            if shouldPinOnInsert {
+            if shouldLockOnInsert {
+                windowToInsert.pinState = .locked
+            } else if shouldPinOnInsert {
                 windowToInsert.isPinned = true
             }
             setExpectedFrame(targetGroup.frame, for: [window.id])
