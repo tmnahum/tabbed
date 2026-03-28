@@ -1124,4 +1124,76 @@ final class TabGroupTests: XCTestCase {
             XCTAssertNotEqual(group.windows[idx].id, 2)
         }
     }
+
+    func testDetachedSinglePinnedTabBecomesRegularTab() {
+        XCTAssertEqual(
+            AppDelegate.normalizedPinStateForDetachedGroup(
+                currentPinState: .normal,
+                detachedWindowCount: 1
+            ),
+            .none
+        )
+        XCTAssertEqual(
+            AppDelegate.normalizedPinStateForDetachedGroup(
+                currentPinState: .super,
+                detachedWindowCount: 1
+            ),
+            .none
+        )
+    }
+
+    func testDetachedMultiplePinnedTabsBecomeLockedTabs() {
+        XCTAssertEqual(
+            AppDelegate.normalizedPinStateForDetachedGroup(
+                currentPinState: .normal,
+                detachedWindowCount: 2
+            ),
+            .locked
+        )
+        XCTAssertEqual(
+            AppDelegate.normalizedPinStateForDetachedGroup(
+                currentPinState: .super,
+                detachedWindowCount: 3
+            ),
+            .locked
+        )
+    }
+
+    func testCrossGroupInsertIntoUnpinnedAreaDemotesPinnedTab() {
+        XCTAssertEqual(
+            AppDelegate.normalizedPinStateForCrossGroupInsert(
+                currentPinState: .normal,
+                shouldPinOnInsert: false,
+                shouldLockOnInsert: false
+            ),
+            .none
+        )
+        XCTAssertEqual(
+            AppDelegate.normalizedPinStateForCrossGroupInsert(
+                currentPinState: .super,
+                shouldPinOnInsert: false,
+                shouldLockOnInsert: false
+            ),
+            .none
+        )
+    }
+
+    func testCrossGroupInsertRespectsTargetPinnedSectionType() {
+        XCTAssertEqual(
+            AppDelegate.normalizedPinStateForCrossGroupInsert(
+                currentPinState: .normal,
+                shouldPinOnInsert: true,
+                shouldLockOnInsert: false
+            ),
+            .normal
+        )
+        XCTAssertEqual(
+            AppDelegate.normalizedPinStateForCrossGroupInsert(
+                currentPinState: .normal,
+                shouldPinOnInsert: false,
+                shouldLockOnInsert: true
+            ),
+            .locked
+        )
+    }
 }

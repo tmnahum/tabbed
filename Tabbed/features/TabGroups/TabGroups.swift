@@ -61,6 +61,25 @@ extension AppDelegate {
         Dictionary(uniqueKeysWithValues: orderedWindows.enumerated().map { ($0.element.windowNumber, $0.offset) })
     }
 
+    static func normalizedPinStateForDetachedGroup(
+        currentPinState: WindowPinState,
+        detachedWindowCount: Int
+    ) -> WindowPinState {
+        guard currentPinState != .none else { return .none }
+        return detachedWindowCount > 1 ? .locked : .none
+    }
+
+    static func normalizedPinStateForCrossGroupInsert(
+        currentPinState: WindowPinState,
+        shouldPinOnInsert: Bool,
+        shouldLockOnInsert: Bool
+    ) -> WindowPinState {
+        if shouldLockOnInsert { return .locked }
+        if shouldPinOnInsert { return .normal }
+        guard currentPinState != .none else { return .none }
+        return .none
+    }
+
     static func isBetterDropCandidate(
         zOrderIndex: Int?,
         hitDistance: CGFloat,
@@ -2542,11 +2561,11 @@ extension AppDelegate {
             && insertionIndex < targetGroup.pinnedCount
         for (offset, window) in windowsToMove.enumerated() {
             var windowToInsert = window
-            if shouldLockOnInsert {
-                windowToInsert.pinState = .locked
-            } else if shouldPinOnInsert {
-                windowToInsert.isPinned = true
-            }
+            windowToInsert.pinState = Self.normalizedPinStateForCrossGroupInsert(
+                currentPinState: window.pinState,
+                shouldPinOnInsert: shouldPinOnInsert,
+                shouldLockOnInsert: shouldLockOnInsert
+            )
             setExpectedFrame(targetGroup.frame, for: [window.id])
             AccessibilityHelper.setFrameAsync(of: window.element, to: targetGroup.frame)
             _ = groupManager.addWindow(
@@ -2637,6 +2656,14 @@ extension AppDelegate {
     func moveTabsToNewGroup(withIDs ids: Set<CGWindowID>, from group: TabGroup, panel: TabBarPanel) {
         let windowsToMove = group.managedWindows.filter { ids.contains($0.id) }
         guard !windowsToMove.isEmpty else { return }
+        let detachedWindows = windowsToMove.map { window -> WindowInfo in
+            var detached = window
+            detached.pinState = Self.normalizedPinStateForDetachedGroup(
+                currentPinState: window.pinState,
+                detachedWindowCount: windowsToMove.count
+            )
+            return detached
+        }
 
         let frame = group.frame
         let squeezeDelta = group.tabBarSqueezeDelta
@@ -2654,7 +2681,7 @@ extension AppDelegate {
             bringTabToFront(newActive, in: group)
         }
 
-        guard let newGroup = setupGroup(with: windowsToMove, frame: frame, squeezeDelta: squeezeDelta) else { return }
+        guard let newGroup = setupGroup(with: detachedWindows, frame: frame, squeezeDelta: squeezeDelta) else { return }
         if let activeWindow = newGroup.activeWindow {
             bringTabToFront(activeWindow, in: newGroup)
         }
