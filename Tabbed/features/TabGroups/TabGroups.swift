@@ -2418,16 +2418,11 @@ extension AppDelegate {
         )
         group.displayMode = .fullscreen
 
+        let fullscreenFrame = ScreenCompensation.fullscreenWindowFrame(in: visibleFrame)
+        let visibleWindowIDs = group.visibleWindows.map(\.id)
+        setExpectedFrame(fullscreenFrame, for: visibleWindowIDs)
         for window in group.visibleWindows {
-            guard let frame = AccessibilityHelper.getFrame(of: window.element) else { continue }
-            let pushedFrame = ScreenCompensation.pushBelowTopBarWithoutStretch(
-                frame: frame,
-                visibleFrame: visibleFrame
-            )
-            if pushedFrame != frame {
-                setExpectedFrame(pushedFrame, for: [window.id])
-                AccessibilityHelper.setFrameAsync(of: window.element, to: pushedFrame)
-            }
+            AccessibilityHelper.setFrameAsync(of: window.element, to: fullscreenFrame)
         }
 
         refreshPanelPlacement(for: group, panel: panel, relativeTo: activeWindow.id)

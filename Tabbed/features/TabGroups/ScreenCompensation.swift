@@ -92,6 +92,15 @@ enum ScreenCompensation {
         )
     }
 
+    static func fullscreenWindowFrame(in visibleFrame: CGRect) -> CGRect {
+        CGRect(
+            x: visibleFrame.minX,
+            y: visibleFrame.minY + tabBarHeight,
+            width: visibleFrame.width,
+            height: max(0, visibleFrame.height - tabBarHeight)
+        )
+    }
+
     static func pushBelowTopBarWithoutStretch(
         frame: CGRect,
         visibleFrame: CGRect

@@ -204,4 +204,15 @@ final class ScreenCompensationTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(pushed.height, 0)
         XCTAssertEqual(pushed.minY, 53)
     }
+
+    func testFullscreenWindowFrameFillsVisibleScreenBelowBar() {
+        let visibleFrame = CGRect(x: 10, y: 25, width: 1440, height: 875)
+
+        let fullscreenFrame = ScreenCompensation.fullscreenWindowFrame(in: visibleFrame)
+
+        XCTAssertEqual(fullscreenFrame.minX, visibleFrame.minX)
+        XCTAssertEqual(fullscreenFrame.minY, visibleFrame.minY + ScreenCompensation.tabBarHeight)
+        XCTAssertEqual(fullscreenFrame.width, visibleFrame.width)
+        XCTAssertEqual(fullscreenFrame.height, visibleFrame.height - ScreenCompensation.tabBarHeight)
+    }
 }
