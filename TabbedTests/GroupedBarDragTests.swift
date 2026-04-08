@@ -100,76 +100,18 @@ final class GroupedBarDragTests: XCTestCase {
         XCTAssertEqual(peer.frame.origin.x, 340, accuracy: 0.001)
     }
 
-    func testShouldToggleZoomAcrossCounterGroupsRequiresSourceInMultiGroupSet() {
-        let source = UUID()
-        let peer = UUID()
-
-        XCTAssertTrue(
-            AppDelegate.shouldToggleZoomAcrossCounterGroups(
-                sourceGroupID: source,
-                counterGroupIDs: [source, peer]
-            )
-        )
-        XCTAssertFalse(
-            AppDelegate.shouldToggleZoomAcrossCounterGroups(
-                sourceGroupID: source,
-                counterGroupIDs: [source]
-            )
-        )
-        XCTAssertFalse(
-            AppDelegate.shouldToggleZoomAcrossCounterGroups(
-                sourceGroupID: source,
-                counterGroupIDs: [peer]
-            )
-        )
-    }
-
-    func testGroupedZoomActionRestoresOnlyWhenAllGroupsCanRestore() {
-        XCTAssertEqual(
-            AppDelegate.groupedZoomAction(
-                allGroupsMaximized: true,
-                allGroupsHavePreZoom: true
-            ),
-            .restore
-        )
-        XCTAssertEqual(
-            AppDelegate.groupedZoomAction(
-                allGroupsMaximized: true,
-                allGroupsHavePreZoom: false
-            ),
-            .maximize
-        )
-        XCTAssertEqual(
-            AppDelegate.groupedZoomAction(
-                allGroupsMaximized: false,
-                allGroupsHavePreZoom: true
-            ),
-            .maximize
-        )
-    }
-
-    func testToggleZoomAppliesToCounterPeerGroups() {
+    func testHandleBarDragDoesNothingForFullscreenGroup() {
         let app = AppDelegate()
-        guard let source = app.groupManager.createGroup(with: [makeWindow(id: 401)], frame: makeFrame(x: 100, y: 200)),
-              let peer = app.groupManager.createGroup(with: [makeWindow(id: 402)], frame: makeFrame(x: 420, y: 220)) else {
+        guard let source = app.groupManager.createGroup(with: [makeWindow(id: 401)], frame: makeFrame(x: 100, y: 200)) else {
             XCTFail("Expected groups to be created")
             return
         }
 
-        let counters = [source.id, peer.id]
-        setCounterIDs(counters, groups: [source, peer])
-        let sourcePanel = TabBarPanel()
-        let peerPanel = TabBarPanel()
-        app.tabBarPanels[source.id] = sourcePanel
-        app.tabBarPanels[peer.id] = peerPanel
+        source.displayMode = .fullscreen
+        app.handleBarDrag(group: source, totalDx: 40, totalDy: 15, isShiftPressed: false)
 
-        XCTAssertNil(source.preZoomFrame)
-        XCTAssertNil(peer.preZoomFrame)
-
-        app.toggleZoom(group: source, panel: sourcePanel)
-
-        XCTAssertNotNil(source.preZoomFrame)
-        XCTAssertNotNil(peer.preZoomFrame)
+        XCTAssertEqual(source.frame.origin.x, 100, accuracy: 0.001)
+        XCTAssertEqual(source.frame.origin.y, 200, accuracy: 0.001)
     }
 
     func testGroupedBarDragSnapExcludedGroupIDsContainsSourceAndPeers() {

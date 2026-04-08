@@ -46,6 +46,8 @@ class GroupManager: ObservableObject {
         frame: CGRect,
         spaceID: UInt64 = 0,
         name: String? = nil,
+        displayMode: TabGroupDisplayMode = .bound,
+        fullscreenState: FullscreenGroupState? = nil,
         allowSharedMembership: Bool = false
     ) -> TabGroup? {
         guard windows.count >= 1 else { return nil }
@@ -61,7 +63,14 @@ class GroupManager: ObservableObject {
             }
         }
 
-        let group = TabGroup(windows: windows, frame: frame, spaceID: spaceID, name: name)
+        let group = TabGroup(
+            windows: windows,
+            frame: frame,
+            spaceID: spaceID,
+            name: name,
+            displayMode: displayMode,
+            fullscreenState: fullscreenState
+        )
         groups.append(group)
         rebuildMembershipIndex()
         return group

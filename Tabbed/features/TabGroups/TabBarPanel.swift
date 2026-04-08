@@ -148,7 +148,7 @@ class TabBarPanel: NSPanel {
 
     /// Position the panel above the given window frame (in AX/CG coordinates).
     /// When `isMaximized` is true, uses a tiny radius on all four corners; otherwise top corners only with larger radius.
-    func positionAbove(windowFrame: CGRect, isMaximized: Bool = false) {
+    func positionBound(above windowFrame: CGRect, isVisuallyMaximized: Bool = false) {
         let appKitOrigin = CoordinateConverter.axToAppKit(
             point: CGPoint(
                 x: windowFrame.origin.x,
@@ -166,13 +166,32 @@ class TabBarPanel: NSPanel {
             display: true
         )
         guard let layer = visualEffectView.layer else { return }
-        if isMaximized {
+        if isVisuallyMaximized {
             layer.cornerRadius = Self.maximizedCornerRadius
             layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner, .layerMinXMaxYCorner, .layerMaxXMaxYCorner]
         } else {
             layer.cornerRadius = Self.normalCornerRadius
             layer.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
         }
+    }
+
+    func positionFullscreen(on visibleFrame: CGRect) {
+        let appKitOrigin = CoordinateConverter.axToAppKit(
+            point: CGPoint(x: visibleFrame.minX, y: visibleFrame.minY),
+            windowHeight: Self.tabBarHeight
+        )
+        self.setFrame(
+            NSRect(
+                x: appKitOrigin.x,
+                y: appKitOrigin.y,
+                width: visibleFrame.width,
+                height: Self.tabBarHeight
+            ),
+            display: true
+        )
+        guard let layer = visualEffectView.layer else { return }
+        layer.cornerRadius = Self.maximizedCornerRadius
+        layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner, .layerMinXMaxYCorner, .layerMaxXMaxYCorner]
     }
 
     /// Order this panel directly above the specified window
@@ -188,7 +207,14 @@ class TabBarPanel: NSPanel {
 
     func show(above windowFrame: CGRect, windowID: CGWindowID, isMaximized: Bool = false) {
         Logger.log("[PANELDBG] show group=\(debugGroupID) panel=\(windowNumber) targetWindow=\(windowID) frame=\(windowFrame) maximized=\(isMaximized)")
-        positionAbove(windowFrame: windowFrame, isMaximized: isMaximized)
+        positionBound(above: windowFrame, isVisuallyMaximized: isMaximized)
+        orderFront(nil)
+        orderAbove(windowID: windowID)
+    }
+
+    func showFullscreen(on visibleFrame: CGRect, relativeTo windowID: CGWindowID) {
+        Logger.log("[PANELDBG] showFullscreen group=\(debugGroupID) panel=\(windowNumber) targetWindow=\(windowID) frame=\(visibleFrame)")
+        positionFullscreen(on: visibleFrame)
         orderFront(nil)
         orderAbove(windowID: windowID)
     }
@@ -341,7 +367,7 @@ class TabBarPanel: NSPanel {
         let panelWidth = frame.width
         let panelHeight = frame.height
         let verticalPad: CGFloat = 2
-        let showHandle = tabBarConfig?.showDragHandle ?? true
+        let showHandle = (tabBarConfig?.showDragHandle ?? true) && group?.displayMode != .fullscreen
         // Match SwiftUI layout: leading pad is 4 with handle, 2 without
         let leadingPad: CGFloat = showHandle ? 4 : 2
         let trailingPad: CGFloat = 4
@@ -515,7 +541,7 @@ class TabBarPanel: NSPanel {
         let panelHeight = frame.height
 
         let verticalPad: CGFloat = 2
-        let showHandle = tabBarConfig.showDragHandle
+        let showHandle = tabBarConfig.showDragHandle && group.displayMode != .fullscreen
         let leadingPad: CGFloat = showHandle ? 4 : 2
         let trailingPad: CGFloat = 4
         let handleWidth: CGFloat = showHandle ? TabBarView.dragHandleWidth : 0

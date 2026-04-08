@@ -165,7 +165,9 @@ final class SessionMRUTests: XCTestCase {
             activeIndex: 0,
             frame: CodableRect(.zero),
             tabBarSqueezeDelta: 0,
-            name: nil
+            name: nil,
+            displayMode: .bound,
+            fullscreenState: nil
         )
 
         let matched = SessionManager.matchGroup(
@@ -193,7 +195,9 @@ final class SessionMRUTests: XCTestCase {
             activeIndex: 0,
             frame: CodableRect(.zero),
             tabBarSqueezeDelta: 0,
-            name: nil
+            name: nil,
+            displayMode: .bound,
+            fullscreenState: nil
         )
 
         let matched = SessionManager.matchGroup(
@@ -226,7 +230,9 @@ final class SessionMRUTests: XCTestCase {
             activeIndex: 0,
             frame: CodableRect(.zero),
             tabBarSqueezeDelta: 0,
-            name: nil
+            name: nil,
+            displayMode: .bound,
+            fullscreenState: nil
         )
 
         let matched = SessionManager.matchGroup(
@@ -258,7 +264,9 @@ final class SessionMRUTests: XCTestCase {
             activeIndex: 0,
             frame: CodableRect(.zero),
             tabBarSqueezeDelta: 0,
-            name: nil
+            name: nil,
+            displayMode: .bound,
+            fullscreenState: nil
         )
 
         let matched = SessionManager.matchGroup(
@@ -290,7 +298,9 @@ final class SessionMRUTests: XCTestCase {
             activeIndex: 0,
             frame: CodableRect(.zero),
             tabBarSqueezeDelta: 0,
-            name: "A"
+            name: "A",
+            displayMode: .bound,
+            fullscreenState: nil
         )
         let snapshotB = GroupSnapshot(
             windows: [
@@ -305,7 +315,9 @@ final class SessionMRUTests: XCTestCase {
             activeIndex: 0,
             frame: CodableRect(.zero),
             tabBarSqueezeDelta: 0,
-            name: "B"
+            name: "B",
+            displayMode: .bound,
+            fullscreenState: nil
         )
 
         let firstMatch = SessionManager.matchGroup(

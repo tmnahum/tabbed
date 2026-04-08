@@ -2,6 +2,11 @@ import AppKit
 import Combine
 import SwiftUI
 
+enum GroupPresentationState {
+    case bound(frame: CGRect, squeezeDelta: CGFloat, screen: NSScreen?)
+    case fullscreen(screen: NSScreen?)
+}
+
 class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let windowManager = WindowManager()
     let groupManager = GroupManager()

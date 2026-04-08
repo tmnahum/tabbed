@@ -81,10 +81,12 @@ struct GroupSnapshot: Codable {
     let frame: CodableRect
     let tabBarSqueezeDelta: CGFloat
     let name: String?
+    let displayMode: TabGroupDisplayMode
+    let fullscreenState: FullscreenGroupState?
 }
 
 /// CGRect wrapper that conforms to Codable.
-struct CodableRect: Codable {
+struct CodableRect: Codable, Equatable {
     let x: CGFloat
     let y: CGFloat
     let width: CGFloat

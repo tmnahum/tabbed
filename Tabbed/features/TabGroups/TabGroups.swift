@@ -683,6 +683,8 @@ extension AppDelegate {
         squeezeDelta: CGFloat,
         activeIndex: Int = 0,
         name: String? = nil,
+        displayMode: TabGroupDisplayMode = .bound,
+        fullscreenState: FullscreenGroupState? = nil,
         allowSharedMembership: Bool = false
     ) -> TabGroup? {
         let spaceID = windows.first.flatMap { SpaceUtils.spaceID(for: $0.id) } ?? 0
@@ -691,6 +693,8 @@ extension AppDelegate {
             frame: frame,
             spaceID: spaceID,
             name: name,
+            displayMode: displayMode,
+            fullscreenState: fullscreenState,
             allowSharedMembership: allowSharedMembership
         ) else { return nil }
         Logger.log("[SPACE] Created group \(group.id) on space \(spaceID)")
@@ -819,7 +823,7 @@ extension AppDelegate {
         }
         panel.onBarDoubleClicked = { [weak self, weak panel] in
             guard let panel else { return }
-            self?.toggleZoom(group: group, panel: panel)
+            self?.toggleGroupDisplayMode(group: group, panel: panel)
         }
 
         tabBarPanels[group.id] = panel
@@ -829,10 +833,7 @@ extension AppDelegate {
         }
 
         if let activeWindow = group.activeWindow {
-            let maximized = isGroupMaximized(group).0
-            panel.show(above: frame, windowID: activeWindow.id, isMaximized: maximized)
-            panel.orderAbove(windowID: activeWindow.id)
-            movePanelToWindowSpace(panel, windowID: activeWindow.id)
+            refreshPanelPlacement(for: group, panel: panel, relativeTo: activeWindow.id)
         }
 
         let groupID = group.id
@@ -842,6 +843,11 @@ extension AppDelegate {
                   let panel = self.tabBarPanels[groupID],
                   let activeWindow = group.activeWindow,
                   let actualFrame = AccessibilityHelper.getFrame(of: activeWindow.element) else { return }
+
+            guard group.displayMode == .bound else {
+                self.refreshPanelPlacement(for: group, panel: panel, relativeTo: activeWindow.id)
+                return
+            }
 
             let visibleFrame = CoordinateConverter.visibleFrameInAX(at: actualFrame.origin)
             let (clamped, squeezeDelta) = self.applyClamp(
@@ -860,9 +866,7 @@ extension AppDelegate {
                     }
                 }
             }
-            panel.positionAbove(windowFrame: group.frame, isMaximized: self.isGroupMaximized(group).0)
-            panel.orderAbove(windowID: activeWindow.id)
-            self.movePanelToWindowSpace(panel, windowID: activeWindow.id)
+            self.refreshPanelPlacement(for: group, panel: panel, relativeTo: activeWindow.id)
         }
 
         evaluateAutoCapture()
@@ -890,11 +894,21 @@ extension AppDelegate {
         )
         let counterMode = tabBarConfig.groupCounterMode
         let candidates = groupManager.groups.map { group in
-            MaximizedGroupCounterPolicy.Candidate(
+            let presentationState = groupPresentationState(for: group)
+            let screenFrame: CGRect?
+            switch presentationState {
+            case let .bound(_, _, screen):
+                screenFrame = screen.map { CoordinateConverter.visibleFrameInAX(for: $0) }
+            case let .fullscreen(screen):
+                screenFrame = screen.map { CoordinateConverter.visibleFrameInAX(for: $0) }
+            }
+            return MaximizedGroupCounterPolicy.Candidate(
                 groupID: group.id,
                 spaceID: resolvedSpaceID(for: group),
                 isMaximized: isGroupMaximized(group).0,
-                frame: group.frame
+                frame: group.frame,
+                displayMode: group.displayMode,
+                screenFrame: screenFrame
             )
         }
 
@@ -1246,7 +1260,9 @@ extension AppDelegate {
             if let idx = group.windows.firstIndex(where: { $0.id == windowID }) {
                 group.windows[idx].element = freshElement
             }
-            self.tabBarPanels[groupID]?.orderAbove(windowID: windowID)
+            if let panel = self.tabBarPanels[groupID] {
+                self.refreshPanelPlacement(for: group, panel: panel, relativeTo: windowID, orderFront: false)
+            }
         }
     }
 
@@ -1257,6 +1273,37 @@ extension AppDelegate {
         let panelWID = CGWindowID(panel.windowNumber)
         guard SpaceUtils.spaceID(for: panelWID) != targetSpace else { return }
         SpaceUtils.moveWindow(panelWID, toSpace: targetSpace)
+    }
+
+    func refreshPanelPlacement(
+        for group: TabGroup,
+        panel: TabBarPanel,
+        relativeTo windowID: CGWindowID,
+        orderFront: Bool = true
+    ) {
+        switch group.displayMode {
+        case .bound:
+            let maximized = isGroupMaximized(group).0
+            if orderFront {
+                panel.show(above: group.frame, windowID: windowID, isMaximized: maximized)
+            } else {
+                panel.positionBound(above: group.frame, isVisuallyMaximized: maximized)
+                panel.orderAbove(windowID: windowID)
+            }
+            movePanelToWindowSpace(panel, windowID: windowID)
+        case .fullscreen:
+            guard let screen = screenForActiveWindow(in: group) ?? group.fullscreenState.flatMap({ resolveScreen(from: $0.screenIdentity) }) else {
+                return
+            }
+            let visibleFrame = CoordinateConverter.visibleFrameInAX(for: screen)
+            if orderFront {
+                panel.showFullscreen(on: visibleFrame, relativeTo: windowID)
+            } else {
+                panel.positionFullscreen(on: visibleFrame)
+                panel.orderAbove(windowID: windowID)
+            }
+            movePanelToWindowSpace(panel, windowID: windowID)
+        }
     }
 
     func switchTab(in group: TabGroup, to index: Int, panel: TabBarPanel) {
@@ -1276,24 +1323,33 @@ extension AppDelegate {
         if !group.isCycling {
             group.recordFocus(windowID: window.id)
         }
-
-        // Defensive invariant guard: if an app/AX race leaves the group frame
-        // extending below the visible area, trim it before applying the switch.
-        let visibleFrame = CoordinateConverter.visibleFrameInAX(at: group.frame.origin)
-        let maxBottom = visibleFrame.origin.y + visibleFrame.height
-        let currentBottom = group.frame.origin.y + group.frame.height
-        if currentBottom > maxBottom + Self.frameTolerance {
-            let correctedHeight = maxBottom - group.frame.origin.y
-            group.frame = CGRect(x: group.frame.origin.x, y: group.frame.origin.y,
-                                 width: group.frame.width, height: correctedHeight)
-            Logger.log("[DEBUG] switchTab: defensive trim applied, corrected height=\(correctedHeight)")
-            panel.positionAbove(windowFrame: group.frame, isMaximized: isGroupMaximized(group).0)
+        switch group.displayMode {
+        case .bound:
+            let visibleFrame = CoordinateConverter.visibleFrameInAX(at: group.frame.origin)
+            let maxBottom = visibleFrame.origin.y + visibleFrame.height
+            let currentBottom = group.frame.origin.y + group.frame.height
+            if currentBottom > maxBottom + Self.frameTolerance {
+                let correctedHeight = maxBottom - group.frame.origin.y
+                group.frame = CGRect(
+                    x: group.frame.origin.x,
+                    y: group.frame.origin.y,
+                    width: group.frame.width,
+                    height: correctedHeight
+                )
+                Logger.log("[DEBUG] switchTab: defensive trim applied, corrected height=\(correctedHeight)")
+                panel.positionBound(above: group.frame, isVisuallyMaximized: isGroupMaximized(group).0)
+            }
+            setExpectedFrame(group.frame, for: [window.id])
+            AccessibilityHelper.setFrameAsync(of: window.element, to: group.frame)
+            bringTabToFront(window, in: group)
+        case .fullscreen:
+            if let screen = screenForWindow(window) {
+                group.fullscreenState?.screenIdentity = screenIdentity(for: screen)
+            }
+            focusWindow(window)
+            refreshPanelPlacement(for: group, panel: panel, relativeTo: window.id)
+            evaluateAutoCapture()
         }
-
-        setExpectedFrame(group.frame, for: [window.id])
-        AccessibilityHelper.setFrameAsync(of: window.element, to: group.frame)
-
-        bringTabToFront(window, in: group)
     }
 
     func releaseTab(at index: Int, from group: TabGroup, panel: TabBarPanel) {
@@ -1316,7 +1372,7 @@ extension AppDelegate {
             expectedFrames.removeValue(forKey: window.id)
 
             // Fullscreened windows: skip frame expansion (macOS manages their frame)
-            if !window.isFullscreened {
+            if group.displayMode == .bound, !window.isFullscreened {
                 if let frame = AccessibilityHelper.getFrame(of: window.element) {
                     let delta = max(group.tabBarSqueezeDelta, ScreenCompensation.tabBarHeight)
                     let expanded = ScreenCompensation.expandFrame(frame, undoingSqueezeDelta: delta)
@@ -1439,8 +1495,20 @@ extension AppDelegate {
             return
         }
         mruTracker.removeWindow(window.id)
-        setExpectedFrame(group.frame, for: [window.id])
-        AccessibilityHelper.setFrameAsync(of: window.element, to: group.frame)
+        if group.displayMode == .bound {
+            setExpectedFrame(group.frame, for: [window.id])
+            AccessibilityHelper.setFrameAsync(of: window.element, to: group.frame)
+        } else if let frame = AccessibilityHelper.getFrame(of: window.element),
+                  let screen = screenForActiveWindow(in: group) {
+            let pushedFrame = ScreenCompensation.pushBelowTopBarWithoutStretch(
+                frame: frame,
+                visibleFrame: CoordinateConverter.visibleFrameInAX(for: screen)
+            )
+            if pushedFrame != frame {
+                setExpectedFrame(pushedFrame, for: [window.id])
+                AccessibilityHelper.setFrameAsync(of: window.element, to: pushedFrame)
+            }
+        }
         // Use explicit index if provided, otherwise insert after active for same-app or auto-capture
         let insertionIndex: Int?
         if let explicitIndex {
@@ -1463,6 +1531,9 @@ extension AppDelegate {
         promoteWindowOwnership(windowID: window.id, group: group)
         if !group.isCycling {
             group.recordFocus(windowID: window.id)
+        }
+        if let panel = tabBarPanels[group.id] {
+            refreshPanelPlacement(for: group, panel: panel, relativeTo: window.id)
         }
         bringTabToFront(window, in: group)
         evaluateAutoCapture()
@@ -1817,7 +1888,8 @@ extension AppDelegate {
 
         if let lastWindow = group.managedWindows.first {
             stopObservingWindowIfUnused(lastWindow)
-            if !lastWindow.isFullscreened, group.tabBarSqueezeDelta > 0,
+            if group.displayMode == .bound,
+               !lastWindow.isFullscreened, group.tabBarSqueezeDelta > 0,
                let lastFrame = AccessibilityHelper.getFrame(of: lastWindow.element) {
                 let expandedFrame = ScreenCompensation.expandFrame(lastFrame, undoingSqueezeDelta: group.tabBarSqueezeDelta)
                 AccessibilityHelper.setFrameAsync(of: lastWindow.element, to: expandedFrame)
@@ -1846,7 +1918,8 @@ extension AppDelegate {
         for window in group.managedWindows { expectedFrames.removeValue(forKey: window.id) }
 
         for window in group.managedWindows {
-            if !window.isFullscreened, group.tabBarSqueezeDelta > 0,
+            if group.displayMode == .bound,
+               !window.isFullscreened, group.tabBarSqueezeDelta > 0,
                let frame = AccessibilityHelper.getFrame(of: window.element) {
                 let expandedFrame = ScreenCompensation.expandFrame(frame, undoingSqueezeDelta: group.tabBarSqueezeDelta)
                 AccessibilityHelper.setFrameAsync(of: window.element, to: expandedFrame)
@@ -2087,6 +2160,7 @@ extension AppDelegate {
     }
 
     private func applyBarDragFrame(_ frame: CGRect, to group: TabGroup, updatePanelPosition: Bool) {
+        guard group.displayMode == .bound else { return }
         group.frame = frame
 
         let allIDs = group.visibleWindows.map(\.id)
@@ -2097,11 +2171,12 @@ extension AppDelegate {
 
         if updatePanelPosition,
            let panel = tabBarPanels[group.id] {
-            panel.positionAbove(windowFrame: frame, isMaximized: isGroupMaximized(group).0)
+            panel.positionBound(above: frame, isVisuallyMaximized: isGroupMaximized(group).0)
         }
     }
 
     func handleBarDrag(group: TabGroup, totalDx: CGFloat, totalDy: CGFloat, isShiftPressed explicitShiftPressed: Bool? = nil) {
+        guard group.displayMode == .bound else { return }
         if barDraggingGroupID == nil {
             barDraggingGroupID = group.id
             barDragInitialFrame = group.frame
@@ -2169,6 +2244,7 @@ extension AppDelegate {
         allowSnap: Bool,
         snapExcludedGroupIDs: Set<UUID> = []
     ) {
+        guard group.displayMode == .bound else { return }
         var finalFrame = group.frame
         var finalSqueezeDelta = group.tabBarSqueezeDelta
 
@@ -2208,12 +2284,16 @@ extension AppDelegate {
         }
 
         if let panel {
-            panel.positionAbove(windowFrame: finalFrame, isMaximized: isGroupMaximized(group).0)
+            panel.positionBound(above: finalFrame, isVisuallyMaximized: isGroupMaximized(group).0)
             panel.orderAbove(windowID: activeWindow.id)
         }
     }
 
     func handleBarDragEnded(group: TabGroup, panel: TabBarPanel) {
+        guard group.displayMode == .bound else {
+            resetBarDragTracking()
+            return
+        }
         let groupedPeerIDs = Array(barDragInitialFramesByGroupedGroupID.keys)
         defer { resetBarDragTracking() }
 
@@ -2314,85 +2394,76 @@ extension AppDelegate {
         )
     }
 
-    enum GroupZoomAction: Equatable {
-        case maximize
-        case restore
-    }
-
-    static func shouldToggleZoomAcrossCounterGroups(sourceGroupID: UUID, counterGroupIDs: [UUID]) -> Bool {
-        counterGroupIDs.count >= 2 && counterGroupIDs.contains(sourceGroupID)
-    }
-
-    static func groupedZoomAction(allGroupsMaximized: Bool, allGroupsHavePreZoom: Bool) -> GroupZoomAction {
-        (allGroupsMaximized && allGroupsHavePreZoom) ? .restore : .maximize
-    }
-
-    func toggleZoom(group: TabGroup, panel: TabBarPanel) {
-        let targetGroupIDs: [UUID]
-        if Self.shouldToggleZoomAcrossCounterGroups(
-            sourceGroupID: group.id,
-            counterGroupIDs: group.maximizedGroupCounterIDs
-        ) {
-            targetGroupIDs = group.maximizedGroupCounterIDs
-        } else {
-            targetGroupIDs = [group.id]
+    func toggleGroupDisplayMode(group: TabGroup, panel: TabBarPanel) {
+        switch group.displayMode {
+        case .bound:
+            enterFullscreenMode(group: group, panel: panel)
+        case .fullscreen:
+            exitFullscreenMode(group: group, panel: panel)
         }
+    }
 
-        let groupsByID = Dictionary(uniqueKeysWithValues: groupManager.groups.map { ($0.id, $0) })
-        let targetGroups = targetGroupIDs.compactMap { groupsByID[$0] }
-        guard !targetGroups.isEmpty else { return }
+    func enterFullscreenMode(group: TabGroup, panel: TabBarPanel) {
+        guard group.displayMode == .bound,
+              let activeWindow = group.activeWindow,
+              let screen = screenForWindow(activeWindow) else { return }
 
-        let allGroupsMaximized = targetGroups.allSatisfy { candidate in
-            let visibleFrame = CoordinateConverter.visibleFrameInAX(at: candidate.frame.origin)
-            return ScreenCompensation.isMaximized(
-                groupFrame: candidate.frame,
-                squeezeDelta: candidate.tabBarSqueezeDelta,
+        resyncWorkItems[group.id]?.cancel()
+        resyncWorkItems.removeValue(forKey: group.id)
+
+        let visibleFrame = CoordinateConverter.visibleFrameInAX(for: screen)
+        group.fullscreenState = FullscreenGroupState(
+            screenIdentity: screenIdentity(for: screen),
+            preFullscreenFrame: group.frame
+        )
+        group.displayMode = .fullscreen
+
+        for window in group.visibleWindows {
+            guard let frame = AccessibilityHelper.getFrame(of: window.element) else { continue }
+            let pushedFrame = ScreenCompensation.pushBelowTopBarWithoutStretch(
+                frame: frame,
                 visibleFrame: visibleFrame
             )
-        }
-        let allGroupsHavePreZoom = targetGroups.allSatisfy { $0.preZoomFrame != nil }
-        let action = Self.groupedZoomAction(
-            allGroupsMaximized: allGroupsMaximized,
-            allGroupsHavePreZoom: allGroupsHavePreZoom
-        )
-
-        for targetGroup in targetGroups {
-            let targetPanel: TabBarPanel?
-            if targetGroup.id == group.id {
-                targetPanel = tabBarPanels[targetGroup.id] ?? panel
-            } else {
-                targetPanel = tabBarPanels[targetGroup.id]
-            }
-            guard let targetPanel else { continue }
-
-            let visibleFrame = CoordinateConverter.visibleFrameInAX(at: targetGroup.frame.origin)
-            switch action {
-            case .restore:
-                guard let preZoom = targetGroup.preZoomFrame else { continue }
-                targetGroup.preZoomFrame = nil
-                setGroupFrame(targetGroup, to: preZoom, panel: targetPanel)
-            case .maximize:
-                targetGroup.preZoomFrame = targetGroup.frame
-                let zoomedFrame = CGRect(
-                    x: visibleFrame.origin.x,
-                    y: visibleFrame.origin.y + ScreenCompensation.tabBarHeight,
-                    width: visibleFrame.width,
-                    height: visibleFrame.height - ScreenCompensation.tabBarHeight
-                )
-                targetGroup.tabBarSqueezeDelta = ScreenCompensation.tabBarHeight
-                setGroupFrame(targetGroup, to: zoomedFrame, panel: targetPanel)
+            if pushedFrame != frame {
+                setExpectedFrame(pushedFrame, for: [window.id])
+                AccessibilityHelper.setFrameAsync(of: window.element, to: pushedFrame)
             }
         }
+
+        refreshPanelPlacement(for: group, panel: panel, relativeTo: activeWindow.id)
+        evaluateAutoCapture()
     }
 
-    private func setGroupFrame(_ group: TabGroup, to frame: CGRect, panel: TabBarPanel) {
+    func exitFullscreenMode(group: TabGroup, panel: TabBarPanel) {
+        guard group.displayMode == .fullscreen,
+              let fullscreenState = group.fullscreenState else { return }
+
+        group.displayMode = .bound
+        group.fullscreenState = nil
+        group.frame = fullscreenState.preFullscreenFrame
+        group.tabBarSqueezeDelta = max(group.tabBarSqueezeDelta, ScreenCompensation.tabBarHeight)
+
+        let visibleWindows = group.visibleWindows
+        setExpectedFrame(group.frame, for: visibleWindows.map(\.id))
+        for window in visibleWindows {
+            AccessibilityHelper.setFrameAsync(of: window.element, to: group.frame)
+        }
+
+        if let activeWindow = group.activeWindow {
+            refreshPanelPlacement(for: group, panel: panel, relativeTo: activeWindow.id)
+        }
+        evaluateAutoCapture()
+    }
+
+    private func setBoundGroupFrame(_ group: TabGroup, to frame: CGRect, panel: TabBarPanel) {
+        guard group.displayMode == .bound else { return }
         group.frame = frame
         let allIDs = group.visibleWindows.map(\.id)
         setExpectedFrame(frame, for: allIDs)
         for window in group.visibleWindows {
             AccessibilityHelper.setFrameAsync(of: window.element, to: frame)
         }
-        panel.positionAbove(windowFrame: frame, isMaximized: isGroupMaximized(group).0)
+        panel.positionBound(above: frame, isVisuallyMaximized: isGroupMaximized(group).0)
         if let activeWindow = group.activeWindow {
             panel.orderAbove(windowID: activeWindow.id)
         }
@@ -2566,8 +2637,20 @@ extension AppDelegate {
                 shouldPinOnInsert: shouldPinOnInsert,
                 shouldLockOnInsert: shouldLockOnInsert
             )
-            setExpectedFrame(targetGroup.frame, for: [window.id])
-            AccessibilityHelper.setFrameAsync(of: window.element, to: targetGroup.frame)
+            if targetGroup.displayMode == .bound {
+                setExpectedFrame(targetGroup.frame, for: [window.id])
+                AccessibilityHelper.setFrameAsync(of: window.element, to: targetGroup.frame)
+            } else if let frame = AccessibilityHelper.getFrame(of: window.element),
+                      let screen = screenForActiveWindow(in: targetGroup) {
+                let pushedFrame = ScreenCompensation.pushBelowTopBarWithoutStretch(
+                    frame: frame,
+                    visibleFrame: CoordinateConverter.visibleFrameInAX(for: screen)
+                )
+                if pushedFrame != frame {
+                    setExpectedFrame(pushedFrame, for: [window.id])
+                    AccessibilityHelper.setFrameAsync(of: window.element, to: pushedFrame)
+                }
+            }
             _ = groupManager.addWindow(
                 windowToInsert,
                 to: targetGroup,

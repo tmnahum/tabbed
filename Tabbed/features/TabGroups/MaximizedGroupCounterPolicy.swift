@@ -7,12 +7,23 @@ enum MaximizedGroupCounterPolicy {
         let spaceID: UInt64?
         let isMaximized: Bool
         let frame: CGRect
+        let displayMode: TabGroupDisplayMode
+        let screenFrame: CGRect?
 
-        init(groupID: UUID, spaceID: UInt64?, isMaximized: Bool, frame: CGRect = .zero) {
+        init(
+            groupID: UUID,
+            spaceID: UInt64?,
+            isMaximized: Bool,
+            frame: CGRect = .zero,
+            displayMode: TabGroupDisplayMode = .bound,
+            screenFrame: CGRect? = nil
+        ) {
             self.groupID = groupID
             self.spaceID = spaceID
             self.isMaximized = isMaximized
             self.frame = frame
+            self.displayMode = displayMode
+            self.screenFrame = screenFrame
         }
     }
 
@@ -82,12 +93,12 @@ enum MaximizedGroupCounterPolicy {
                 let aligned: Bool
                 if hasMaximized {
                     aligned = maximizedCandidates.contains { maximized in
-                        isRoughlyAligned(candidate.frame, maximized.frame)
+                        isRoughlyAligned(candidate, maximized)
                     }
                 } else {
                     aligned = candidates.contains { other in
                         other.groupID != candidate.groupID &&
-                        isRoughlyAligned(candidate.frame, other.frame)
+                        isRoughlyAligned(candidate, other)
                     }
                 }
                 return aligned ? candidate.groupID : nil
@@ -95,17 +106,20 @@ enum MaximizedGroupCounterPolicy {
         }
     }
 
-    private static func isRoughlyAligned(_ lhs: CGRect, _ rhs: CGRect) -> Bool {
+    private static func isRoughlyAligned(_ lhs: Candidate, _ rhs: Candidate) -> Bool {
         let lhsTopLeft = tabBarTopLeft(for: lhs)
         let rhsTopLeft = tabBarTopLeft(for: rhs)
         return abs(lhsTopLeft.x - rhsTopLeft.x) <= tabBarTopLeftTolerance &&
                abs(lhsTopLeft.y - rhsTopLeft.y) <= tabBarTopLeftTolerance
     }
 
-    private static func tabBarTopLeft(for groupFrame: CGRect) -> CGPoint {
-        CGPoint(
-            x: groupFrame.origin.x,
-            y: groupFrame.origin.y - ScreenCompensation.tabBarHeight
+    private static func tabBarTopLeft(for candidate: Candidate) -> CGPoint {
+        if candidate.displayMode == .fullscreen, let screenFrame = candidate.screenFrame {
+            return CGPoint(x: screenFrame.origin.x, y: screenFrame.origin.y)
+        }
+        return CGPoint(
+            x: candidate.frame.origin.x,
+            y: candidate.frame.origin.y - ScreenCompensation.tabBarHeight
         )
     }
 

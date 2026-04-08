@@ -59,6 +59,24 @@ extension AppDelegate {
 // MARK: - Window Event Handlers
 
 extension AppDelegate {
+    func pushWindowBelowFullscreenBarIfNeeded(
+        _ window: WindowInfo,
+        in group: TabGroup,
+        using frame: CGRect? = nil
+    ) {
+        guard group.displayMode == .fullscreen,
+              let screen = screenForActiveWindow(in: group) ?? screenForWindow(window) else { return }
+        let currentFrame = frame ?? AccessibilityHelper.getFrame(of: window.element)
+        guard let currentFrame else { return }
+        let visibleFrame = CoordinateConverter.visibleFrameInAX(for: screen)
+        let pushedFrame = ScreenCompensation.pushBelowTopBarWithoutStretch(
+            frame: currentFrame,
+            visibleFrame: visibleFrame
+        )
+        guard pushedFrame != currentFrame else { return }
+        setExpectedFrame(pushedFrame, for: [window.id])
+        AccessibilityHelper.setFrameAsync(of: window.element, to: pushedFrame)
+    }
 
     func nextFocusDiagnosticSequence() -> UInt64 {
         focusDiagnosticSequence &+= 1
@@ -125,6 +143,21 @@ extension AppDelegate {
         if barDraggingGroupID == group.id || barDraggingGroupIDs.contains(group.id) { return }
         if shouldSuppress(windowID: windowID, currentFrame: frame) { return }
 
+        if group.displayMode == .fullscreen {
+            if let activeWindow = group.activeWindow,
+               activeWindow.id == windowID,
+               let screen = screenForWindow(activeWindow) {
+                group.fullscreenState?.screenIdentity = screenIdentity(for: screen)
+                refreshPanelPlacement(for: group, panel: panel, relativeTo: windowID, orderFront: false)
+                evaluateAutoCapture()
+            }
+            pushWindowBelowFullscreenBarIfNeeded(windowInfo, in: group, using: frame)
+            if containingGroups.count > 1 {
+                promoteWindowOwnership(windowID: windowID, group: group)
+            }
+            return
+        }
+
         let existingSqueeze = ScreenCompensation.existingSqueezeForReclamp(
             previousFrame: group.frame,
             incomingFrame: frame,
@@ -147,7 +180,7 @@ extension AppDelegate {
             AccessibilityHelper.setFrameAsync(of: window.element, to: adjustedFrame)
         }
 
-        panel.positionAbove(windowFrame: adjustedFrame, isMaximized: isGroupMaximized(group).0)
+        panel.positionBound(above: adjustedFrame, isVisuallyMaximized: isGroupMaximized(group).0)
         panel.orderAbove(windowID: windowID)
         if containingGroups.count > 1 {
             promoteWindowOwnership(windowID: windowID, group: group)
@@ -216,6 +249,21 @@ extension AppDelegate {
             return
         }
 
+        if group.displayMode == .fullscreen {
+            if let activeWindow = group.activeWindow,
+               activeWindow.id == windowID {
+                refreshPanelPlacement(for: group, panel: panel, relativeTo: windowID, orderFront: false)
+            }
+            pushWindowBelowFullscreenBarIfNeeded(windowInfo, in: group, using: frame)
+            if containingGroups.count > 1 {
+                promoteWindowOwnership(windowID: windowID, group: group)
+            }
+            evaluateAutoCapture()
+            resyncWorkItems[group.id]?.cancel()
+            resyncWorkItems.removeValue(forKey: group.id)
+            return
+        }
+
         let existingSqueeze = ScreenCompensation.existingSqueezeForReclamp(
             previousFrame: group.frame,
             incomingFrame: frame,
@@ -239,7 +287,7 @@ extension AppDelegate {
             AccessibilityHelper.setFrameAsync(of: window.element, to: adjustedFrame)
         }
 
-        panel.positionAbove(windowFrame: adjustedFrame, isMaximized: isGroupMaximized(group).0)
+        panel.positionBound(above: adjustedFrame, isVisuallyMaximized: isGroupMaximized(group).0)
         panel.orderAbove(windowID: windowID)
         if containingGroups.count > 1 {
             promoteWindowOwnership(windowID: windowID, group: group)
@@ -283,7 +331,7 @@ extension AppDelegate {
             for window in others {
                 AccessibilityHelper.setFrameAsync(of: window.element, to: clamped)
             }
-            panel.positionAbove(windowFrame: clamped, isMaximized: self.isGroupMaximized(group).0)
+            panel.positionBound(above: clamped, isVisuallyMaximized: self.isGroupMaximized(group).0)
             panel.orderAbove(windowID: activeWindow.id)
             self.evaluateAutoCapture()
         }
@@ -319,6 +367,11 @@ extension AppDelegate {
             if !group.isCycling {
                 group.recordFocus(windowID: windowID)
             }
+            if group.displayMode == .fullscreen,
+               let window = group.windows.first(where: { $0.id == windowID }),
+               let screen = screenForWindow(window) {
+                group.fullscreenState?.screenIdentity = screenIdentity(for: screen)
+            }
             evaluateAutoCapture()
         }
 
@@ -331,6 +384,9 @@ extension AppDelegate {
         // to be ejected by the space-change handler and will get its own group.
         if group.spaceID == 0 || SpaceUtils.spaceID(for: windowID) == group.spaceID {
             movePanelToWindowSpace(panel, windowID: windowID)
+        }
+        if group.displayMode == .fullscreen {
+            refreshPanelPlacement(for: group, panel: panel, relativeTo: windowID, orderFront: false)
         }
         Logger.log("[FOCUSDBG] event=\(eventID) type=windowFocused panelOrdering=apply window=\(windowID)")
         orderPanelAboveFromFocusEvent(panel, windowID: windowID, source: "windowFocused#\(eventID)")
@@ -474,6 +530,11 @@ extension AppDelegate {
             if !group.isCycling {
                 group.recordFocus(windowID: windowID)
             }
+            if group.displayMode == .fullscreen,
+               let window = group.windows.first(where: { $0.id == windowID }),
+               let screen = screenForWindow(window) {
+                group.fullscreenState?.screenIdentity = screenIdentity(for: screen)
+            }
             evaluateAutoCapture()
         }
 
@@ -484,6 +545,9 @@ extension AppDelegate {
 
         if group.spaceID == 0 || SpaceUtils.spaceID(for: windowID) == group.spaceID {
             movePanelToWindowSpace(panel, windowID: windowID)
+        }
+        if group.displayMode == .fullscreen {
+            refreshPanelPlacement(for: group, panel: panel, relativeTo: windowID, orderFront: false)
         }
         Logger.log("[FOCUSDBG] event=\(eventID) type=appActivated panelOrdering=apply window=\(windowID)")
         orderPanelAboveFromFocusEvent(panel, windowID: windowID, source: "appActivated#\(eventID)")
@@ -604,8 +668,15 @@ extension AppDelegate {
         promoteWindowOwnership(windowID: windowID, group: group)
 
         // Ensure tab bar is visible (it may have been hidden if all were fullscreened)
+        if group.displayMode == .fullscreen {
+            refreshPanelPlacement(for: group, panel: panel, relativeTo: windowID)
+            pushWindowBelowFullscreenBarIfNeeded(group.windows.first(where: { $0.id == windowID })!, in: group)
+            bringTabToFront(group.windows.first(where: { $0.id == windowID })!, in: group)
+            return
+        }
+
         let maximized = isGroupMaximized(group).0
-        panel.positionAbove(windowFrame: group.frame, isMaximized: maximized)
+        panel.positionBound(above: group.frame, isVisuallyMaximized: maximized)
         panel.show(above: group.frame, windowID: windowID, isMaximized: maximized)
 
         // Delay frame restoration — macOS fullscreen exit animation takes ~0.7s.

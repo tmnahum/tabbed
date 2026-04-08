@@ -178,12 +178,14 @@ extension AppDelegate {
             recordGlobalActivation(.groupWindow(groupID: group.id, windowID: targetWindow.id))
             promoteWindowOwnership(windowID: targetWindow.id, group: group)
             group.recordFocus(windowID: targetWindow.id)
-            if !targetWindow.isFullscreened {
+            if group.displayMode == .bound, !targetWindow.isFullscreened {
                 setExpectedFrame(group.frame, for: [targetWindow.id])
                 AccessibilityHelper.setFrameAsync(of: targetWindow.element, to: group.frame)
             }
             if !targetWindow.isFullscreened, let panel = tabBarPanels[group.id] {
-                focusWindow(targetWindow) { panel.orderAbove(windowID: targetWindow.id) }
+                focusWindow(targetWindow) { [weak self] in
+                    self?.refreshPanelPlacement(for: group, panel: panel, relativeTo: targetWindow.id, orderFront: false)
+                }
             } else {
                 focusWindow(targetWindow)
             }
@@ -210,12 +212,14 @@ extension AppDelegate {
             recordGlobalActivation(.groupWindow(groupID: group.id, windowID: targetWindow.id))
             promoteWindowOwnership(windowID: targetWindow.id, group: group)
             group.recordFocus(windowID: targetWindow.id)
-            if !targetWindow.isFullscreened {
+            if group.displayMode == .bound, !targetWindow.isFullscreened {
                 setExpectedFrame(group.frame, for: [targetWindow.id])
                 AccessibilityHelper.setFrameAsync(of: targetWindow.element, to: group.frame)
             }
             if !targetWindow.isFullscreened, let panel = tabBarPanels[group.id] {
-                focusWindow(targetWindow) { panel.orderAbove(windowID: targetWindow.id) }
+                focusWindow(targetWindow) { [weak self] in
+                    self?.refreshPanelPlacement(for: group, panel: panel, relativeTo: targetWindow.id, orderFront: false)
+                }
             } else {
                 focusWindow(targetWindow)
             }
