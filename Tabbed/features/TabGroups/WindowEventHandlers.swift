@@ -406,6 +406,8 @@ extension AppDelegate {
                 .compactMap({ group in group.windows.first(where: { $0.id == windowID }) })
                 .first else { return }
 
+        scheduleQuitOwningAppIfNeeded(afterClosing: representativeWindow)
+
         Logger.log("[DEBUG] handleWindowDestroyed: windowID=\(windowID), stillExists=\(AccessibilityHelper.windowExists(id: windowID)), groups=\(containingGroups.count)")
 
         windowObserver.handleDestroyedWindow(

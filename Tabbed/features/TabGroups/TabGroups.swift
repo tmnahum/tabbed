@@ -1451,22 +1451,8 @@ extension AppDelegate {
 
         expectedFrames.removeValue(forKey: window.id)
 
-        let isSharedWindow = groupManager.membershipCount(for: window.id) > 1
         AccessibilityHelper.closeWindowAsync(window.element)
-        if isSharedWindow {
-            removeWindowFromAllGroups(windowID: window.id)
-        } else {
-            _ = groupManager.releaseWindow(withID: window.id, from: group)
-            removeSuperpinMirrors(windowIDs: [window.id], from: group.id)
-            stopObservingWindowIfUnused(window)
-        }
-
-        if !groupManager.groups.contains(where: { $0.id == group.id }) {
-            handleGroupDissolution(group: group, panel: panel)
-        } else if let newActive = group.activeWindow {
-            bringTabToFront(newActive, in: group)
-        }
-        dissolveFunctionallyEmptySuperpinGroups()
+        scheduleQuitOwningAppIfNeeded(afterClosing: window)
         evaluateAutoCapture()
     }
 
@@ -2810,7 +2796,7 @@ extension AppDelegate {
         for window in windowsToClose {
             expectedFrames.removeValue(forKey: window.id)
             AccessibilityHelper.closeWindowAsync(window.element)
-            removeWindowFromAllGroups(windowID: window.id)
+            scheduleQuitOwningAppIfNeeded(afterClosing: window)
         }
 
         dissolveFunctionallyEmptySuperpinGroups()

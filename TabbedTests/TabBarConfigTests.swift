@@ -26,6 +26,7 @@ final class TabBarConfigTests: XCTestCase {
         XCTAssertTrue(config.superpinnedTabsBeforeHandle)
         XCTAssertEqual(config.closeButtonMode, .xmarkOnAllTabs)
         XCTAssertTrue(config.showCloseConfirmation)
+        XCTAssertTrue(config.quitAppWhenLastWindowClosed)
         XCTAssertEqual(config.groupCounterMode, .maximizedOnly)
         XCTAssertTrue(config.showMaximizedGroupCounters)
         XCTAssertFalse(config.multiGroupCounterStartsAtZero)
@@ -64,6 +65,7 @@ final class TabBarConfigTests: XCTestCase {
             showTooltip: false,
             closeButtonMode: .minusOnCurrentTab,
             showCloseConfirmation: false,
+            quitAppWhenLastWindowClosed: false,
             groupCounterMode: .disabled,
             multiGroupCounterStartsAtZero: true,
             fullscreenModeKeepsResizedWindows: true
@@ -76,6 +78,7 @@ final class TabBarConfigTests: XCTestCase {
         XCTAssertFalse(decoded.showTooltip)
         XCTAssertEqual(decoded.closeButtonMode, .minusOnCurrentTab)
         XCTAssertFalse(decoded.showCloseConfirmation)
+        XCTAssertFalse(decoded.quitAppWhenLastWindowClosed)
         XCTAssertEqual(decoded.groupCounterMode, .disabled)
         XCTAssertFalse(decoded.showMaximizedGroupCounters)
         XCTAssertTrue(decoded.multiGroupCounterStartsAtZero)
@@ -92,6 +95,7 @@ final class TabBarConfigTests: XCTestCase {
         XCTAssertTrue(decoded.showTooltip)
         XCTAssertEqual(decoded.closeButtonMode, .xmarkOnAllTabs)
         XCTAssertTrue(decoded.showCloseConfirmation)
+        XCTAssertTrue(decoded.quitAppWhenLastWindowClosed)
         XCTAssertEqual(decoded.groupCounterMode, .maximizedOnly)
         XCTAssertTrue(decoded.showMaximizedGroupCounters)
         XCTAssertFalse(decoded.multiGroupCounterStartsAtZero)
@@ -110,13 +114,15 @@ final class TabBarConfigTests: XCTestCase {
         let config = TabBarConfig(
             style: .compact,
             closeButtonMode: .minusOnAllTabs,
-            showCloseConfirmation: false
+            showCloseConfirmation: false,
+            quitAppWhenLastWindowClosed: false
         )
         config.save()
 
         let loaded = TabBarConfig.load()
         XCTAssertEqual(loaded.closeButtonMode, .minusOnAllTabs)
         XCTAssertFalse(loaded.showCloseConfirmation)
+        XCTAssertFalse(loaded.quitAppWhenLastWindowClosed)
     }
 
     func testSaveAndLoadSuperpinnedBeforeHandleToggle() {

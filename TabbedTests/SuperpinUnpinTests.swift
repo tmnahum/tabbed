@@ -237,6 +237,11 @@ final class SuperpinUnpinTests: XCTestCase {
         app.tabBarPanels[source.id] = sourcePanel
         app.closeTabs(withIDs: [sourceWindow.id], from: source, panel: sourcePanel)
 
+        XCTAssertTrue(app.groupManager.groups.contains(where: { $0.id == source.id }))
+        XCTAssertTrue(source.contains(windowID: sourceWindow.id))
+
+        app.handleWindowDestroyed(sourceWindow.id)
+
         XCTAssertFalse(app.groupManager.groups.contains(where: { $0.id == source.id }))
         XCTAssertTrue(third.contains(windowID: thirdWindow.id))
     }

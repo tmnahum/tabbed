@@ -48,6 +48,11 @@ class TabBarConfig: ObservableObject, Codable {
             if showCloseConfirmation != oldValue { save() }
         }
     }
+    @Published var quitAppWhenLastWindowClosed: Bool {
+        didSet {
+            if quitAppWhenLastWindowClosed != oldValue { save() }
+        }
+    }
     @Published var groupCounterMode: GroupCounterMode {
         didSet {
             if groupCounterMode != oldValue { save() }
@@ -82,6 +87,7 @@ class TabBarConfig: ObservableObject, Codable {
         showTooltip: Bool = true,
         closeButtonMode: TabCloseButtonMode = .xmarkOnAllTabs,
         showCloseConfirmation: Bool = true,
+        quitAppWhenLastWindowClosed: Bool = true,
         showMaximizedGroupCounters: Bool = true,
         groupCounterMode: GroupCounterMode? = nil,
         multiGroupCounterStartsAtZero: Bool = false,
@@ -93,6 +99,7 @@ class TabBarConfig: ObservableObject, Codable {
         self.showTooltip = showTooltip
         self.closeButtonMode = closeButtonMode
         self.showCloseConfirmation = showCloseConfirmation
+        self.quitAppWhenLastWindowClosed = quitAppWhenLastWindowClosed
         self.groupCounterMode = groupCounterMode ?? (showMaximizedGroupCounters ? .maximizedOnly : .disabled)
         self.multiGroupCounterStartsAtZero = multiGroupCounterStartsAtZero
         self.fullscreenModeKeepsResizedWindows = fullscreenModeKeepsResizedWindows
@@ -107,6 +114,7 @@ class TabBarConfig: ObservableObject, Codable {
         case showTooltip
         case closeButtonMode
         case showCloseConfirmation
+        case quitAppWhenLastWindowClosed
         case groupCounterMode
         case showMaximizedGroupCounters
         case multiGroupCounterStartsAtZero
@@ -121,6 +129,7 @@ class TabBarConfig: ObservableObject, Codable {
         showTooltip = try container.decodeIfPresent(Bool.self, forKey: .showTooltip) ?? true
         closeButtonMode = try container.decodeIfPresent(TabCloseButtonMode.self, forKey: .closeButtonMode) ?? .xmarkOnAllTabs
         showCloseConfirmation = try container.decodeIfPresent(Bool.self, forKey: .showCloseConfirmation) ?? true
+        quitAppWhenLastWindowClosed = try container.decodeIfPresent(Bool.self, forKey: .quitAppWhenLastWindowClosed) ?? true
         if let decodedMode = try container.decodeIfPresent(GroupCounterMode.self, forKey: .groupCounterMode) {
             groupCounterMode = decodedMode
         } else {
@@ -139,6 +148,7 @@ class TabBarConfig: ObservableObject, Codable {
         try container.encode(showTooltip, forKey: .showTooltip)
         try container.encode(closeButtonMode, forKey: .closeButtonMode)
         try container.encode(showCloseConfirmation, forKey: .showCloseConfirmation)
+        try container.encode(quitAppWhenLastWindowClosed, forKey: .quitAppWhenLastWindowClosed)
         try container.encode(groupCounterMode, forKey: .groupCounterMode)
         try container.encode(showMaximizedGroupCounters, forKey: .showMaximizedGroupCounters)
         try container.encode(multiGroupCounterStartsAtZero, forKey: .multiGroupCounterStartsAtZero)

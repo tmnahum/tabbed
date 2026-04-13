@@ -8,7 +8,7 @@ enum SettingsTab: Int {
         switch self {
         case .general:   return 450
         case .launcher:  return 420
-        case .tabBar:    return 400
+        case .tabBar:    return 460
         case .shortcuts: return 520
         case .switcher:  return 640
         }
@@ -671,6 +671,19 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 12)
                 .padding(.bottom, 10)
+
+                Toggle(isOn: $tabBarConfig.quitAppWhenLastWindowClosed) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Quit App After Closing Its Last Window")
+                        Text("When a close action leaves an app with no standard windows, ask macOS to quit that app too.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .toggleStyle(.checkbox)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 12)
             }
 
             Spacer()

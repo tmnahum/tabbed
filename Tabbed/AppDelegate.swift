@@ -119,6 +119,44 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         isExplicitQuit ? .terminateNow : .terminateCancel
     }
 
+    static func shouldQuitOwningAppAfterClosingWindow(
+        closedWindowID: CGWindowID,
+        ownerPID: pid_t,
+        appWindows: [WindowInfo],
+        currentProcessID: pid_t = ProcessInfo.processInfo.processIdentifier
+    ) -> Bool {
+        guard ownerPID != currentProcessID else { return false }
+        return !appWindows.contains { window in
+            window.ownerPID == ownerPID &&
+            window.id != closedWindowID &&
+            !window.isSeparator
+        }
+    }
+
+    func scheduleQuitOwningAppIfNeeded(afterClosing window: WindowInfo) {
+        guard tabBarConfig.quitAppWhenLastWindowClosed,
+              !window.isSeparator else { return }
+
+        let ownerPID = window.ownerPID
+        let closedWindowID = window.id
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            guard let self,
+                  self.tabBarConfig.quitAppWhenLastWindowClosed else { return }
+
+            let appWindows = WindowDiscovery.allSpaces(includeHidden: true, includeAccessoryApps: true)
+            guard Self.shouldQuitOwningAppAfterClosingWindow(
+                closedWindowID: closedWindowID,
+                ownerPID: ownerPID,
+                appWindows: appWindows
+            ) else { return }
+
+            guard let app = NSRunningApplication(processIdentifier: ownerPID),
+                  !app.isTerminated else { return }
+            Logger.log("[LIFECYCLE] Terminating pid=\(ownerPID) after last window closed")
+            app.terminate()
+        }
+    }
+
     private func applyPreferredLauncherProvidersIfNeeded() {
         var config = addWindowLauncherConfig
         guard config.applyPreferredProviderSelectionsIfNeeded(resolver: browserProviderResolver) else { return }
