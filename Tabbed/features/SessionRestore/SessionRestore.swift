@@ -131,15 +131,56 @@ extension AppDelegate {
                 return zA < zB
             }) ?? 0
 
+            let requestedDisplayMode = snapshot.displayMode
+            let restoredFullscreenState = snapshot.fullscreenState.map {
+                FullscreenGroupState(
+                    screenIdentity: $0.screenIdentity,
+                    preFullscreenFrame: $0.preFullscreenFrame
+                )
+            }
+            let canRestoreFullscreen = requestedDisplayMode == .fullscreen &&
+                restoredFullscreenState.flatMap { resolveScreen(from: $0.screenIdentity) } != nil
+            let effectiveDisplayMode: TabGroupDisplayMode = canRestoreFullscreen ? .fullscreen : .bound
+            let effectiveFrame = effectiveDisplayMode == .fullscreen
+                ? (restoredFullscreenState?.preFullscreenFrame ?? restoredFrame)
+                : restoredFrame
+
             if let group = setupGroup(
                 with: matchedWindows,
-                frame: restoredFrame,
+                frame: effectiveFrame,
                 squeezeDelta: effectiveSqueezeDelta,
                 activeIndex: frontmostIndex,
                 name: snapshot.name,
+                displayMode: effectiveDisplayMode,
+                fullscreenState: canRestoreFullscreen ? restoredFullscreenState : nil,
                 allowSharedMembership: true
-            ), maximizedCounterOrderMetadata != nil {
-                restoreIndexToGroupID[snapshotIndex] = group.id
+            ) {
+                if effectiveDisplayMode == .fullscreen,
+                   let screen = restoredFullscreenState.flatMap({ resolveScreen(from: $0.screenIdentity) }) {
+                    if fullscreenModeKeepsResizedWindows {
+                        syncFullscreenGroupWindows(group, preferredScreen: screen)
+                    } else {
+                        let restoreVisibleFrame = CoordinateConverter.visibleFrameInAX(for: screen)
+                        for window in group.visibleWindows {
+                            guard let frame = AccessibilityHelper.getFrame(of: window.element) else { continue }
+                            let pushedFrame = ScreenCompensation.pushBelowTopBarWithoutStretch(
+                                frame: frame,
+                                visibleFrame: restoreVisibleFrame
+                            )
+                            if pushedFrame != frame {
+                                setExpectedFrame(pushedFrame, for: [window.id])
+                                AccessibilityHelper.setFrameAsync(of: window.element, to: pushedFrame)
+                            }
+                        }
+                    }
+                    if let activeWindow = group.activeWindow,
+                       let panel = tabBarPanels[group.id] {
+                        refreshPanelPlacement(for: group, panel: panel, relativeTo: activeWindow.id)
+                    }
+                }
+                if maximizedCounterOrderMetadata != nil {
+                    restoreIndexToGroupID[snapshotIndex] = group.id
+                }
             }
         }
 
@@ -173,6 +214,10 @@ extension AppDelegate {
             group.recordFocus(windowID: windowID)
             promoteWindowOwnership(windowID: windowID, group: group)
             recordGlobalActivation(.groupWindow(groupID: group.id, windowID: windowID))
+            if group.displayMode == .fullscreen,
+               let panel = tabBarPanels[group.id] {
+                refreshPanelPlacement(for: group, panel: panel, relativeTo: windowID, orderFront: false)
+            }
             Logger.log("[SessionRestore] synced active tab to focused window wid=\(windowID) in group=\(group.id)")
         }
     }

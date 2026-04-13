@@ -274,4 +274,33 @@ final class MaximizedGroupCounterPolicyTests: XCTestCase {
         XCTAssertEqual(result[maximized], [])
         XCTAssertEqual(result[overlappingButDifferentTopLeft], [])
     }
+
+    func testFullscreenGroupsOnSameScreenCountAsAligned() {
+        let first = UUID()
+        let second = UUID()
+        let screenFrame = CGRect(x: 0, y: 25, width: 1440, height: 875)
+
+        let result = MaximizedGroupCounterPolicy.counterGroupIDsByGroupID(
+            candidates: [
+                .init(
+                    groupID: first,
+                    spaceID: 1,
+                    isMaximized: true,
+                    displayMode: .fullscreen,
+                    screenFrame: screenFrame
+                ),
+                .init(
+                    groupID: second,
+                    spaceID: 1,
+                    isMaximized: true,
+                    displayMode: .fullscreen,
+                    screenFrame: screenFrame
+                )
+            ],
+            mode: .maximizedAndPositionAligned
+        )
+
+        XCTAssertEqual(result[first], [first, second])
+        XCTAssertEqual(result[second], [first, second])
+    }
 }

@@ -289,6 +289,7 @@ final class AutoCapturePolicyTests: XCTestCase {
         XCTAssertTrue(
             AutoCapturePolicy.canAutoCaptureIntoGroup(
                 requireResizableToMatchGroup: false,
+                displayMode: .bound,
                 isWindowResizable: false,
                 currentWindowSize: CGSize(width: 700, height: 500),
                 targetGroupSize: CGSize(width: 1000, height: 700),
@@ -301,6 +302,7 @@ final class AutoCapturePolicyTests: XCTestCase {
         XCTAssertTrue(
             AutoCapturePolicy.canAutoCaptureIntoGroup(
                 requireResizableToMatchGroup: true,
+                displayMode: .bound,
                 isWindowResizable: false,
                 currentWindowSize: CGSize(width: 1000.5, height: 700.5),
                 targetGroupSize: CGSize(width: 1000, height: 700),
@@ -313,6 +315,20 @@ final class AutoCapturePolicyTests: XCTestCase {
         XCTAssertFalse(
             AutoCapturePolicy.canAutoCaptureIntoGroup(
                 requireResizableToMatchGroup: true,
+                displayMode: .bound,
+                isWindowResizable: false,
+                currentWindowSize: CGSize(width: 700, height: 500),
+                targetGroupSize: CGSize(width: 1000, height: 700),
+                tolerance: 1
+            )
+        )
+    }
+
+    func testCanAutoCaptureIntoFullscreenGroupRelaxesSharedSizeRequirement() {
+        XCTAssertTrue(
+            AutoCapturePolicy.canAutoCaptureIntoGroup(
+                requireResizableToMatchGroup: true,
+                displayMode: .fullscreen,
                 isWindowResizable: false,
                 currentWindowSize: CGSize(width: 700, height: 500),
                 targetGroupSize: CGSize(width: 1000, height: 700),

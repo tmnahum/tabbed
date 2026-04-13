@@ -58,6 +58,11 @@ class TabBarConfig: ObservableObject, Codable {
             if multiGroupCounterStartsAtZero != oldValue { save() }
         }
     }
+    @Published var fullscreenModeKeepsResizedWindows: Bool {
+        didSet {
+            if fullscreenModeKeepsResizedWindows != oldValue { save() }
+        }
+    }
 
     var showMaximizedGroupCounters: Bool {
         get {
@@ -79,7 +84,8 @@ class TabBarConfig: ObservableObject, Codable {
         showCloseConfirmation: Bool = true,
         showMaximizedGroupCounters: Bool = true,
         groupCounterMode: GroupCounterMode? = nil,
-        multiGroupCounterStartsAtZero: Bool = false
+        multiGroupCounterStartsAtZero: Bool = false,
+        fullscreenModeKeepsResizedWindows: Bool = false
     ) {
         self.style = style
         self.showDragHandle = showDragHandle
@@ -89,6 +95,7 @@ class TabBarConfig: ObservableObject, Codable {
         self.showCloseConfirmation = showCloseConfirmation
         self.groupCounterMode = groupCounterMode ?? (showMaximizedGroupCounters ? .maximizedOnly : .disabled)
         self.multiGroupCounterStartsAtZero = multiGroupCounterStartsAtZero
+        self.fullscreenModeKeepsResizedWindows = fullscreenModeKeepsResizedWindows
     }
 
     // MARK: - Codable
@@ -103,6 +110,7 @@ class TabBarConfig: ObservableObject, Codable {
         case groupCounterMode
         case showMaximizedGroupCounters
         case multiGroupCounterStartsAtZero
+        case fullscreenModeKeepsResizedWindows
     }
 
     required init(from decoder: Decoder) throws {
@@ -120,6 +128,7 @@ class TabBarConfig: ObservableObject, Codable {
             groupCounterMode = showCounters ? .maximizedOnly : .disabled
         }
         multiGroupCounterStartsAtZero = try container.decodeIfPresent(Bool.self, forKey: .multiGroupCounterStartsAtZero) ?? false
+        fullscreenModeKeepsResizedWindows = try container.decodeIfPresent(Bool.self, forKey: .fullscreenModeKeepsResizedWindows) ?? false
     }
 
     func encode(to encoder: Encoder) throws {
@@ -133,6 +142,7 @@ class TabBarConfig: ObservableObject, Codable {
         try container.encode(groupCounterMode, forKey: .groupCounterMode)
         try container.encode(showMaximizedGroupCounters, forKey: .showMaximizedGroupCounters)
         try container.encode(multiGroupCounterStartsAtZero, forKey: .multiGroupCounterStartsAtZero)
+        try container.encode(fullscreenModeKeepsResizedWindows, forKey: .fullscreenModeKeepsResizedWindows)
     }
 
     // MARK: - Persistence

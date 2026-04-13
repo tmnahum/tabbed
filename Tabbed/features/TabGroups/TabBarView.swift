@@ -548,6 +548,7 @@ struct TabBarView: View {
 
     var body: some View {
         GeometryReader { geo in
+            let showDragHandle = tabBarConfig.showDragHandle && group.displayMode != .fullscreen
             let tabCount = group.windows.count
             let pinnedCount = group.pinnedCount
             let superPinnedCount = group.superPinnedCount
@@ -562,17 +563,17 @@ struct TabBarView: View {
                 counterGroupIDs: counterGroupIDs,
                 itemWidths: counterItemWidths
             )
-            let handleWidth: CGFloat = tabBarConfig.showDragHandle ? Self.dragHandleWidth : 0
+            let handleWidth: CGFloat = showDragHandle ? Self.dragHandleWidth : 0
             let groupCounterWidth = Self.groupCounterReservedWidth(
                 counterGroupIDs: counterGroupIDs,
                 currentGroupID: group.id,
                 enabled: tabBarConfig.showMaximizedGroupCounters,
-                showDragHandle: tabBarConfig.showDragHandle,
+                showDragHandle: showDragHandle,
                 startAtZero: tabBarConfig.multiGroupCounterStartsAtZero
             )
             let groupNameLayoutName = isEditingGroupName ? groupNameDraft : group.name
             let groupNameWidth = Self.groupNameReservedWidth(for: groupNameLayoutName, isEditing: isEditingGroupName)
-            let leadingPad: CGFloat = tabBarConfig.showDragHandle ? 4 : 2
+            let leadingPad: CGFloat = showDragHandle ? 4 : 2
             let trailingPad: CGFloat = 4
             let availableWidth = max(
                 0,
@@ -602,18 +603,18 @@ struct TabBarView: View {
                     if tabBarConfig.superpinnedTabsBeforeHandle {
                         superPinnedTabsContent(tabWidths: widthLayout.widths, targetIndex: targetIndex, dragTabStep: dragTabStep)
                     }
-                    if tabBarConfig.showDragHandle {
+                    if showDragHandle {
                         dragHandle
                     }
                     if !tabBarConfig.superpinnedTabsBeforeHandle {
                         superPinnedTabsContent(tabWidths: widthLayout.widths, targetIndex: targetIndex, dragTabStep: dragTabStep)
                     }
-                    groupCounterControl(
-                        groupCounterWidth: groupCounterWidth,
-                        showDragHandle: tabBarConfig.showDragHandle,
-                        counterGroupIDs: counterGroupIDs,
-                        counterItemWidths: counterItemWidths,
-                        targetIndex: counterTargetIndex
+                        groupCounterControl(
+                            groupCounterWidth: groupCounterWidth,
+                            showDragHandle: showDragHandle,
+                            counterGroupIDs: counterGroupIDs,
+                            counterItemWidths: counterItemWidths,
+                            targetIndex: counterTargetIndex
                     )
                     groupNameControl(groupNameWidth: groupNameWidth)
                     ForEach(Array(group.windows.enumerated().dropFirst(superPinnedCount)), id: \.element.id) { index, window in

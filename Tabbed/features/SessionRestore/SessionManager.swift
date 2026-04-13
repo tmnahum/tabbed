@@ -47,7 +47,9 @@ enum SessionManager {
                 activeIndex: group.activeIndex,
                 frame: CodableRect(group.frame),
                 tabBarSqueezeDelta: group.tabBarSqueezeDelta,
-                name: group.displayName
+                name: group.displayName,
+                displayMode: group.displayMode,
+                fullscreenState: group.fullscreenState
             )
         }
 

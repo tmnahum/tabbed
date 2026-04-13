@@ -3,6 +3,7 @@ import CoreGraphics
 enum ScreenCompensation {
 
     static let tabBarHeight: CGFloat = 28
+    private static let minimumWindowHeight: CGFloat = tabBarHeight
 
     struct ClampResult {
         let frame: CGRect
@@ -88,6 +89,34 @@ enum ScreenCompensation {
             y: frame.origin.y - delta,
             width: frame.width,
             height: frame.height + delta
+        )
+    }
+
+    static func fullscreenWindowFrame(in visibleFrame: CGRect) -> CGRect {
+        CGRect(
+            x: visibleFrame.minX,
+            y: visibleFrame.minY + tabBarHeight,
+            width: visibleFrame.width,
+            height: max(0, visibleFrame.height - tabBarHeight)
+        )
+    }
+
+    static func pushBelowTopBarWithoutStretch(
+        frame: CGRect,
+        visibleFrame: CGRect
+    ) -> CGRect {
+        let reservedMinY = visibleFrame.minY
+        let reservedMaxY = visibleFrame.minY + tabBarHeight
+        guard frame.minY < reservedMaxY else { return frame }
+
+        let bottom = frame.maxY
+        let targetY = reservedMaxY
+        let targetHeight = max(minimumWindowHeight, bottom - targetY)
+        return CGRect(
+            x: frame.origin.x,
+            y: max(targetY, reservedMinY),
+            width: frame.width,
+            height: max(0, targetHeight)
         )
     }
 }

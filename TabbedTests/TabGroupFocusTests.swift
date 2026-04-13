@@ -138,6 +138,26 @@ final class TabGroupFocusTests: XCTestCase {
         XCTAssertEqual(group.focusHistory, [1, 2])
     }
 
+    func testFullscreenModeTabSwitchDoesNotMutateRestoreFrame() {
+        let w1 = makeWindow(id: 1)
+        let w2 = makeWindow(id: 2)
+        let originalFrame = CGRect(x: 10, y: 20, width: 800, height: 600)
+        let group = TabGroup(windows: [w1, w2], frame: originalFrame)
+        group.displayMode = .fullscreen
+        group.fullscreenState = FullscreenGroupState(
+            screenIdentity: ScreenIdentity(frame: CodableRect(CGRect(x: 0, y: 0, width: 1440, height: 900))),
+            preFullscreenFrame: originalFrame
+        )
+
+        group.switchTo(index: 1)
+        group.recordFocus(windowID: 2)
+
+        XCTAssertEqual(group.frame, originalFrame)
+        XCTAssertEqual(group.fullscreenState?.preFullscreenFrame, originalFrame)
+        XCTAssertEqual(group.activeWindow?.id, 2)
+        XCTAssertEqual(group.focusHistory.first, 2)
+    }
+
     // MARK: - MRU Cycling
 
     func testNextInMRUCycleReturnsNilForSingleWindow() {

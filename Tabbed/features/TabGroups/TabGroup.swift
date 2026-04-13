@@ -1,11 +1,26 @@
 import Foundation
 import CoreGraphics
 
+enum TabGroupDisplayMode: String, Codable {
+    case bound
+    case fullscreen
+}
+
+struct ScreenIdentity: Codable, Equatable {
+    var frame: CodableRect
+}
+
+struct FullscreenGroupState: Codable, Equatable {
+    var screenIdentity: ScreenIdentity
+    var preFullscreenFrame: CGRect
+}
+
 class TabGroup: Identifiable, ObservableObject {
     let id = UUID()
     @Published var windows: [WindowInfo]
     @Published var activeIndex: Int
     @Published var frame: CGRect
+    @Published var displayMode: TabGroupDisplayMode
     @Published var name: String?
     /// Ordered group IDs for the maximized-group counter strip shown in the tab bar.
     @Published var maximizedGroupCounterIDs: [UUID] = []
@@ -13,8 +28,8 @@ class TabGroup: Identifiable, ObservableObject {
     @Published var dropIndicatorIndex: Int? = nil
     /// How many pixels the window was squeezed down when the group was created (0 if no squeeze was needed).
     var tabBarSqueezeDelta: CGFloat = 0
-    /// Stored frame before zoom, used to restore on second double-click.
-    var preZoomFrame: CGRect?
+    /// Screen-pinned fullscreen-mode restore state.
+    var fullscreenState: FullscreenGroupState?
     /// The macOS Space this group belongs to. 0 means unknown (e.g. restored groups that couldn't resolve their space).
     var spaceID: UInt64
 
@@ -72,10 +87,19 @@ class TabGroup: Identifiable, ObservableObject {
         windows.filter { $0.isCompactPinned && !$0.isSeparator }.count
     }
 
-    init(windows: [WindowInfo], frame: CGRect, spaceID: UInt64 = 0, name: String? = nil) {
+    init(
+        windows: [WindowInfo],
+        frame: CGRect,
+        spaceID: UInt64 = 0,
+        name: String? = nil,
+        displayMode: TabGroupDisplayMode = .bound,
+        fullscreenState: FullscreenGroupState? = nil
+    ) {
         self.windows = windows
         self.activeIndex = 0
         self.frame = frame
+        self.displayMode = displayMode
+        self.fullscreenState = fullscreenState
         self.spaceID = spaceID
         self.name = name?.trimmingCharacters(in: .whitespacesAndNewlines)
         // Seed focus history with initial real-window order

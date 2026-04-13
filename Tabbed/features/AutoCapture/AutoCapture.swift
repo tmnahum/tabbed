@@ -119,12 +119,16 @@ enum AutoCapturePolicy {
 
     static func canAutoCaptureIntoGroup(
         requireResizableToMatchGroup: Bool,
+        displayMode: TabGroupDisplayMode,
         isWindowResizable: Bool?,
         currentWindowSize: CGSize?,
         targetGroupSize: CGSize,
         tolerance: CGFloat
     ) -> Bool {
         guard requireResizableToMatchGroup else { return true }
+        if displayMode == .fullscreen {
+            return true
+        }
 
         let matchesTargetSize: Bool
         if let currentWindowSize {
@@ -180,21 +184,62 @@ extension AppDelegate {
         return onScreenIDs.contains(windowID)
     }
 
+    func screenIdentity(for screen: NSScreen) -> ScreenIdentity {
+        ScreenIdentity(frame: CodableRect(CoordinateConverter.visibleFrameInAX(for: screen)))
+    }
+
+    func resolveScreen(from identity: ScreenIdentity) -> NSScreen? {
+        NSScreen.screens.first { screen in
+            CoordinateConverter.visibleFrameInAX(for: screen).equalTo(identity.frame.cgRect)
+        }
+    }
+
+    func screenForWindow(_ window: WindowInfo) -> NSScreen? {
+        guard let frame = AccessibilityHelper.getFrame(of: window.element) else { return nil }
+        return CoordinateConverter.screen(containingAXPoint: frame.origin)
+    }
+
+    func screenForActiveWindow(in group: TabGroup) -> NSScreen? {
+        if let activeWindow = group.activeWindow,
+           let screen = screenForWindow(activeWindow) {
+            return screen
+        }
+        if let identity = group.fullscreenState?.screenIdentity {
+            return resolveScreen(from: identity)
+        }
+        return CoordinateConverter.screen(containingAXPoint: group.frame.origin)
+    }
+
+    func groupPresentationState(for group: TabGroup) -> GroupPresentationState {
+        switch group.displayMode {
+        case .bound:
+            let screen = CoordinateConverter.screen(containingAXPoint: group.frame.origin)
+            return .bound(frame: group.frame, squeezeDelta: group.tabBarSqueezeDelta, screen: screen)
+        case .fullscreen:
+            return .fullscreen(screen: screenForActiveWindow(in: group))
+        }
+    }
+
     func isGroupMaximized(_ group: TabGroup) -> (Bool, NSScreen?) {
-        guard let screen = CoordinateConverter.screen(containingAXPoint: group.frame.origin) else {
-            Logger.log("[AutoCapture] isGroupMaximized: no screen for origin \(group.frame.origin)")
-            return (false, nil)
+        switch groupPresentationState(for: group) {
+        case let .bound(frame, squeezeDelta, screen):
+            guard let screen else {
+                Logger.log("[AutoCapture] isGroupMaximized: no screen for origin \(frame.origin)")
+                return (false, nil)
+            }
+            let visibleFrame = CoordinateConverter.visibleFrameInAX(for: screen)
+            let maximized = ScreenCompensation.isMaximized(
+                groupFrame: frame,
+                squeezeDelta: squeezeDelta,
+                visibleFrame: visibleFrame
+            )
+            if !maximized {
+                Logger.log("[AutoCapture] isGroupMaximized: NO — groupFrame=\(frame) delta=\(squeezeDelta) visibleFrame=\(visibleFrame)")
+            }
+            return (maximized, screen)
+        case let .fullscreen(screen):
+            return (true, screen)
         }
-        let visibleFrame = CoordinateConverter.visibleFrameInAX(for: screen)
-        let maximized = ScreenCompensation.isMaximized(
-            groupFrame: group.frame,
-            squeezeDelta: group.tabBarSqueezeDelta,
-            visibleFrame: visibleFrame
-        )
-        if !maximized {
-            Logger.log("[AutoCapture] isGroupMaximized: NO — groupFrame=\(group.frame) delta=\(group.tabBarSqueezeDelta) visibleFrame=\(visibleFrame)")
-        }
-        return (maximized, screen)
     }
 
     func evaluateAutoCapture() {
@@ -339,7 +384,12 @@ extension AppDelegate {
     }
 
     private func screenForGroup(_ group: TabGroup) -> NSScreen? {
-        CoordinateConverter.screen(containingAXPoint: group.frame.origin)
+        switch groupPresentationState(for: group) {
+        case let .bound(_, _, screen):
+            return screen
+        case let .fullscreen(screen):
+            return screen
+        }
     }
 
     private func isGroupOnlyOnCurrentSpace(_ group: TabGroup) -> Bool {
@@ -756,6 +806,7 @@ extension AppDelegate {
             let isWindowResizable = AccessibilityHelper.isResizable(element)
             let canAutoCaptureIntoGroup = AutoCapturePolicy.canAutoCaptureIntoGroup(
                 requireResizableToMatchGroup: sessionConfig.autoCaptureRequireResizableToMatchGroup,
+                displayMode: group.displayMode,
                 isWindowResizable: isWindowResizable,
                 currentWindowSize: size,
                 targetGroupSize: group.frame.size,
@@ -777,7 +828,6 @@ extension AppDelegate {
             }
 
             Logger.log("[AutoCapture] Capturing window \(window.id) (\(window.appName): \(window.title)) [\(source)]")
-            setExpectedFrame(group.frame, for: [window.id])
             addWindow(window, to: group, afterActive: true)
             cancelCaptureRetry(for: pid, windowID: window.id)
             // Note: addWindow already calls evaluateAutoCapture()

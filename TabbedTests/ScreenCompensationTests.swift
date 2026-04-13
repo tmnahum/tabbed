@@ -170,4 +170,49 @@ final class ScreenCompensationTests: XCTestCase {
 
         XCTAssertEqual(expanded, frame)
     }
+
+    // MARK: - pushBelowTopBarWithoutStretch
+
+    func testPushBelowTopBarWithoutStretchMovesIntrudingWindowDown() {
+        let visibleFrame = CGRect(x: 0, y: 25, width: 1440, height: 875)
+        let frame = CGRect(x: 100, y: 30, width: 800, height: 600)
+
+        let pushed = ScreenCompensation.pushBelowTopBarWithoutStretch(frame: frame, visibleFrame: visibleFrame)
+
+        XCTAssertEqual(pushed.minY, 53)
+        XCTAssertEqual(pushed.width, 800)
+        XCTAssertEqual(pushed.maxY, frame.maxY)
+    }
+
+    func testPushBelowTopBarWithoutStretchDoesNothingWhenAlreadyBelowBar() {
+        let visibleFrame = CGRect(x: 0, y: 25, width: 1440, height: 875)
+        let frame = CGRect(x: 100, y: 80, width: 800, height: 600)
+
+        XCTAssertEqual(
+            ScreenCompensation.pushBelowTopBarWithoutStretch(frame: frame, visibleFrame: visibleFrame),
+            frame
+        )
+    }
+
+    func testPushBelowTopBarWithoutStretchHandlesTinyWindowSafely() {
+        let visibleFrame = CGRect(x: 0, y: 25, width: 1440, height: 875)
+        let frame = CGRect(x: 100, y: 25, width: 200, height: 10)
+
+        let pushed = ScreenCompensation.pushBelowTopBarWithoutStretch(frame: frame, visibleFrame: visibleFrame)
+
+        XCTAssertEqual(pushed.width, 200)
+        XCTAssertGreaterThanOrEqual(pushed.height, 0)
+        XCTAssertEqual(pushed.minY, 53)
+    }
+
+    func testFullscreenWindowFrameFillsVisibleScreenBelowBar() {
+        let visibleFrame = CGRect(x: 10, y: 25, width: 1440, height: 875)
+
+        let fullscreenFrame = ScreenCompensation.fullscreenWindowFrame(in: visibleFrame)
+
+        XCTAssertEqual(fullscreenFrame.minX, visibleFrame.minX)
+        XCTAssertEqual(fullscreenFrame.minY, visibleFrame.minY + ScreenCompensation.tabBarHeight)
+        XCTAssertEqual(fullscreenFrame.width, visibleFrame.width)
+        XCTAssertEqual(fullscreenFrame.height, visibleFrame.height - ScreenCompensation.tabBarHeight)
+    }
 }
