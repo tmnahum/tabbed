@@ -564,6 +564,21 @@ struct SettingsView: View {
 
             Divider()
 
+            Toggle(isOn: $tabBarConfig.fullscreenModeKeepsResizedWindows) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Fullscreen Mode Keeps Windows Resized")
+                    Text("Non-default. In fullscreen group mode, keep member windows snapped to the screen-sized group frame instead of letting them keep independent sizes.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .toggleStyle(.checkbox)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+
+            Divider()
+
             Toggle(isOn: $tabBarConfig.superpinnedTabsBeforeHandle) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Superpinned Before Handle")

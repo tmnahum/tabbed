@@ -65,6 +65,7 @@ extension AppDelegate {
         using frame: CGRect? = nil
     ) {
         guard group.displayMode == .fullscreen,
+              !fullscreenModeKeepsResizedWindows,
               let screen = screenForActiveWindow(in: group) ?? screenForWindow(window) else { return }
         let currentFrame = frame ?? AccessibilityHelper.getFrame(of: window.element)
         guard let currentFrame else { return }
@@ -148,6 +149,7 @@ extension AppDelegate {
                activeWindow.id == windowID,
                let screen = screenForWindow(activeWindow) {
                 group.fullscreenState?.screenIdentity = screenIdentity(for: screen)
+                syncFullscreenGroupWindows(group, preferredScreen: screen)
                 refreshPanelPlacement(for: group, panel: panel, relativeTo: windowID, orderFront: false)
                 evaluateAutoCapture()
             }
@@ -251,7 +253,10 @@ extension AppDelegate {
 
         if group.displayMode == .fullscreen {
             if let activeWindow = group.activeWindow,
-               activeWindow.id == windowID {
+               activeWindow.id == windowID,
+               let screen = screenForWindow(activeWindow) {
+                group.fullscreenState?.screenIdentity = screenIdentity(for: screen)
+                syncFullscreenGroupWindows(group, preferredScreen: screen)
                 refreshPanelPlacement(for: group, panel: panel, relativeTo: windowID, orderFront: false)
             }
             pushWindowBelowFullscreenBarIfNeeded(windowInfo, in: group, using: frame)
@@ -371,6 +376,7 @@ extension AppDelegate {
                let window = group.windows.first(where: { $0.id == windowID }),
                let screen = screenForWindow(window) {
                 group.fullscreenState?.screenIdentity = screenIdentity(for: screen)
+                syncFullscreenGroupWindows(group, preferredScreen: screen)
             }
             evaluateAutoCapture()
         }
@@ -534,6 +540,7 @@ extension AppDelegate {
                let window = group.windows.first(where: { $0.id == windowID }),
                let screen = screenForWindow(window) {
                 group.fullscreenState?.screenIdentity = screenIdentity(for: screen)
+                syncFullscreenGroupWindows(group, preferredScreen: screen)
             }
             evaluateAutoCapture()
         }

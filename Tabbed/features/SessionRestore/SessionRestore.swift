@@ -157,16 +157,20 @@ extension AppDelegate {
             ) {
                 if effectiveDisplayMode == .fullscreen,
                    let screen = restoredFullscreenState.flatMap({ resolveScreen(from: $0.screenIdentity) }) {
-                    let restoreVisibleFrame = CoordinateConverter.visibleFrameInAX(for: screen)
-                    for window in group.visibleWindows {
-                        guard let frame = AccessibilityHelper.getFrame(of: window.element) else { continue }
-                        let pushedFrame = ScreenCompensation.pushBelowTopBarWithoutStretch(
-                            frame: frame,
-                            visibleFrame: restoreVisibleFrame
-                        )
-                        if pushedFrame != frame {
-                            setExpectedFrame(pushedFrame, for: [window.id])
-                            AccessibilityHelper.setFrameAsync(of: window.element, to: pushedFrame)
+                    if fullscreenModeKeepsResizedWindows {
+                        syncFullscreenGroupWindows(group, preferredScreen: screen)
+                    } else {
+                        let restoreVisibleFrame = CoordinateConverter.visibleFrameInAX(for: screen)
+                        for window in group.visibleWindows {
+                            guard let frame = AccessibilityHelper.getFrame(of: window.element) else { continue }
+                            let pushedFrame = ScreenCompensation.pushBelowTopBarWithoutStretch(
+                                frame: frame,
+                                visibleFrame: restoreVisibleFrame
+                            )
+                            if pushedFrame != frame {
+                                setExpectedFrame(pushedFrame, for: [window.id])
+                                AccessibilityHelper.setFrameAsync(of: window.element, to: pushedFrame)
+                            }
                         }
                     }
                     if let activeWindow = group.activeWindow,

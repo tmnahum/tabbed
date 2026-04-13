@@ -1275,6 +1275,36 @@ extension AppDelegate {
         SpaceUtils.moveWindow(panelWID, toSpace: targetSpace)
     }
 
+    var fullscreenModeKeepsResizedWindows: Bool {
+        tabBarConfig.fullscreenModeKeepsResizedWindows
+    }
+
+    func fullscreenManagedFrame(for group: TabGroup, preferredScreen: NSScreen? = nil) -> CGRect? {
+        guard group.displayMode == .fullscreen else { return nil }
+        let screen = preferredScreen
+            ?? screenForActiveWindow(in: group)
+            ?? group.fullscreenState.flatMap { resolveScreen(from: $0.screenIdentity) }
+        guard let screen else { return nil }
+        return ScreenCompensation.fullscreenWindowFrame(
+            in: CoordinateConverter.visibleFrameInAX(for: screen)
+        )
+    }
+
+    func syncFullscreenGroupWindows(
+        _ group: TabGroup,
+        preferredScreen: NSScreen? = nil
+    ) {
+        guard fullscreenModeKeepsResizedWindows,
+              let fullscreenFrame = fullscreenManagedFrame(for: group, preferredScreen: preferredScreen) else {
+            return
+        }
+        let visibleWindows = group.visibleWindows
+        setExpectedFrame(fullscreenFrame, for: visibleWindows.map(\.id))
+        for window in visibleWindows {
+            AccessibilityHelper.setFrameAsync(of: window.element, to: fullscreenFrame)
+        }
+    }
+
     func refreshPanelPlacement(
         for group: TabGroup,
         panel: TabBarPanel,
@@ -1346,6 +1376,7 @@ extension AppDelegate {
             if let screen = screenForWindow(window) {
                 group.fullscreenState?.screenIdentity = screenIdentity(for: screen)
             }
+            syncFullscreenGroupWindows(group)
             focusWindow(window)
             refreshPanelPlacement(for: group, panel: panel, relativeTo: window.id)
             evaluateAutoCapture()
@@ -1498,6 +1529,10 @@ extension AppDelegate {
         if group.displayMode == .bound {
             setExpectedFrame(group.frame, for: [window.id])
             AccessibilityHelper.setFrameAsync(of: window.element, to: group.frame)
+        } else if fullscreenModeKeepsResizedWindows,
+                  let fullscreenFrame = fullscreenManagedFrame(for: group) {
+            setExpectedFrame(fullscreenFrame, for: [window.id])
+            AccessibilityHelper.setFrameAsync(of: window.element, to: fullscreenFrame)
         } else if let frame = AccessibilityHelper.getFrame(of: window.element),
                   let screen = screenForActiveWindow(in: group) {
             let pushedFrame = ScreenCompensation.pushBelowTopBarWithoutStretch(
@@ -2418,12 +2453,7 @@ extension AppDelegate {
         )
         group.displayMode = .fullscreen
 
-        let fullscreenFrame = ScreenCompensation.fullscreenWindowFrame(in: visibleFrame)
-        let visibleWindowIDs = group.visibleWindows.map(\.id)
-        setExpectedFrame(fullscreenFrame, for: visibleWindowIDs)
-        for window in group.visibleWindows {
-            AccessibilityHelper.setFrameAsync(of: window.element, to: fullscreenFrame)
-        }
+        syncFullscreenGroupWindows(group, preferredScreen: screen)
 
         refreshPanelPlacement(for: group, panel: panel, relativeTo: activeWindow.id)
         evaluateAutoCapture()
@@ -2635,6 +2665,10 @@ extension AppDelegate {
             if targetGroup.displayMode == .bound {
                 setExpectedFrame(targetGroup.frame, for: [window.id])
                 AccessibilityHelper.setFrameAsync(of: window.element, to: targetGroup.frame)
+            } else if fullscreenModeKeepsResizedWindows,
+                      let fullscreenFrame = fullscreenManagedFrame(for: targetGroup) {
+                setExpectedFrame(fullscreenFrame, for: [window.id])
+                AccessibilityHelper.setFrameAsync(of: window.element, to: fullscreenFrame)
             } else if let frame = AccessibilityHelper.getFrame(of: window.element),
                       let screen = screenForActiveWindow(in: targetGroup) {
                 let pushedFrame = ScreenCompensation.pushBelowTopBarWithoutStretch(

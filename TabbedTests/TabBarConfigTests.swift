@@ -29,6 +29,7 @@ final class TabBarConfigTests: XCTestCase {
         XCTAssertEqual(config.groupCounterMode, .maximizedOnly)
         XCTAssertTrue(config.showMaximizedGroupCounters)
         XCTAssertFalse(config.multiGroupCounterStartsAtZero)
+        XCTAssertFalse(config.fullscreenModeKeepsResizedWindows)
     }
 
     func testSaveAndLoad() {
@@ -64,7 +65,8 @@ final class TabBarConfigTests: XCTestCase {
             closeButtonMode: .minusOnCurrentTab,
             showCloseConfirmation: false,
             groupCounterMode: .disabled,
-            multiGroupCounterStartsAtZero: true
+            multiGroupCounterStartsAtZero: true,
+            fullscreenModeKeepsResizedWindows: true
         )
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(TabBarConfig.self, from: data)
@@ -77,6 +79,7 @@ final class TabBarConfigTests: XCTestCase {
         XCTAssertEqual(decoded.groupCounterMode, .disabled)
         XCTAssertFalse(decoded.showMaximizedGroupCounters)
         XCTAssertTrue(decoded.multiGroupCounterStartsAtZero)
+        XCTAssertTrue(decoded.fullscreenModeKeepsResizedWindows)
     }
 
     func testDecodesWithMissingStyleKey() throws {
@@ -92,6 +95,7 @@ final class TabBarConfigTests: XCTestCase {
         XCTAssertEqual(decoded.groupCounterMode, .maximizedOnly)
         XCTAssertTrue(decoded.showMaximizedGroupCounters)
         XCTAssertFalse(decoded.multiGroupCounterStartsAtZero)
+        XCTAssertFalse(decoded.fullscreenModeKeepsResizedWindows)
     }
 
     func testSaveAndLoadDragHandle() {
@@ -155,5 +159,13 @@ final class TabBarConfigTests: XCTestCase {
 
         let loaded = TabBarConfig.load()
         XCTAssertTrue(loaded.multiGroupCounterStartsAtZero)
+    }
+
+    func testSaveAndLoadFullscreenModeKeepsResizedWindows() {
+        let config = TabBarConfig(style: .compact, fullscreenModeKeepsResizedWindows: true)
+        config.save()
+
+        let loaded = TabBarConfig.load()
+        XCTAssertTrue(loaded.fullscreenModeKeepsResizedWindows)
     }
 }

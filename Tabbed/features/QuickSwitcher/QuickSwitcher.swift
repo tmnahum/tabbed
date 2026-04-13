@@ -181,6 +181,11 @@ extension AppDelegate {
             if group.displayMode == .bound, !targetWindow.isFullscreened {
                 setExpectedFrame(group.frame, for: [targetWindow.id])
                 AccessibilityHelper.setFrameAsync(of: targetWindow.element, to: group.frame)
+            } else if group.displayMode == .fullscreen,
+                      fullscreenModeKeepsResizedWindows,
+                      let fullscreenFrame = fullscreenManagedFrame(for: group) {
+                setExpectedFrame(fullscreenFrame, for: [targetWindow.id])
+                AccessibilityHelper.setFrameAsync(of: targetWindow.element, to: fullscreenFrame)
             }
             if !targetWindow.isFullscreened, let panel = tabBarPanels[group.id] {
                 focusWindow(targetWindow) { [weak self] in
@@ -215,6 +220,11 @@ extension AppDelegate {
             if group.displayMode == .bound, !targetWindow.isFullscreened {
                 setExpectedFrame(group.frame, for: [targetWindow.id])
                 AccessibilityHelper.setFrameAsync(of: targetWindow.element, to: group.frame)
+            } else if group.displayMode == .fullscreen,
+                      fullscreenModeKeepsResizedWindows,
+                      let fullscreenFrame = fullscreenManagedFrame(for: group) {
+                setExpectedFrame(fullscreenFrame, for: [targetWindow.id])
+                AccessibilityHelper.setFrameAsync(of: targetWindow.element, to: fullscreenFrame)
             }
             if !targetWindow.isFullscreened, let panel = tabBarPanels[group.id] {
                 focusWindow(targetWindow) { [weak self] in
