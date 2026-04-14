@@ -59,6 +59,30 @@ extension AppDelegate {
 // MARK: - Window Event Handlers
 
 extension AppDelegate {
+    private func scheduleFullscreenBarRepushCheck(windowID: CGWindowID, groupID: UUID) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            guard let self,
+                  !self.fullscreenModeKeepsResizedWindows,
+                  let group = self.groupManager.groups.first(where: { $0.id == groupID }),
+                  group.displayMode == .fullscreen,
+                  let window = group.windows.first(where: { $0.id == windowID }),
+                  let screen = self.screenForActiveWindow(in: group) ?? self.screenForWindow(window),
+                  let actualFrame = AccessibilityHelper.getFrame(of: window.element) else { return }
+
+            let visibleFrame = CoordinateConverter.visibleFrameInAX(for: screen)
+            let pushedFrame = ScreenCompensation.pushBelowTopBarWithoutStretch(
+                frame: actualFrame,
+                visibleFrame: visibleFrame
+            )
+            guard pushedFrame != actualFrame else { return }
+
+            Logger.log("[FULLSCREEN] quick re-push wid=\(windowID) actual=\(actualFrame) -> \(pushedFrame)")
+            self.expectedFrames.removeValue(forKey: windowID)
+            self.setExpectedFrame(pushedFrame, for: [windowID])
+            AccessibilityHelper.setFrameAsync(of: window.element, to: pushedFrame)
+        }
+    }
+
     func pushWindowBelowFullscreenBarIfNeeded(
         _ window: WindowInfo,
         in group: TabGroup,
@@ -77,6 +101,7 @@ extension AppDelegate {
         guard pushedFrame != currentFrame else { return }
         setExpectedFrame(pushedFrame, for: [window.id])
         AccessibilityHelper.setFrameAsync(of: window.element, to: pushedFrame)
+        scheduleFullscreenBarRepushCheck(windowID: window.id, groupID: group.id)
     }
 
     func nextFocusDiagnosticSequence() -> UInt64 {
@@ -405,6 +430,8 @@ extension AppDelegate {
               let representativeWindow = containingGroups
                 .compactMap({ group in group.windows.first(where: { $0.id == windowID }) })
                 .first else { return }
+
+        scheduleQuitOwningAppIfNeeded(afterClosing: representativeWindow)
 
         Logger.log("[DEBUG] handleWindowDestroyed: windowID=\(windowID), stillExists=\(AccessibilityHelper.windowExists(id: windowID)), groups=\(containingGroups.count)")
 

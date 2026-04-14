@@ -205,6 +205,17 @@ final class ScreenCompensationTests: XCTestCase {
         XCTAssertEqual(pushed.minY, 53)
     }
 
+    func testPushBelowTopBarWithoutStretchKeepsBottomEdgeForZoomedShrinkFrame() {
+        let visibleFrame = CGRect(x: 0, y: 25, width: 1440, height: 875)
+        let frame = CGRect(x: 40, y: 25, width: 1200, height: 500)
+
+        let pushed = ScreenCompensation.pushBelowTopBarWithoutStretch(frame: frame, visibleFrame: visibleFrame)
+
+        XCTAssertEqual(pushed.minY, 53)
+        XCTAssertEqual(pushed.maxY, frame.maxY)
+        XCTAssertEqual(pushed.height, frame.height - ScreenCompensation.tabBarHeight)
+    }
+
     func testFullscreenWindowFrameFillsVisibleScreenBelowBar() {
         let visibleFrame = CGRect(x: 10, y: 25, width: 1440, height: 875)
 
