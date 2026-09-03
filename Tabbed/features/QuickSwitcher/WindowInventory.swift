@@ -1,8 +1,10 @@
+import Combine
+import CoreGraphics
 import Foundation
 
 /// Caches expensive all-spaces window discovery for switcher reads.
 /// All methods are expected to run on the main thread.
-final class WindowInventory {
+final class WindowInventory: ObservableObject {
     typealias DiscoverAllSpaces = () -> [WindowInfo]
     typealias Now = () -> Date
 
@@ -10,7 +12,7 @@ final class WindowInventory {
     private let discoverAllSpaces: DiscoverAllSpaces
     private let now: Now
 
-    private(set) var cachedAllSpacesWindows: [WindowInfo] = []
+    @Published private(set) var cachedAllSpacesWindows: [WindowInfo] = []
     private(set) var lastRefreshAt: Date?
     private var asyncRefreshInFlight = false
     private var refreshVersion: UInt64 = 0
@@ -53,6 +55,10 @@ final class WindowInventory {
                 self?.applyRefreshResult(windows, version: version, fromAsync: true)
             }
         }
+    }
+
+    func removeCachedWindow(withID windowID: CGWindowID) {
+        cachedAllSpacesWindows.removeAll { $0.id == windowID }
     }
 
     private var isStale: Bool {

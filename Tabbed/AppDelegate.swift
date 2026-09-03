@@ -39,6 +39,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var switcherController = SwitcherController()
     var switcherConfig = SwitcherConfig.load()
     var tabBarConfig = TabBarConfig.load()
+    let menuBarConfig = MenuBarConfig.load()
     var addWindowLauncherConfig = AddWindowLauncherConfig.load()
     let launcherEngine = LauncherEngine()
     let appCatalogService = AppCatalogService()
@@ -339,6 +340,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let menuBarView = MenuBarView(
             groupManager: groupManager,
             sessionState: sessionState,
+            windowInventory: windowInventory,
+            menuBarConfig: menuBarConfig,
             shortcutConfig: hotkeyManager?.config ?? .default,
             onNewGroup: { [weak self] in
                 self?.popover.performClose(nil)
@@ -355,6 +358,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             onFocusWindow: { [weak self] window in
                 self?.popover.performClose(nil)
                 self?.focusWindow(window)
+            },
+            onQuitWindow: { [weak self] window in
+                guard let self else { return }
+                AccessibilityHelper.closeWindowAsync(window.element)
+                self.scheduleQuitOwningAppIfNeeded(afterClosing: window)
+                self.windowInventory.removeCachedWindow(withID: window.id)
             },
             onDisbandGroup: { [weak self] group in
                 self?.disbandGroup(group)
@@ -397,6 +406,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if popover.isShown {
             popover.performClose(nil)
         } else {
+            if menuBarConfig.showUngroupedWindows {
+                _ = windowInventory.allSpacesForSwitcher()
+            }
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         }
     }
@@ -474,6 +486,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             switcherConfig: switcherConfig,
             launcherConfig: addWindowLauncherConfig,
             tabBarConfig: tabBarConfig,
+            menuBarConfig: menuBarConfig,
             onConfigChanged: { [weak self] newConfig in
                 newConfig.save()
                 self?.hotkeyManager?.updateConfig(newConfig)

@@ -102,6 +102,18 @@ final class WindowInventoryTests: XCTestCase {
         XCTAssertTrue(inventory.hasCompletedRefresh)
     }
 
+    func testRemoveCachedWindowImmediatelyUpdatesInventory() {
+        let inventory = WindowInventory(
+            staleAfter: 60,
+            discoverAllSpaces: { [self.makeWindow(id: 1), self.makeWindow(id: 2)] }
+        )
+        inventory.refreshSync()
+
+        inventory.removeCachedWindow(withID: 1)
+
+        XCTAssertEqual(inventory.cachedAllSpacesWindows.map(\.id), [2])
+    }
+
     func testForcedSyncRefreshWinsOverOlderAsyncCompletion() {
         let asyncStarted = expectation(description: "async refresh started")
         let allowAsyncCompletion = DispatchSemaphore(value: 0)

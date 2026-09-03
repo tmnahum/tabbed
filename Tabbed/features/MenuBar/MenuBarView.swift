@@ -3,12 +3,16 @@ import SwiftUI
 struct MenuBarView: View {
     @ObservedObject var groupManager: GroupManager
     @ObservedObject var sessionState: SessionState
+    @ObservedObject var windowInventory: WindowInventory
+    @ObservedObject var menuBarConfig: MenuBarConfig
+    @State private var hoveredUngroupedWindowID: CGWindowID?
 
     var shortcutConfig: ShortcutConfig
     var onNewGroup: () -> Void
     var onAllInSpace: () -> Void
     var onRestoreSession: () -> Void
     var onFocusWindow: (WindowInfo) -> Void
+    var onQuitWindow: (WindowInfo) -> Void
     var onDisbandGroup: (TabGroup) -> Void
     var onQuitGroup: (TabGroup) -> Void
     var onSettings: () -> Void
@@ -33,6 +37,10 @@ struct MenuBarView: View {
                 onAllInSpace()
             }
 
+            if menuBarConfig.showUngroupedWindows, !ungroupedWindows.isEmpty {
+                ungroupedWindowList
+            }
+
             if sessionState.hasPendingSession {
                 menuItem("Restore Previous Session", systemImage: "arrow.counterclockwise") {
                     onRestoreSession()
@@ -50,7 +58,38 @@ struct MenuBarView: View {
                 onQuit()
             }
         }
-        .padding(4)
+        .padding(.horizontal, 4)
+        .padding(.top, 7)
+        .padding(.bottom, 4)
+    }
+
+    private var ungroupedWindows: [WindowInfo] {
+        let groupedWindowIDs = Set(
+            groupManager.groups.flatMap { $0.managedWindows.map(\.id) }
+        )
+        return WindowManager.ungroupedWindows(
+            from: windowInventory.cachedAllSpacesWindows,
+            groupedWindowIDs: groupedWindowIDs
+        )
+    }
+
+    @ViewBuilder
+    private var ungroupedWindowList: some View {
+        let rows = VStack(alignment: .leading, spacing: 0) {
+            ForEach(ungroupedWindows) { window in
+                ungroupedWindowRow(window)
+            }
+        }
+
+        Divider()
+            .padding(.vertical, 4)
+
+        if ungroupedWindows.count > 8 {
+            ScrollView { rows }
+                .frame(height: 28 * 8.5)
+        } else {
+            rows
+        }
     }
 
     @ViewBuilder
@@ -146,6 +185,60 @@ struct MenuBarView: View {
         )
         .padding(.horizontal, 4)
         .padding(.vertical, 2)
+    }
+
+    private func ungroupedWindowRow(_ window: WindowInfo) -> some View {
+        HStack(spacing: 4) {
+            Button {
+                onFocusWindow(window)
+            } label: {
+                HStack(spacing: 8) {
+                    if let icon = window.icon {
+                        Image(nsImage: icon)
+                            .resizable()
+                            .frame(width: 18, height: 18)
+                    } else {
+                        Image(systemName: "macwindow")
+                            .frame(width: 18, height: 18)
+                    }
+
+                    Text(window.displayTitle)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Focus \(window.displayTitle)")
+
+            Button {
+                onQuitWindow(window)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 18, height: 18)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Close \(window.displayTitle)")
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(
+            RoundedRectangle(cornerRadius: 4)
+                .fill(hoveredUngroupedWindowID == window.id ? Color.primary.opacity(0.1) : Color.clear)
+        )
+        .contentShape(Rectangle())
+        .onHover { isHovered in
+            if isHovered {
+                hoveredUngroupedWindowID = window.id
+            } else if hoveredUngroupedWindowID == window.id {
+                hoveredUngroupedWindowID = nil
+            }
+        }
     }
 }
 

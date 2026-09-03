@@ -6,7 +6,7 @@ enum SettingsTab: Int {
 
     var contentHeight: CGFloat {
         switch self {
-        case .general:   return 450
+        case .general:   return 510
         case .launcher:  return 420
         case .tabBar:    return 460
         case .shortcuts: return 520
@@ -23,6 +23,7 @@ struct SettingsView: View {
     @State private var switcherConfig: SwitcherConfig
     @State private var launcherConfig: AddWindowLauncherConfig
     @ObservedObject var tabBarConfig: TabBarConfig
+    @ObservedObject var menuBarConfig: MenuBarConfig
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var recordingAction: ShortcutAction?
     @State private var selectedTab: SettingsTab = .general
@@ -41,6 +42,7 @@ struct SettingsView: View {
         switcherConfig: SwitcherConfig,
         launcherConfig: AddWindowLauncherConfig,
         tabBarConfig: TabBarConfig,
+        menuBarConfig: MenuBarConfig,
         onConfigChanged: @escaping (ShortcutConfig) -> Void,
         onSessionConfigChanged: @escaping (SessionConfig) -> Void,
         onSwitcherConfigChanged: @escaping (SwitcherConfig) -> Void,
@@ -52,6 +54,7 @@ struct SettingsView: View {
         self._switcherConfig = State(initialValue: switcherConfig)
         self._launcherConfig = State(initialValue: launcherConfig)
         self.tabBarConfig = tabBarConfig
+        self.menuBarConfig = menuBarConfig
         self.onConfigChanged = onConfigChanged
         self.onSessionConfigChanged = onSessionConfigChanged
         self.onSwitcherConfigChanged = onSwitcherConfigChanged
@@ -186,6 +189,21 @@ struct SettingsView: View {
                     launchAtLogin = !newValue
                 }
             }
+
+            Divider()
+
+            Toggle(isOn: $menuBarConfig.showUngroupedWindows) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Show Ungrouped Windows in Menu")
+                    Text("List ungrouped windows from all Spaces below the group actions in the menu bar popover.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .toggleStyle(.checkbox)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
 
             Divider()
 

@@ -12,4 +12,11 @@ class WindowManager: ObservableObject {
             return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
         }
     }
+
+    static func ungroupedWindows(
+        from windows: [WindowInfo],
+        groupedWindowIDs: Set<CGWindowID>
+    ) -> [WindowInfo] {
+        windows.filter { !groupedWindowIDs.contains($0.id) }
+    }
 }
